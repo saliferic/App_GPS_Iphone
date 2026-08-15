@@ -815,6 +815,16 @@
             if (!destValue) { statusBox.innerText = "Veuillez indiquer une destination."; statusBox.style.color = "#ff6b6b"; return; }
             if (drivers.length === 0) { statusBox.innerText = "Ajoutez au moins un conducteur."; statusBox.style.color = "#ff6b6b"; return; }
 
+            /* Annule un flyTo différé de focusDestinationOnMap() encore en attente (choix
+               d'un profil au menu déroulant, dictée au micro) : le garde-fou de doFly() ne
+               protège que si le modal a DÉJÀ sa classe 'open' quand le timer de 600 ms se
+               déclenche. Si Démarrer est pressé assez vite après la sélection — ce qui est
+               le geste naturel après un retour vocal —, ce timer peut se déclencher APRÈS
+               que fitMapToModalRoute() a cadré tout le trajet, et l'écraser par un simple
+               zoom 16 sur la seule destination. Voir AGENTS.md, point 1 des « points en
+               suspens ». */
+            if (_focusDestTimer) { clearTimeout(_focusDestTimer); _focusDestTimer = null; }
+
             // Cacher le panneau itinéraire pour ne voir que la carte
             document.getElementById('ui-panel').style.display = 'none';
 
