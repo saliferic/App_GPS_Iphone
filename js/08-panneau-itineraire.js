@@ -174,7 +174,9 @@
                     map.flyTo({ center: coords, zoom, padding: getMapFollowPadding(), duration });
                 } catch (e) {
                     logAppError('focusDestinationOnMap/flyTo', e);
-                    try { map.flyTo({ center: coords, zoom, duration }); } catch (e2) {}
+                    // Repli sans padding : la premiere tentative est deja journalisee ci-dessus,
+                    // ce second echec n'ajouterait rien qu'une ligne redondante.
+                    tenterSansBruit(() => map.flyTo({ center: coords, zoom, duration }), 'flyTo/repli');
                 }
             };
 
@@ -393,7 +395,7 @@
             // Si le panneau était réduit/escamoté, on le remet en état normal d'abord
             if (panelSnapState === 'min' || panelSnapState === 'hidden') setPanelSnap('full');
             // On ferme le formulaire "Créer un contact" s'il était ouvert
-            try { toggleCreateContactForm(false); } catch (e) {}
+            try { toggleCreateContactForm(false); } catch (e) { logAppError('toggleCreateContactForm', e); }
             panel.scrollTop = 0;
             panel.style.transition = 'max-height 0.25s ease, padding 0.2s ease';
             panel.classList.add('search-focus');
@@ -523,12 +525,16 @@
             window.addEventListener('orientationchange', () => schedule(300));
             // Sur Android, orientationchange n'est pas toujours émis : on suit aussi le
             // basculement du media query, qui est le signal le plus fiable.
+            // Sans cet abonnement, la bascule portrait/paysage n'est plus détectée du
+            // tout sur Android (orientationchange n'y est pas fiable) : le panneau garde
+            // la géométrie de l'orientation précédente. Un silence total ici renverrait
+            // droit à l'enquête paysage du 15/08/2026.
             try {
                 const mq = window.matchMedia(PANEL_LANDSCAPE_MQ);
                 const onChange = () => schedule(150);
                 if (mq.addEventListener) mq.addEventListener('change', onChange);
                 else if (mq.addListener) mq.addListener(onChange);
-            } catch (e) {}
+            } catch (e) { logAppError('panelOrientationWatcher/matchMedia', e); }
 
             /* ⚠ LES DEUX SIGNAUX CI-DESSUS SONT DES TRANSITIONS — ils ne disent rien de
                l'état de DÉPART. Or l'app peut très bien DÉMARRER en paysage : téléphone

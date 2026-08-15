@@ -111,7 +111,7 @@
                cadrage. Sur téléphone le premier aperçu peut tomber dans cette fenêtre,
                jamais sur un poste de bureau : encore un écart que le simulateur ne
                reproduit pas. */
-            try { map.resize(); } catch (e) {}
+            tenterSansBruit(() => map.resize(), 'fitMapToModalRoute/resize');
 
             _modalFitBounds = bounds;
             _modalFitViewportH = window.innerHeight;
@@ -236,7 +236,9 @@
                    visé correct puis remplacé signifie qu'une autre commande caméra a repris
                    la main (boucle de suivi GPS, flyTo différé…). */
                 let camZoom = null;
-                try { const c = map.cameraForBounds(bounds, { padding, maxZoom: 18, bearing: 0, pitch: 0 }); if (c) camZoom = +c.zoom.toFixed(2); } catch (e) {}
+                // Mesure de diagnostic uniquement (zoom vise avant application) : son echec ne
+                // change rien au cadrage qui suit. Voir la methode cameraForBounds d'AGENTS.md.
+                tenterSansBruit(() => { const c = map.cameraForBounds(bounds, { padding, maxZoom: 18, bearing: 0, pitch: 0 }); if (c) camZoom = +c.zoom.toFixed(2); }, 'diagCameraForBounds');
                 /* `cvBrut` expose la taille rendue par le canevas À CÔTÉ de celle du rect :
                    si les deux diffèrent, la trace le dit au lieu de le laisser deviner.
                    C'est l'écart qui a produit le sur-dézoom, il doit rester sous les yeux. */
@@ -251,6 +253,8 @@
                     zAvant: +map.getZoom().toFixed(2), zVise: camZoom
                 });
                 setTimeout(() => {
+                    // ⚠ PAS de logAppError : on est DANS une trace de diagnostic.
+                    // Journaliser l'echec d'une journalisation n'apporte rien.
                     try {
                         logDiag('fit+1.8s', { z: +map.getZoom().toFixed(2), panning: isUserPanning, course: isCourseStarted });
                     } catch (e) {}
@@ -340,7 +344,7 @@
                     fitMapToModalRoute(_modalFitBounds);
                 }, 320);
             });
-            try { ro.observe(canvas); } catch (e) {}
+            tenterSansBruit(() => ro.observe(canvas), 'modalRefit/observe');
         })();
 
         function onAvoidTollsChange(src) {
@@ -390,7 +394,7 @@
                     const snapped = turf.nearestPointOnLine(currentTurfLine, pt, { units: 'meters' });
                     const distM   = snapped.properties.dist;
                     if (distM <= maxDist) return { coords: snapped.geometry.coordinates, distM };
-                } catch(e) {}
+                } catch (e) { if (DEBUG) console.warn('[snapOnRoute] projection turf impossible :', e); }
                 return null;
             };
 
@@ -428,7 +432,12 @@
                             }
                         }
                     }
-                } catch(e) {}
+                /* Réseau coupé, quota Mapbox, adresse ingéocodable : le repli sur les
+                   coordonnées brutes de la source (juste en dessous) est un comportement
+                   PRÉVU, pas une panne — il ne mérite donc pas le journal d'erreurs, qui
+                   se remplirait à chaque station d'un trajet mal couvert. Mais plus de
+                   silence total : sous ?debug=1 on voit laquelle a échoué et pourquoi. */
+                } catch (e) { if (DEBUG) console.warn(`[StationSnap] géocodage de « ${station.addr} » impossible :`, e); }
             }
 
             console.warn(`[StationSnap] Fallback coords brutes pour ${station.name}`);
@@ -684,7 +693,7 @@
 
                 const moyenne = Math.round((prix.reduce((a, b) => a + b, 0) / prix.length) * 1000) / 1000;
                 const nouveau = { price: moyenne, count: prix.length, ts: Date.now(), center, fuel: kind };
-                try { localStorage.setItem('gps_fuel_price_auto', JSON.stringify(nouveau)); } catch (e) {}
+                safeLocalSet('gps_fuel_price_auto', JSON.stringify(nouveau));
                 _applyAutoFuelPrice(nouveau);
                 return moyenne;
             } catch (e) {

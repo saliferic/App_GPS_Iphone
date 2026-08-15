@@ -107,6 +107,75 @@
             if (DEBUG) console.error('[' + context + ']', err);
         }
 
+        /* ═══ ÉCRITURES localStorage : ÉCHOUER EN SILENCE N'EST PLUS UNE OPTION ═══
+
+           Une douzaine d'endroits faisaient `try { localStorage.setItem(…) } catch (e) {}`.
+           L'intention était juste — un quota dépassé ou le mode navigation privée ne doit
+           pas interrompre l'app — mais la conséquence l'était moins : le favori, le
+           réglage ou la position du curseur n'était PAS enregistré, l'utilisateur le
+           découvrait au rechargement suivant, et rien nulle part n'en gardait trace.
+
+           ⚠ POURQUOI UN COMPTEUR PLUTÔT QU'UN `logAppError` DIRECT : quand le quota est
+           atteint, il l'est pour TOUTES les clés et à CHAQUE écriture. Journaliser sans
+           filtre remplirait les 20 emplacements du journal en quelques secondes et en
+           chasserait l'erreur qu'on cherche — le travers que la clé séparée de logDiag()
+           évite déjà par ailleurs. On ne journalise donc que la PREMIÈRE défaillance de
+           chaque clé dans la session : une ligne par clé, ce qu'il faut pour comprendre,
+           pas de quoi noyer le reste.
+
+           Retourne `true`/`false` : un appelant qui doit réagir à l'échec le peut. */
+        const _lsEchecsSignales = new Set();
+
+        function safeLocalSet(cle, valeur) {
+            try {
+                localStorage.setItem(cle, valeur);
+                return true;
+            } catch (e) {
+                if (!_lsEchecsSignales.has(cle)) {
+                    _lsEchecsSignales.add(cle);
+                    logAppError('localStorage/set/' + cle, e);
+                }
+                return false;
+            }
+        }
+
+        function safeLocalRemove(cle) {
+            try {
+                localStorage.removeItem(cle);
+                return true;
+            } catch (e) {
+                if (!_lsEchecsSignales.has('rm:' + cle)) {
+                    _lsEchecsSignales.add('rm:' + cle);
+                    logAppError('localStorage/remove/' + cle, e);
+                }
+                return false;
+            }
+        }
+
+        /* ═══ APPELS « AU MIEUX » : LE SILENCE DEVIENT UNE DÉCISION ÉCRITE ═══
+
+           Il reste des endroits où l'échec est vraiment sans conséquence : arrêter le
+           vibreur sur un appareil qui n'en a pas, retirer une couche Mapbox déjà retirée,
+           capturer un pointeur sur un navigateur qui l'ignore. Les journaliser
+           remplirait les 20 emplacements du journal d'erreurs avec du bruit et en
+           chasserait les vraies pannes.
+
+           Mais `catch (e) {}` ne DIT rien : impossible, en le relisant, de distinguer un
+           silence réfléchi d'un oubli. `tenterSansBruit()` nomme la décision, et sous
+           `?debug=1` l'exception redevient visible en console — ce qu'un bloc vide ne
+           permettait à aucun moment.
+
+           À n'utiliser QUE lorsque l'échec est sans effet observable. Si un réglage n'est
+           pas enregistré, un marqueur pas posé ou un calcul pas fait, c'est
+           `logAppError()` qu'il faut, pas ceci. */
+        function tenterSansBruit(action, contexte) {
+            try { return action(); }
+            catch (e) {
+                if (DEBUG) console.warn('[tenterSansBruit' + (contexte ? '/' + contexte : '') + ']', e);
+                return undefined;
+            }
+        }
+
         /* Lecture du journal depuis l'app (onglet Profil → 🩺 Journal d'erreurs).
            Un bug qui ne se produit que sur le téléphone — géoloc réelle, vraies barres
            système, vrai clavier — ne laisse aucune trace atteignable autrement : le
@@ -131,7 +200,7 @@
                 log.push({ t: new Date().toISOString(), ctx, msg: JSON.stringify(data) });
                 if (log.length > DIAG_LOG_MAX) log = log.slice(-DIAG_LOG_MAX);
                 localStorage.setItem(DIAG_LOG_KEY, JSON.stringify(log));
-            } catch (e) {}
+            } catch (e) { /* meme regle que logAppError : on n'aggrave pas un stockage plein */ }
             if (DEBUG) console.log('[diag ' + ctx + ']', data);
         }
 
@@ -206,6 +275,8 @@
         }
 
         function clearErrorLog() {
+            // ⚠ PAS de safeLocalSet/logAppError ici : on est en train d'EFFACER le
+            // journal. Journaliser son propre échec le remplirait aussitôt après.
             try { localStorage.removeItem(ERROR_LOG_KEY); } catch (e) {}
             try { localStorage.removeItem(DIAG_LOG_KEY); } catch (e) {}
             renderErrorLog();

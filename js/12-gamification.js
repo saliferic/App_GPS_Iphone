@@ -939,7 +939,7 @@
                 f.coords = norm;
             });
             if (migrated) {
-                try { localStorage.setItem('gps_favorites', JSON.stringify(favorites)); } catch (e) {}
+                safeLocalSet('gps_favorites', JSON.stringify(favorites));
             }
             renderFavoritesDropdown();
         }
@@ -1182,7 +1182,7 @@
                 catch (e) { favCoords = null; logAppError('loadFavoriteAddress/geocode', e); }
                 if (favCoords) { // mémoriser pour ne pas re-géocoder à chaque sélection
                     fav.coords = favCoords;
-                    try { localStorage.setItem('gps_favorites', JSON.stringify(favorites)); } catch (e) {}
+                    safeLocalSet('gps_favorites', JSON.stringify(favorites));
                 }
             }
 

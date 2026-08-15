@@ -203,7 +203,7 @@
                 try { favCoords = normalizeLngLat(await geocode(fav.address)); } catch (e) { favCoords = null; }
                 if (favCoords) {
                     fav.coords = favCoords;
-                    try { localStorage.setItem('gps_favorites', JSON.stringify(favorites)); } catch (e) {}
+                    safeLocalSet('gps_favorites', JSON.stringify(favorites));
                 }
             }
             if (!favCoords) {

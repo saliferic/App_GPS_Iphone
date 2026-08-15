@@ -183,9 +183,9 @@
                `title` : les deux formes coexistent volontairement, la bascule se fait
                section par section. */
             trophy:  { bodyId: 'trophy-gallery-body', title: 'Galerie des trophées', dot: true,
-                       onOpen: () => { try { renderTrophyGallery(); } catch (e) {} } },
+                       onOpen: () => { try { renderTrophyGallery(); } catch (e) { logAppError('profilSheet/renderTrophyGallery', e); } } },
             vehicle: { bodyId: 'vehicle-panel-body',  title: 'Mon véhicule', dot: true,
-                       onOpen: () => { try { initVehicleConfigUI(); } catch (e) {} } },
+                       onOpen: () => { try { initVehicleConfigUI(); } catch (e) { logAppError('profilSheet/initVehicleConfigUI', e); } } },
             aide:    { bodyId: 'aide-conduite-body',  title: '🛟 Aide à la conduite' }
         };
 

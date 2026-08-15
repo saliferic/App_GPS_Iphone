@@ -475,7 +475,7 @@
         const HB_HAPTIC_CLOSE  = 25;
 
         function _hbVibrate(pattern) {
-            try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+            tenterSansBruit(() => { if (navigator.vibrate) navigator.vibrate(pattern); }, 'vibrate');
         }
 
         // Course avec destination : arrêt intermédiaire et partage live n'ont pas de
@@ -656,7 +656,7 @@
 
             // Sans ça, le glissement vers une entrée ferait aussi défiler la carte —
             // et déclencherait isUserPanning via map.on('dragstart').
-            try { map.dragPan.disable(); map.dragRotate.disable(); map.touchZoomRotate.disable(); } catch (e) {}
+            tenterSansBruit(() => { map.dragPan.disable(); map.dragRotate.disable(); map.touchZoomRotate.disable(); }, 'hotbox/gestesOff');
 
             dismissHotboxHint(true);   // le geste vient d'être exécuté : l'invite a fait son office
             window.addEventListener('pointermove', _hbOnMove);
@@ -691,7 +691,7 @@
             // Même raison : sans ce retrait, le cercle se rouvrirait avec ses entrées floues.
             document.getElementById('hotbox-ring')?.classList.remove('focusing');
             document.getElementById('hotbox-title')?.classList.remove('visible');
-            try { map.dragPan.enable(); map.dragRotate.enable(); map.touchZoomRotate.enable(); } catch (e) {}
+            tenterSansBruit(() => { map.dragPan.enable(); map.dragRotate.enable(); map.touchZoomRotate.enable(); }, 'hotbox/gestesOn');
             window.removeEventListener('pointermove', _hbOnMove);
             window.removeEventListener('pointerup', _hbOnUp);
             window.removeEventListener('pointercancel', _hbOnCancel);
@@ -806,7 +806,7 @@
         function dismissHotboxHint(persist) {
             const el = document.getElementById('hotbox-hint');
             if (el) el.classList.remove('visible');
-            if (persist) { try { localStorage.setItem('gps_hotbox_hint', 'seen'); } catch (e) {} }
+            if (persist) { safeLocalSet('gps_hotbox_hint', 'seen'); }
         }
 
         function applyHotboxMode() {
@@ -818,7 +818,7 @@
 
         function onHotboxToggleChange(chk) {
             hotboxEnabled = chk.checked;
-            try { localStorage.setItem('gps_hotbox', hotboxEnabled ? 'on' : 'off'); } catch (e) {}
+            safeLocalSet('gps_hotbox', hotboxEnabled ? 'on' : 'off');
             applyHotboxMode();
             // Les boutons flottants réapparaissent dans l'état où la course les avait
             // laissés : on resynchronise le seul qui dépende du contexte caméra.
@@ -868,7 +868,7 @@
                parcourue. `dragstart` et non `movestart` : ce dernier se déclenche aussi sur
                les commandes caméra programmées (recadrage, suivi GPS), qui n'ont rien à
                voir avec le doigt de l'utilisateur et annuleraient un appui légitime. */
-            try { map.on('dragstart', _hbCancelPress); } catch (e) {}
+            tenterSansBruit(() => map.on('dragstart', _hbCancelPress), 'hotbox/dragstart');
 
             ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
                 mapEl.addEventListener(ev, _hbCancelPress, { passive: true }));

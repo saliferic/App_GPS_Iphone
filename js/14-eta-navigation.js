@@ -704,7 +704,7 @@
         }
 
         function clearDestinationDraft() {
-            try { localStorage.removeItem(DEST_DRAFT_KEY); } catch (e) {}
+            safeLocalRemove(DEST_DRAFT_KEY);
         }
 
         function restoreDestinationDraft() {
@@ -727,10 +727,12 @@
                 exactEndCoords = draft.coords;
                 // Le marqueur est reposé, mais on ne déplace pas la carte : à l'ouverture
                 // la vue doit rester sur la position du conducteur.
+                // Un échec ici laisse la destination restaurée SANS son marqueur rouge :
+                // l'adresse est dans le champ, rien ne la matérialise sur la carte.
                 try {
                     if (endTempMarker) endTempMarker.remove();
                     endTempMarker = addEmojiMarker(draft.coords[0], draft.coords[1], '🔴');
-                } catch (e) {}
+                } catch (e) { logAppError('restoreDestinationDraft/marqueur', e); }
             }
         }
 
@@ -792,10 +794,10 @@
                Même parade que les champs d'adresse du modal, qui blurent déjà avant de
                calculer. Les 450 ms d'effet de chargement ci-dessous laissent au clavier le
                temps de descendre. */
-            try {
+            tenterSansBruit(() => {
                 const ae = document.activeElement;
                 if (ae && typeof ae.blur === 'function' && ae !== document.body) ae.blur();
-            } catch (e) {}
+            }, 'fermetureClavier');
 
             const isSim = document.getElementById('mode-switch').checked;
             const btnStart = document.getElementById('btn-start');
@@ -926,7 +928,7 @@
                     /* La destination annulée n'est plus liée à un contact : sans cette
                        remise à zéro, l'alerte « à 10 min » continuerait de viser son
                        numéro au trajet suivant (même règle que « Go ici » de la hotbox). */
-                    try { updateFavPhoneUI(''); setFavDropdownLabel(null); } catch (e) {}
+                    try { updateFavPhoneUI(''); setFavDropdownLabel(null); } catch (e) { logAppError('resetFavUI', e); }
                 }
             }
         }
@@ -1165,7 +1167,7 @@
                et seule closeProfilSheet() sait le rendre à sa place. Masquer l'overlay
                laisserait Mon véhicule ou Aide à la conduite définitivement absents du
                Profil — jusqu'au rechargement de la page. */
-            try { closeProfilSheet(); } catch (e) {}
+            try { closeProfilSheet(); } catch (e) { logAppError('closeProfilSheet', e); }
 
             /* Le scan de stations occupe l'emplacement du panneau et masque #ui-panel
                (body.gas-scan-open) : changer d'onglet doit donc le refermer, sinon la

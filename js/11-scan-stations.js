@@ -223,7 +223,7 @@
                 startOffset = sheet.classList.contains('collapsed') ? maxY : 0;
                 curY = startOffset;
                 sheet.style.transition = 'none';       // le suivi doit être immédiat
-                try { head.setPointerCapture(e.pointerId); } catch (err) {}
+                tenterSansBruit(() => head.setPointerCapture(e.pointerId), 'scan/pointerCapture');
             });
 
             head.addEventListener('pointermove', (e) => {
@@ -276,7 +276,7 @@
             const km = parseFloat(v);
             if (!Number.isFinite(km)) return;
             _scanRadiusKm = km;
-            try { localStorage.setItem('gps_gas_scan_radius', String(km)); } catch (e) {}
+            safeLocalSet('gps_gas_scan_radius', String(km));
             _renderGasScanRadiusLabel();
             runGasScan();
         }
@@ -494,10 +494,10 @@
             _gasScanZoneStop();
             // Les couches d'abord : Mapbox refuse de retirer une source encore utilisée.
             [GAS_WAVE_LAYER, GAS_ZONE_EDGE, GAS_ZONE_FILL].forEach(id => {
-                try { if (map.getLayer(id)) map.removeLayer(id); } catch (e) {}
+                tenterSansBruit(() => { if (map.getLayer(id)) map.removeLayer(id); }, 'scan/removeLayer');
             });
             [GAS_WAVE_SRC, GAS_ZONE_SRC].forEach(id => {
-                try { if (map.getSource(id)) map.removeSource(id); } catch (e) {}
+                tenterSansBruit(() => { if (map.getSource(id)) map.removeSource(id); }, 'scan/removeSource');
             });
         }
 
@@ -863,7 +863,7 @@
         }
 
         function _clearGasScanMarkers() {
-            _scanMarkers.forEach(m => { try { m.remove(); } catch (e) {} });
+            _scanMarkers.forEach(m => tenterSansBruit(() => m.remove(), 'scan/removeMarker'));
             _scanMarkers = [];
         }
 

@@ -108,7 +108,7 @@
             } catch (e) {
                 // Quota dépassé : on abandonne silencieusement le cache disque,
                 // la copie mémoire reste valable pour la session.
-                try { localStorage.removeItem(ZFE_CACHE_KEY); } catch (e2) {}
+                tenterSansBruit(() => localStorage.removeItem(ZFE_CACHE_KEY), 'zfe/purgeCache');
                 if (DEBUG) console.warn('[ZFE] cache non enregistré (quota) :', e);
             }
         }
@@ -457,10 +457,10 @@
 
         function clearZFEMapLayer() {
             zfeRouteCrossings = [];
-            try {
+            tenterSansBruit(() => {
                 const src = map.getSource && map.getSource('zfe-zones');
                 if (src) src.setData({ type: 'FeatureCollection', features: [] });
-            } catch (e) {}
+            }, 'clearZFEMapLayer');
         }
 
         // ── Alertes en navigation ────────────────────────────────────────────
@@ -477,7 +477,7 @@
             banner.classList.toggle('info', !!isInfo);
             banner.classList.add('visible');
             if (!isInfo && typeof playAudioSequence === 'function') {
-                try { playAudioSequence(['attention.ogg']); } catch (e) {}
+                try { playAudioSequence(['attention.ogg']); } catch (e) { logAppError('zfe/alerteSonore', e); }
             }
             clearTimeout(_zfeBannerTimer);
             _zfeBannerTimer = setTimeout(closeZFEBanner, isInfo ? 9000 : 15000);
