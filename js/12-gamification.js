@@ -683,14 +683,29 @@
            rend la panne si difficile à lire** — l'app paraît fonctionner, seules les
            variables partagées manquent à l'appel.
 
-           Un `setTimeout(…, 0)` suffit : les `<script src>` restants sont exécutés par
-           l'analyseur avant que la file des macrotâches ne soit dépilée. C'est déjà la
-           parade retenue pour `initCritAirUI()` à l'intérieur de la fonction — elle est
-           simplement remontée d'un cran, là où elle couvre TOUTES les appelées. */
-        setTimeout(() => {
-            try { initVehicleConfigUI(); }
-            catch (e) { logAppError('initVehicleConfigUI', e); }
-        }, 0);
+           ⚠ `setTimeout(…, 0)` NE SUFFIT PAS — mesuré sur appareil le 15/08/2026.
+           Le pari était que l'analyseur exécuterait les `<script src>` restants avant de
+           dépiler la file des macrotâches. C'est vrai quand les fichiers sont déjà en
+           cache, faux dans l'APK : servis depuis `file:///android_asset/`, ils se chargent
+           assez lentement pour que l'analyseur rende la main à la boucle d'événements
+           entre deux balises. Le timer se déclenchait donc AVANT l'évaluation du fichier
+           15, et `loadVehicleConfig is not defined` revenait à chaque lancement — visible
+           dans le journal d'erreurs de l'app, invisible au simulateur de bureau.
+
+           `DOMContentLoaded` est la garantie recherchée : l'événement n'est émis qu'une
+           fois TOUS les scripts non-`defer` exécutés. Le repli `setTimeout` couvre le cas
+           où ce fichier serait un jour chargé après l'émission de l'événement. */
+        (function initVehicleConfigWhenReady() {
+            const lancer = () => {
+                try { initVehicleConfigUI(); }
+                catch (e) { logAppError('initVehicleConfigUI', e); }
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', lancer, { once: true });
+            } else {
+                setTimeout(lancer, 0);
+            }
+        })();
 
         // ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
         function _debugFillGoals95() {
