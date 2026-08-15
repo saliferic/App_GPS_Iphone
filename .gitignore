@@ -21,3 +21,7 @@ Desktop.ini
 # === Sorties de travail ===
 node_modules/
 *.log
+
+# Captures produites par tests/app.e2e.js à chaque exécution. Utiles pour lire un
+# échec, sans intérêt dans l'historique — elles changent à chaque lancement.
+tests/*.png

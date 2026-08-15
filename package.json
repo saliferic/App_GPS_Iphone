@@ -1,0 +1,17 @@
+{
+  "name": "go_app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simulateur GPS Recompenses — outils de test. L'APPLICATION ELLE-MEME N'A AUCUNE DEPENDANCE : ce fichier ne sert qu'aux tests, il n'est jamais lu par index.html ni embarque dans l'APK.",
+  "scripts": {
+    "test": "node tests/noyau.test.js",
+    "test:app": "node tests/app.e2e.js",
+    "test:app:voir": "node tests/app.e2e.js --voir",
+    "test:all": "node tests/noyau.test.js && node tests/app.e2e.js"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
