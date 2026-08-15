@@ -20,16 +20,9 @@
             return now.getFullYear() + '-W' + weekNum;
         }
 
-        function getTimeUntilEndOfWeek() {
-            const now = new Date();
-            const dayOfWeek = now.getDay(); // 0=dim, 1=lun, ..., 6=sam
-            const daysUntilSunday = dayOfWeek === 0 ? 0 : (7 - dayOfWeek);
-            const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilSunday, 23, 59, 59);
-            const diff = endOfWeek - now;
-            const days = Math.floor(diff / 86400000);
-            const hours = Math.floor((diff % 86400000) / 3600000);
-            return `${days}j ${hours}h restants`;
-        }
+        // `getTimeUntilEndOfWeek()` a rejoint js/00-noyau-calculs.js, où l'instant lui
+        // est injecté en paramètre pour être testable (le repli `new Date()` conserve
+        // le comportement : aucun appelant n'a changé).
 
         // ═══════════════════════════════════════════════════════════
         // === BASELINE PERSONNELLE — HISTORIQUE KM PAR SEMAINE ===

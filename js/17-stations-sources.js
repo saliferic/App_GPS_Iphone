@@ -158,27 +158,7 @@
         // === DÉTECTION PAYS + ROUTEUR MULTI-SOURCE ===
         // ═══════════════════════════════════════════════════════════════
 
-        const COUNTRY_BOXES = {
-            fr: { minLat: 41.3, maxLat: 51.1, minLng: -5.2, maxLng: 9.6  },
-            be: { minLat: 49.5, maxLat: 51.6, minLng: 2.5,  maxLng: 6.4  },
-            lu: { minLat: 49.4, maxLat: 50.2, minLng: 5.7,  maxLng: 6.6  },
-            es: { minLat: 35.9, maxLat: 43.8, minLng: -9.3, maxLng: 4.4  },
-        };
-
-        function detectCountriesOnRoute(routeCoords) {
-            const countries = new Set();
-            const step = Math.max(1, Math.floor(routeCoords.length / 20));
-            for (let i = 0; i < routeCoords.length; i += step) {
-                const [lng, lat] = routeCoords[i];
-                for (const [cc, box] of Object.entries(COUNTRY_BOXES)) {
-                    if (lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng)
-                        countries.add(cc);
-                }
-            }
-            if (countries.size === 0) countries.add('fr');
-            if (countries.has('lu')) countries.add('be');
-            return [...countries];
-        }
+        // `COUNTRY_BOXES` et `detectCountriesOnRoute()` ont rejoint js/00-noyau-calculs.js.
 
         const GAS_API_BASE   = 'https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records';
         const GAS_SEGMENT_KM = 100;
@@ -301,70 +281,9 @@
             }
         }
 
-        function extractGasCoords(s) {
-            const rawLat = parseFloat(s.latitude);
-            const rawLng = parseFloat(s.longitude);
-            if (!isNaN(rawLat) && !isNaN(rawLng)) {
-                const lat = Math.abs(rawLat) > 1000 ? rawLat / 100000 : rawLat;
-                const lng = Math.abs(rawLng) > 1000 ? rawLng / 100000 : rawLng;
-                if (lat > 35 && lat < 52 && lng > -10 && lng < 10) return [lng, lat];
-            }
-            if (s.geom?.coordinates) {
-                const lng = parseFloat(s.geom.coordinates[0]);
-                const lat = parseFloat(s.geom.coordinates[1]);
-                if (!isNaN(lng) && !isNaN(lat)) return [lng, lat];
-            }
-            if (s.geo_point_2d) {
-                const lat = parseFloat(s.geo_point_2d.lat ?? s.geo_point_2d.latitude);
-                const lng = parseFloat(s.geo_point_2d.lon ?? s.geo_point_2d.longitude ?? s.geo_point_2d.lng);
-                if (!isNaN(lng) && !isNaN(lat)) return [lng, lat];
-            }
-            return null;
-        }
-
-        function extractGasPrice(s, fuelType) {
-            // Prix pré-parsés par les normaliseurs BE/ES
-            const preKey = '_' + fuelType;
-            if (s[preKey] != null) return s[preKey];
-            // Format FR : tableau prix:[{"@nom":"Gazole","@valeur":"2.127"}, ...]
-            const prixArr = s.prix;
-            if (Array.isArray(prixArr)) {
-                const nomMap = {
-                    sp95:   ['sp95', 'e5', 'sp95-e5'],
-                    gazole: ['gazole', 'diesel', 'go', 'b7', 'gazole b7'],
-                    e10:    ['e10', 'sp95-e10'],
-                    sp98:   ['sp98', 'sp98-e5'],
-                    gplc:   ['gplc', 'gpl'],
-                };
-                const cibles = nomMap[fuelType] || [];
-                for (const entry of prixArr) {
-                    const nom = (entry['@nom'] || entry.nom || entry.name || '').toLowerCase().trim();
-                    if (cibles.some(c => nom === c) || cibles.some(c => nom.includes(c))) {
-                        const val = parseFloat(String(entry['@valeur'] ?? entry.valeur ?? entry.value ?? '').replace(',', '.'));
-                        if (!isNaN(val) && val > 0.5) return val > 10 ? val / 1000 : val;
-                    }
-                }
-            }
-            const flatMap = {
-                sp95:   ['sp95_prix', 'prix_sp95', 'sp95', 'e5_prix', 'prix_e5'],
-                gazole: ['gazole_prix', 'prix_gazole', 'gazole', 'go_prix', 'prix_go'],
-                e10:    ['e10_prix', 'prix_e10', 'e10'],
-                sp98:   ['sp98_prix', 'prix_sp98', 'sp98'],
-            };
-            for (const field of (flatMap[fuelType] || [])) {
-                const v = s[field];
-                if (v != null && v !== '') {
-                    const parsed = parseFloat(String(v).replace(',', '.'));
-                    if (!isNaN(parsed) && parsed > 0.5) return parsed > 10 ? parsed / 1000 : parsed;
-                }
-            }
-            return null;
-        }
-
-        function getBestPrice(s) {
-            const prices = ['sp95','gazole','e10','sp98'].map(t => extractGasPrice(s, t)).filter(p => p !== null);
-            return prices.length > 0 ? Math.min(...prices) : 999;
-        }
+        // `extractGasCoords()`, `extractGasPrice()` et `getBestPrice()` ont rejoint
+        // js/00-noyau-calculs.js : ce sont des lecteurs de flux, purs et testables
+        // sur des enregistrements figes (formats FR tableau, BE/ES pre-parses).
 
         // ── FRANCE : récupération paginée autour d'un point ──
         // L'API renvoie { results: [...], total_count: N }. Si N > 100, il FAUT

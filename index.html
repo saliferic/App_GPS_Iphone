@@ -1380,6 +1380,12 @@
          00-helpers-partages.js regroupe setupAddressAutocomplete() et
          initVehicleConfigUI(), appelees plus haut qu'elles n'etaient definies :
          il doit rester en premier. ═══ -->
+    <!-- Noyau de calcul : que des declarations, zero dependance, zero execution au
+         chargement. Sa position n'a donc aucune importance technique — il est en tete
+         par convention. C'est le seul fichier couvert par des tests (tests/noyau.test.js,
+         lance par `node tests/noyau.test.js`). ATTENTION : il se charge AVANT
+         00-helpers-partages.js alors qu'il le SUIT dans l'ordre alphabetique de js/. -->
+    <script src="js/00-noyau-calculs.js"></script>
     <script src="js/00-helpers-partages.js"></script>
     <script src="js/01-core-utils.js"></script>
     <script src="js/02-profil-export.js"></script>

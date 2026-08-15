@@ -41,21 +41,10 @@
            non `gps_critair`, qui détermine le montant.
            Montants forfaitaires nationaux, susceptibles d'évoluer : les garder
            groupés ici pour n'avoir qu'un endroit à corriger. */
-        const ZFE_AMENDES = {
-            classe3: { classe: 3, forfait: 68,  minoree: 45, majoree: 180 },
-            classe4: { classe: 4, forfait: 135, minoree: 90, majoree: 375 },
-        };
-        const ZFE_CAT_CLASSE = {
-            vp:               'classe3',
-            vul:              'classe3',
-            deux_rm:          'classe3',
-            pl:               'classe4',
-            autobus_autocars: 'classe4',
-        };
-
-        function getZFEAmende(categorie = getZFECategory()) {
-            return ZFE_AMENDES[ZFE_CAT_CLASSE[categorie] || 'classe3'];
-        }
+        // `ZFE_AMENDES`, `ZFE_CAT_CLASSE` et `getZFEAmende()` ont rejoint
+        // js/00-noyau-calculs.js — le barème est une table, son application une
+        // fonction pure, et le lien catégorie → classe de contravention mérite d'être
+        // vérifié par un test plutôt que par relecture de l'article R411-19-1.
 
         // ── Jeu de secours embarqué ──────────────────────────────────────────
         // Périmètres APPROXIMATIFS (octogones) des principales ZFE françaises.

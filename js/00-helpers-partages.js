@@ -22,11 +22,8 @@
            publiée sur l'objet global), un `let` non. */
         let userPanningResumeTimer = null;
 
-        /* Capital maximal du permis français. Déclaré ICI parce qu'il est lu par 14
-           (`initializeVehicleConfig`, dénominateur du « x / 12 ») et par 15
-           (`loadVehicleConfig` / `saveVehicleConfig`, valeur par défaut) — règle des
-           `const` partagés entre fichiers, cf. commentaire ci-dessus. */
-        const LICENSE_POINTS_MAX = 12;
+        // `LICENSE_POINTS_MAX` a rejoint js/00-noyau-calculs.js (chargé avant ce fichier)
+        // avec `_readLicensePoints()`, la fonction qui l'exploite.
 
         function setupAddressAutocomplete(inputId, suggestionsId, onSelect) {
             const inputEl = document.getElementById(inputId); const boxEl = document.getElementById(suggestionsId);

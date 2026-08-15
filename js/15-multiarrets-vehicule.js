@@ -90,37 +90,9 @@
         let _modalFitViewportH = 0;
         let _modalFitCanvas = '';   // « largeur x hauteur » du canevas au moment du cadrage
 
-        /* Ramène un padding de fitBounds dans les limites du canevas.
-           ⚠ Mapbox n'effectue AUCUN contrôle : dès que `top + bottom` atteint la hauteur
-           de la carte (ou `left + right` sa largeur), la bande utile devient nulle ou
-           négative, le zoom calculé n'est pas un nombre, et `cameraForBounds` construit
-           un centre NaN. L'exception levée est alors
-           `Invalid LngLat object: (NaN, NaN)` — elle accuse les coordonnées alors que
-           celles-ci sont parfaitement valides et que le fautif est la géométrie. C'est
-           l'origine, mesurée sur appareil le 14/08/2026, de l'aperçu de trajet qui
-           s'affichait sans jamais cadrer l'itinéraire.
-           On garantit `minBand` px de carte dans chaque axe en réduisant les deux côtés
-           proportionnellement : réduire un seul déplacerait le centre du cadrage. */
-        function _clampMapPadding(pad, mapW, mapH, minBand = 150) {
-            const out = {
-                top:    Math.max(0, Number(pad.top)    || 0),
-                bottom: Math.max(0, Number(pad.bottom) || 0),
-                left:   Math.max(0, Number(pad.left)   || 0),
-                right:  Math.max(0, Number(pad.right)  || 0)
-            };
-            const ajuste = (a, b, taille) => {
-                // Sur une carte plus petite que la bande souhaitée, on se rabat sur la
-                // moitié de la surface : mieux vaut un cadrage serré qu'aucun cadrage.
-                const dispo = Math.max(0, taille - Math.min(minBand, taille * 0.5));
-                const somme = a + b;
-                if (somme <= dispo || somme <= 0) return [a, b];
-                const k = dispo / somme;
-                return [Math.floor(a * k), Math.floor(b * k)];
-            };
-            [out.top, out.bottom] = ajuste(out.top, out.bottom, mapH);
-            [out.left, out.right] = ajuste(out.left, out.right, mapW);
-            return out;
-        }
+        // `_clampMapPadding()` a rejoint js/00-noyau-calculs.js : c'est de la géométrie
+        // pure, et le bug qu'elle corrige (padding non borné → centre NaN) est
+        // exactement le genre de calcul qui doit être couvert par un test.
 
         let _modalFitRetry = false;
 
@@ -533,16 +505,7 @@
 
         // === CONFIG VÉHICULE (consommation + prix carburant) ===
 
-        /* ⚠ `parseInt(v) || repli` PERD LE ZÉRO : un conducteur à 0 point — permis invalidé,
-           précisément le cas où l'information compte le plus — se voyait recréditer 12
-           points au premier enregistrement, parce que 0 est falsy. On teste donc la
-           finitude, pas la véracité. Bornage à [0, LICENSE_POINTS_MAX] au passage : le
-           `max` du champ HTML ne protège pas d'une valeur écrite en localStorage. */
-        function _readLicensePoints(valeur, repli) {
-            const n = parseInt(valeur, 10);
-            if (!Number.isFinite(n)) return repli;
-            return Math.min(LICENSE_POINTS_MAX, Math.max(0, n));
-        }
+        // `_readLicensePoints()` et `LICENSE_POINTS_MAX` ont rejoint js/00-noyau-calculs.js.
 
         function loadVehicleConfig() {
             const type = localStorage.getItem('gps_vehicle_type') || 'thermique';
@@ -760,18 +723,7 @@
             }
         }
 
-        function calcEnergyCost(distKm, cfg) {
-            if (cfg.type === 'electrique') {
-                return (distKm / 100) * cfg.consumptionElec * cfg.elecPrice;
-            } else if (cfg.type === 'hybride') {
-                // Hybride : moitié thermique, moitié élec (approximation)
-                const thermic = (distKm / 100) * cfg.consumption * cfg.fuelPrice * 0.5;
-                const elec    = (distKm / 100) * cfg.consumptionElec * cfg.elecPrice * 0.5;
-                return thermic + elec;
-            } else {
-                return (distKm / 100) * cfg.consumption * cfg.fuelPrice;
-            }
-        }
+        // `calcEnergyCost()` a rejoint js/00-noyau-calculs.js.
 
         function updateFuelCostLabel() {
             const cfg = loadVehicleConfig();

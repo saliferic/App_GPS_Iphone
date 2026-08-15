@@ -245,53 +245,10 @@
                 return data?.features[0]?.place_name || "";
             } catch (err) { return ""; }
         }
-        /* Mapbox encode les suffixes de voirie français de façon compacte : le 20 bis de la
-           rue Wilhem est indexé « 20b Rue Wilhem », jamais « 20 bis Rue Wilhem ». Écrit en
-           toutes lettres, le mot « bis » n'est pas reconnu comme suffixe : le géocodeur
-           retombe sur le numéro 20 seul et l'interpole le long de la rue, ce qui décale le
-           point de plusieurs dizaines de mètres — parfois au carrefour suivant.
-           On réécrit donc bis/ter/quater sous leur forme suffixée avant d'interroger l'API. */
-        function normalizeFrHouseNumber(query) {
-            return (query || '')
-                .replace(/\b(\d+)\s*bis\b/gi,    '$1b')
-                .replace(/\b(\d+)\s*ter\b/gi,    '$1t')
-                .replace(/\b(\d+)\s*quater\b/gi, '$1q');
-        }
+        // `normalizeFrHouseNumber()` a rejoint js/00-noyau-calculs.js — elle est
+        // appelée depuis 00-helpers-partages.js, chargé douze fichiers plus tôt.
 
-        /* === ADRESSES DES STATIONS-SERVICE : abréviations à développer ===
-           Le champ `adresse` du flux data.gouv.fr est saisi librement par les
-           exploitants, en majuscules et fortement abrégé : « 72 BLD DE VERDUN ».
-           Mapbox ne reconnaît pas « BLD » comme un type de voie et retombe sur une
-           correspondance approximative — souvent de l'autre côté d'un boulevard à
-           chaussées séparées. Tapée en toutes lettres, « 72 Boulevard de Verdun »
-           résout au bon point : la seule différence est l'abréviation.
-           On développe donc les formes courantes avant toute requête, exactement
-           comme normalizeFrHouseNumber() le fait pour les bis/ter.
-           Seules les abréviations SANS ambiguïté figurent ici — « QU », « RD » ou
-           « RN » en désignent plusieurs et sont volontairement laissées telles quelles. */
-        const _FR_VOIE_ABBR = [
-            [/\bBL?VD\b/gi, 'BOULEVARD'],   // BVD, BLVD
-            [/\bBLD\b/gi,   'BOULEVARD'],
-            [/\bBOUL\b/gi,  'BOULEVARD'],
-            [/\bBD\b/gi,    'BOULEVARD'],
-            [/\bAVE?\b/gi,  'AVENUE'],      // AV, AVE
-            [/\bRTE\b/gi,   'ROUTE'],
-            [/\bCHEM\b/gi,  'CHEMIN'],
-            [/\bCHE\b/gi,   'CHEMIN'],
-            [/\bIMP\b/gi,   'IMPASSE'],
-            [/\bALL\b/gi,   'ALLEE'],
-            [/\bPL\b/gi,    'PLACE'],
-            [/\bSQ\b/gi,    'SQUARE'],
-            [/\bF[AB]?BG\b/gi, 'FAUBOURG'], // FBG, FABG
-            [/\bSTE\b/gi,   'SAINTE'],      // avant ST, sinon « STE » resterait entier
-            [/\bST\b/gi,    'SAINT'],
-        ];
-
-        function normalizeStationAddr(addr) {
-            let out = (addr || '').trim();
-            _FR_VOIE_ABBR.forEach(([re, full]) => { out = out.replace(re, full); });
-            return normalizeFrHouseNumber(out);
-        }
+        // `_FR_VOIE_ABBR` et `normalizeStationAddr()` ont rejoint js/00-noyau-calculs.js.
 
         /* ═══ ARBITRAGE ENTRE DEUX POSITIONS POSSIBLES POUR UNE STATION ═══
            NI la source NI le géocodage ne sont fiables seuls — c'est le constat
@@ -364,10 +321,8 @@
            bien la tour Eiffel, le Moulin Rouge et le Louvre, mais ignore l'Arc de
            triomphe, le Sacré-Cœur et le musée d'Orsay — d'où sa place en second. */
 
-        // Minuscules + accents retirés, pour comparer « Champs-Élysées » et « champs elysees ».
-        function _deburr(s) {
-            return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        }
+        // `_deburr()` a rejoint js/00-noyau-calculs.js — elle aussi appelée depuis
+        // 00-helpers-partages.js, chargé bien avant ce fichier.
 
         /* La politique d'usage de Nominatim impose une requête par seconde maximum et
            interdit les rafales. On sérialise donc les appels dans une file et on met en
