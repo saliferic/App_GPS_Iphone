@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulateur Récompenses GPS - Dark Mode & Néon</title>
+    
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
+   <link rel="stylesheet" href="css/styles.css" />
+   
+    
+    
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         INTRO ANIMÉE — BLOC 2/3 (HTML)
+         Placée en tête de <body> pour être peinte avant tout le reste.
+         Pour retirer l'intro : supprimer ce bloc, le bloc CSS 1/3 dans
+         <style> et la section JS 3/3 en fin de script.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div id="intro">
+        <div id="intro-grid"></div>
+        <button id="intro-skip">Passer ✕</button>
+        <div id="intro-bar"></div>
+
+        <!-- ── 0 s — La marque ── -->
+        <div class="intro-scene" style="--t:0s">
+            <div id="intro-logo"><span>🏁</span></div>
+            <div class="intro-head">Simulateur<br>Récompenses GPS</div>
+            <div class="intro-sub">Votre conduite vaut mieux qu'un simple trajet.</div>
+        </div>
+
+        <!-- ── 5 s — Navigation temps réel ── -->
+        <div class="intro-scene" style="--t:5s">
+            <div class="intro-kicker">Navigation</div>
+            <div class="intro-stage">
+                <svg viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+                    <path id="intro-route-ghost" d="M20,175 C70,175 60,110 110,100 C165,89 160,40 240,28"
+                          fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="9" stroke-linecap="round"/>
+                    <path id="intro-route-drawn" d="M20,175 C70,175 60,110 110,100 C165,89 160,40 240,28"
+                          fill="none" stroke="#58a6ff" stroke-width="7" stroke-linecap="round"/>
+                    <!-- animateMotion suit exactement le même tracé : impossible de
+                         désynchroniser la pastille et la route en les modifiant. -->
+                    <circle r="8" fill="#fff" stroke="#1f6feb" stroke-width="3" opacity="0">
+                        <animate attributeName="opacity" from="0" to="1" begin="5.6s" dur="0.3s" fill="freeze"/>
+                        <!-- calcMode par défaut = "paced" : vitesse constante le long
+                             de la courbe, sans keyPoints à tenir à jour. -->
+                        <animateMotion begin="5.6s" dur="3.2s" fill="freeze"
+                                       path="M20,175 C70,175 60,110 110,100 C165,89 160,40 240,28"/>
+                    </circle>
+                    <circle cx="240" cy="28" r="6" fill="#f85149" opacity="0">
+                        <animate attributeName="opacity" from="0" to="1" begin="7.4s" dur="0.4s" fill="freeze"/>
+                    </circle>
+                </svg>
+                <div class="intro-hud" id="intro-hud-speed"><b>112</b><i>km/h</i></div>
+                <div class="intro-hud" id="intro-hud-limit"><b>130</b></div>
+            </div>
+            <div class="intro-head">Guidage vocal, virage par virage</div>
+            <div class="intro-sub">Limites réelles, trafic, alternatives — et la voix qui vous prévient à temps.</div>
+        </div>
+
+        <!-- ── 10 s — Éco-conduite ── -->
+        <div class="intro-scene" style="--t:10s">
+            <div class="intro-kicker">Éco-conduite</div>
+            <div class="intro-gauge">
+                <svg viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="9"/>
+                    <circle id="intro-gauge-fill" cx="60" cy="60" r="50" fill="none" stroke="#28a745"
+                            stroke-width="9" stroke-linecap="round"/>
+                </svg>
+                <div class="intro-gauge-num"><b id="intro-eco-num">0</b><i>Score</i></div>
+            </div>
+            <div class="intro-chips">
+                <div class="intro-chip">Freinage doux</div>
+                <div class="intro-chip">Vitesse maîtrisée</div>
+                <div class="intro-chip">Accélération fluide</div>
+            </div>
+            <div class="intro-head">Chaque bon réflexe compte</div>
+        </div>
+
+        <!-- ── 15 s — La hotbox ── -->
+        <div class="intro-scene" style="--t:15s">
+            <div class="intro-kicker">Menu rapide</div>
+            <div id="intro-hotbox">
+                <div id="intro-hb-core">✕</div>
+                <div class="intro-hb-item" style="--hx:0px;--hy:-78px">🔍</div>
+                <div class="intro-hb-item" style="--hx:50px;--hy:-60px">📍</div>
+                <div class="intro-hb-item" style="--hx:77px;--hy:-14px">📡</div>
+                <div class="intro-hb-item" style="--hx:68px;--hy:39px">🔊</div>
+                <div class="intro-hb-item" style="--hx:27px;--hy:73px">◎</div>
+                <div class="intro-hb-item" style="--hx:-27px;--hy:73px">3D</div>
+                <div class="intro-hb-item pick" style="--hx:-68px;--hy:39px">⛽</div>
+                <div class="intro-hb-item" style="--hx:-77px;--hy:-14px">🚦</div>
+                <div class="intro-hb-item" style="--hx:-50px;--hy:-60px">🌙</div>
+                <div id="intro-hb-finger">👆</div>
+            </div>
+            <div class="intro-head">Tout à portée de pouce</div>
+            <div class="intro-sub">Un appui long sur la carte, on glisse, on relâche. L'écran reste à la carte.</div>
+        </div>
+
+        <!-- ── 20 s — Récompenses ── -->
+        <div class="intro-scene" style="--t:20s">
+            <div class="intro-kicker">Récompenses</div>
+            <div id="intro-chest">
+                <div id="intro-chest-rays"></div>
+                <div id="intro-chest-body">
+                    <div id="intro-chest-lid"></div>
+                </div>
+            </div>
+            <div class="intro-reward">+<span id="intro-pts-num">0</span> points</div>
+            <div class="intro-badges">
+                <div class="intro-badge">🏆</div>
+                <div class="intro-badge">🎖️</div>
+                <div class="intro-badge">⭐</div>
+            </div>
+            <div class="intro-head">Coffres, badges, trophées</div>
+        </div>
+
+        <!-- ── 25 s — Objectifs et clôture ── -->
+        <div class="intro-scene" style="--t:25s">
+            <div class="intro-kicker">Objectifs de la semaine</div>
+            <div class="intro-goals">
+                <div class="intro-goal">
+                    <div class="intro-goal-lbl"><span>Trajets sans excès</span><span>5 / 5</span></div>
+                    <div class="intro-goal-track"><div class="intro-goal-fill" style="--w:100%"></div></div>
+                </div>
+                <div class="intro-goal">
+                    <div class="intro-goal-lbl"><span>Kilomètres parcourus</span><span>84 / 100</span></div>
+                    <div class="intro-goal-track"><div class="intro-goal-fill" style="--w:84%"></div></div>
+                </div>
+                <div class="intro-goal">
+                    <div class="intro-goal-lbl"><span>Score éco moyen</span><span>92 / 95</span></div>
+                    <div class="intro-goal-track"><div class="intro-goal-fill" style="--w:97%"></div></div>
+                </div>
+            </div>
+            <div class="intro-head">Bonne route.</div>
+            <div class="intro-sub">Conduisez bien. Le reste suit.</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         INTRO ANIMÉE — BLOC 3/3 (JS)
+         Volontairement ici, collé au bloc HTML, et NON en fin de script :
+         placé plus bas, il ne s'exécuterait qu'après le chargement de Mapbox
+         et l'intro clignoterait une seconde à l'écran de qui l'a déjà vue.
+         Un script inline bloque le rendu, donc la décision est prise avant
+         que le navigateur ne peigne quoi que ce soit.
+         Aucune dépendance au reste de l'app : ce bloc s'auto-suffit.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function initIntro() {
+        // ── Les 3 réglages ──────────────────────────────────────────────
+        const INTRO_VERSION  = 'v1';    // changer cette valeur la rejoue chez tout le monde
+        const INTRO_ALWAYS   = false;   // true = rejouer à CHAQUE démarrage
+        const INTRO_TOTAL_MS = 30000;   // doit rester égal à la durée de #intro-bar (CSS)
+        // Pour la revoir une fois : localStorage.removeItem('gps_intro_seen') puis recharger.
+        // ────────────────────────────────────────────────────────────────
+
+        const el = document.getElementById('intro');
+        if (!el) return;
+
+        const kill = () => { try { el.remove(); } catch (e) {} };
+
+        // Mouvement réduit demandé au niveau système : on ne joue rien du tout.
+        let reduced = false;
+        try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+        let seen = false;
+        try { seen = localStorage.getItem('gps_intro_seen') === INTRO_VERSION; } catch (e) {}
+
+        if (reduced || (seen && !INTRO_ALWAYS)) { kill(); return; }
+
+        // Marqué vu DÈS LE DÉPART, pas à la fin : si l'app plante ou est fermée
+        // pendant l'intro, elle ne se rejouerait pas indéfiniment à chaque essai.
+        try { localStorage.setItem('gps_intro_seen', INTRO_VERSION); } catch (e) {}
+
+        const timers = [];
+        let closed = false;
+
+        function close() {
+            if (closed) return;
+            closed = true;
+            timers.forEach(clearTimeout);
+            el.classList.add('intro-closing');
+            setTimeout(kill, 450);
+        }
+
+        // Les deux seuls chiffres que le CSS ne sait pas animer proprement.
+        // Le reste de la chorégraphie est entièrement déclaratif.
+        function countTo(id, target, startMs, durMs) {
+            timers.push(setTimeout(() => {
+                const node = document.getElementById(id);
+                if (!node) return;
+                const t0 = performance.now();
+                (function tick(now) {
+                    if (closed) return;
+                    const p = Math.min(1, (now - t0) / durMs);
+                    // easing de sortie : le compteur ralentit en approchant de sa valeur
+                    node.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+                    if (p < 1) requestAnimationFrame(tick);
+                })(t0);
+            }, startMs));
+        }
+
+        countTo('intro-eco-num', 100, 10500, 2400);   // scène 3, calé sur la jauge
+        countTo('intro-pts-num', 247, 21900, 1600);   // scène 5, calé sur l'ouverture du coffre
+
+        el.addEventListener('click', close);
+        document.addEventListener('keydown', function onEsc(e) {
+            if (e.key === 'Escape') { document.removeEventListener('keydown', onEsc); close(); }
+        });
+        timers.push(setTimeout(close, INTRO_TOTAL_MS));
+    })();
+    </script>
+
+    <!-- Écran de bienvenue au démarrage : visible 1.5s puis disparaît en fondu -->
+    <div id="welcome-screen">
+        <div id="welcome-message">Salut Karim</div>
+    </div>
+
+    <!-- Confirmation de sortie : déclenchée par le bouton/geste "retour" (voir _armExitGuard) -->
+    <div id="exit-confirm-overlay" onclick="if(event.target===this)closeExitConfirm()">
+        <div id="exit-confirm-box">
+            <h3>Voulez-vous quitter ?</h3>
+            <div class="exit-confirm-actions">
+                <button id="exit-confirm-no" onclick="closeExitConfirm()">Non</button>
+                <button id="exit-confirm-yes" onclick="exitAppConfirmed()">Oui</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Après création d'un profil : bascule immédiate ou non (voir createProfile) -->
+    <div id="profile-use-overlay" onclick="if(event.target===this)confirmUseNewProfile(false)">
+        <div id="profile-use-box">
+            <h3 id="profile-use-title">Utiliser ce profil maintenant ?</h3>
+            <p id="profile-use-sub"></p>
+            <div class="exit-confirm-actions">
+                <button id="profile-use-no" onclick="confirmUseNewProfile(false)">Non</button>
+                <button id="profile-use-yes" onclick="confirmUseNewProfile(true)">Oui</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fin de trajet libre : posée AVANT d'ouvrir la recherche, pour que le conducteur
+         sache ce qu'il encaisse et ce qu'il risque de laisser en route. -->
+    <div id="freecourse-end-overlay" onclick="if(event.target===this)closeFreeCourseEnd()">
+        <div id="freecourse-end-box">
+            <h3>Terminer le trajet libre ?</h3>
+            <p id="freecourse-end-sub">Choisir une destination met fin au mode libre.</p>
+            <p id="freecourse-end-gain"></p>
+            <div class="exit-confirm-actions">
+                <button id="freecourse-end-no" onclick="closeFreeCourseEnd()">Continuer</button>
+                <button id="freecourse-end-yes" onclick="confirmEndFreeCourse()">Terminer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-glow"></div>
+
+    <!-- Bouton objectifs hebdomadaires (conservé pour compatibilité JS mais masqué) -->
+    <button id="btn-weekly-goals" onclick="openWeeklyGoalsModal()" title="Objectifs de la semaine" style="display:none">🎯</button>
+
+    <!-- Modal Vidéo Badge (plein écran, avant la modal badge) -->
+    <!-- === MODAL STATISTIQUES DE CONDUITE === -->
+    <div id="stats-modal-overlay" onclick="if(event.target===this)closeStatsModal()">
+        <div id="stats-modal">
+            <div id="stats-modal-header">
+                <h2>📊 Statistiques</h2>
+                <button id="stats-modal-close" onclick="closeStatsModal()">✕</button>
+            </div>
+            <div class="stats-period-toggle">
+                <button class="stats-period-btn active" id="stats-btn-week" onclick="setStatsPeriod('week')">7 derniers jours</button>
+                <button class="stats-period-btn" id="stats-btn-month" onclick="setStatsPeriod('month')">30 derniers jours</button>
+                <button class="stats-period-btn" id="stats-btn-all" onclick="setStatsPeriod('all')">Tout</button>
+            </div>
+            <div class="stats-kpi-grid" id="stats-kpi-grid"></div>
+            <div class="stats-section-title">Score par trajet</div>
+            <div class="stats-chart-wrap" id="stats-score-chart"></div>
+            <div class="stats-section-title" id="stats-eco-section">Score éco-conduite</div>
+            <div class="stats-chart-wrap" id="stats-eco-chart"></div>
+            <div class="stats-section-title">Kilomètres parcourus</div>
+            <div class="stats-chart-wrap" id="stats-km-chart"></div>
+        </div>
+    </div>
+
+    <!-- === PAGE PLEINE DES SECTIONS DU PROFIL ===
+         Conteneur d'accueil UNIQUE et vide : à l'ouverture, le corps de la section
+         demandée y est DÉPLACÉ (et non recopié), puis remis à sa place à la fermeture.
+         Voir openProfilSheet() — la note y explique pourquoi le déplacement est la seule
+         option viable ici. Ajouter une section = une ligne dans PROFIL_SHEETS, rien ici. -->
+    <div id="profil-sheet-overlay" onclick="if(event.target===this)closeProfilSheet()">
+        <div id="profil-sheet">
+            <div id="profil-sheet-header">
+                <h2 id="profil-sheet-title"></h2>
+                <button id="profil-sheet-close" onclick="closeProfilSheet()" aria-label="Fermer">✕</button>
+            </div>
+            <div id="profil-sheet-body"></div>
+        </div>
+    </div>
+
+    <div id="badge-video-modal">
+        <video id="badge-video-el" playsinline webkit-playsinline></video>
+        <button id="badge-video-skip" onclick="skipBadgeVideo()">Passer ›</button>
+    </div>
+
+    <!-- Modal Badge Débloqué (affiché après fermeture du coffre) -->
+    <div id="badge-unlocked-modal" onclick="if(event.target===this)closeBadgeUnlockedModal()">
+        <div id="badge-unlocked-box">
+            <button onclick="closeBadgeUnlockedModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#4a5568;font-size:20px;cursor:pointer;line-height:1;padding:4px;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#4a5568'">✕</button>
+            <span id="badge-unlocked-icon">🏅</span>
+            <div id="badge-unlocked-label">Objectifs de la semaine</div>
+            <div id="badge-unlocked-title">Badge obtenu !</div>
+            <div id="badge-unlocked-sub"></div>
+            <div id="badge-unlocked-category"></div>
+            <button id="badge-unlocked-close" onclick="closeBadgeUnlockedModal()">Super, merci !</button>
+        </div>
+    </div>
+
+    <!-- Modal hors ligne -->
+    <div id="offline-modal">
+        <div id="offline-modal-box">
+            <div id="offline-modal-icon">📵</div>
+            <div id="offline-modal-title">Pas de connexion</div>
+            <div id="offline-modal-msg">
+                Le calcul d'itinéraire nécessite une connexion internet.<br>
+                Retrouvez votre réseau et réessayez.
+            </div>
+            <div id="offline-modal-resume">
+                <strong>✅ Reprendre la navigation</strong>
+                <span id="offline-resume-desc">Votre dernier itinéraire est disponible hors ligne.</span>
+            </div>
+            <button class="offline-modal-btn" id="offline-btn-resume" onclick="offlineResumeLastRoute()" style="display:none;">
+                🗺️ Reprendre le dernier trajet
+            </button>
+            <button class="offline-modal-btn" id="offline-btn-close" onclick="closeOfflineModal()">
+                Fermer
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast hors ligne pendant navigation -->
+    <div id="offline-nav-toast">📵 Hors ligne — dead reckoning actif</div>
+
+    <!-- === BARRE DE NAVIGATION PERMANENTE === -->
+    <nav id="main-bottom-nav">
+        <div id="offline-dot" title="Hors ligne"></div>
+        <button class="main-nav-tab active" id="nav-tab-trajet" onclick="switchMainTab('trajet')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="10" r="3"/>
+                <path d="M12 2C8.13 2 5 5.13 5 10c0 5.25 7 12 7 12s7-6.75 7-12c0-4.87-3.13-8-7-8z"/>
+            </svg>
+            <span>Itinéraire</span>
+        </button>
+        <button class="main-nav-tab" id="nav-tab-objectifs" onclick="switchMainTab('objectifs')">
+            <div class="nav-badge" id="nav-badge-goals"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+            </svg>
+            <span>Objectifs</span>
+        </button>
+        <button class="main-nav-tab" id="nav-tab-profil" onclick="switchMainTab('profil')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+            </svg>
+            <span>Profil</span>
+        </button>
+    </nav>
+
+    <!-- === OVERLAY PANELS PENDANT NAVIGATION === -->
+    <div id="nav-panel-overlay-backdrop" onclick="closeNavPanelOverlay()"></div>
+    <div id="nav-panel-overlay">
+        <div id="nav-panel-overlay-handle"></div>
+        <div id="nav-panel-overlay-header">
+            <span id="nav-panel-overlay-title">Objectifs</span>
+            <button id="nav-panel-overlay-close" onclick="closeNavPanelOverlay()">✕</button>
+        </div>
+        <div id="nav-panel-overlay-body">
+            <!-- contenu injecté dynamiquement selon l'onglet -->
+        </div>
+    </div>
+
+    <!-- Modale des objectifs hebdomadaires -->
+    <div id="weekly-goals-overlay" onclick="closeWeeklyGoalsModal()">
+        <div id="weekly-goals-modal" onclick="event.stopPropagation()">
+            <div id="weekly-goals-header">
+                <span>🎯 OBJECTIFS DE LA SEMAINE</span>
+                <button onclick="closeWeeklyGoalsModal()" style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;">✕</button>
+            </div>
+            <div id="weekly-goals-timer"></div>
+            <div id="weekly-goals-list"></div>
+            <div id="weekly-goals-bonus"></div>
+        </div>
+    </div>
+
+    <!-- Bannière "Je suis à 10 min" -->
+    <div id="tenmin-banner">
+        <div id="tenmin-banner-header">
+            <div id="tenmin-banner-title">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.558 4.118 1.532 5.845L.073 23.927l6.235-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.371l-.359-.214-3.7.97.988-3.61-.235-.37A9.818 9.818 0 012.18 12c0-5.42 4.399-9.818 9.818-9.818 5.42 0 9.819 4.399 9.819 9.818 0 5.42-4.399 9.818-9.819 9.818z"/></svg>
+                🕐 À 10 minutes de l'arrivée !
+            </div>
+            <button id="tenmin-banner-close" onclick="closeTenMinBanner()">✕</button>
+        </div>
+        <div id="tenmin-banner-msg">Préviens ton contact que tu arrives bientôt.</div>
+        <button id="tenmin-banner-btn" onclick="sendTenMinWhatsApp()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.558 4.118 1.532 5.845L.073 23.927l6.235-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.371l-.359-.214-3.7.97.988-3.61-.235-.37A9.818 9.818 0 012.18 12c0-5.42 4.399-9.818 9.818-9.818 5.42 0 9.819 4.399 9.819 9.818 0 5.42-4.399 9.818-9.819 9.818z"/></svg>
+            Envoyer via WhatsApp
+        </button>
+    </div>
+
+    <!-- Bannière "Station dans 5 min" -->
+    <div id="gas-station-banner">
+        <div id="gas-banner-header">
+            <div id="gas-banner-title">⛽ Station essence dans 5 min</div>
+            <button id="gas-banner-close" onclick="closeGasStationBanner()">✕</button>
+        </div>
+        <div id="gas-banner-msg">Votre station sélectionnée est à moins de 5 minutes.</div>
+    </div>
+
+    <!-- Bannière ZFE (entrée en zone à faibles émissions) -->
+    <div id="zfe-banner">
+        <div id="zfe-banner-header">
+            <div id="zfe-banner-title">🏭 Zone à faibles émissions</div>
+            <button id="zfe-banner-close" onclick="closeZFEBanner()">✕</button>
+        </div>
+        <div id="zfe-banner-msg"></div>
+        <a id="zfe-banner-link" href="#" target="_blank" rel="noopener" style="display:none;">Voir les règles officielles ↗</a>
+    </div>
+
+    <!-- Modale Coffre de Récompense -->
+    <div id="loot-modal-overlay">
+        <div id="loot-modal">
+            <div id="loot-chest-view">
+                <h3>CONDUITE PARFAITE !</h3>
+                <p class="loot-subtitle">Ouvrez votre coffre de récompense.</p>
+                <div id="loot-chest-icon" onclick="onChestClick()">🎁</div>
+            </div>
+            <div id="loot-reward-view" style="display:none;">
+                <!-- MODIFICATION : Ajout de la balise image -->
+                <img id="loot-reward-image" src="" alt="Chevalier">
+                
+                <div id="loot-rarity-banner"></div>
+                <div id="loot-reward-pill"></div>
+                <div id="loot-stats-box">
+                    <div class="loot-stat-label">Score du trajet : <span id="loot-base-score"></span> pts</div>
+                    <div class="loot-stat-total">Total reçu : <span id="loot-total-received"></span> pts</div>
+                </div>
+                <button onclick="closeLootModal()">Récupérer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panneau visuel du prochain virage -->
+    <div id="next-turn-panel">
+        <div id="next-turn-primary">
+            <div id="next-turn-icon-container"></div>
+            <div id="next-turn-info">
+                <div id="next-turn-distance">--</div>
+                <div id="next-turn-street">--</div>
+            </div>
+        </div>
+        <div id="next-turn-secondary">
+            <span class="puis-label">Puis</span>
+            <div id="next-turn-secondary-icon"></div>
+            <div id="next-turn-secondary-street">--</div>
+        </div>
+    </div>
+
+    <!-- Recherche rapide d'une nouvelle destination / ajout d'arrêt pendant la navigation -->
+    <!-- Recherche pendant la navigation (loupe). Reprend volontairement les classes du
+         panneau Itinéraire (.itin-section, .itin-input-row, .itin-select-row) : la mise en
+         page suit ainsi automatiquement toute évolution du panneau, sans copie de styles.
+         Le conteneur du champ porte .form-group (position:relative) pour que la liste de
+         suggestions se cale sous le champ, exactement comme dans le panneau. -->
+    <div id="nav-search-overlay">
+        <div class="nav-search-head">
+            <h2 class="itin-title">Itinéraire</h2>
+            <button class="itin-icon-btn" onclick="closeQuickReroute()" title="Fermer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <div class="form-group itin-section">
+            <label id="nav-search-label">Destination</label>
+            <div class="itin-input-row">
+                <span class="itin-icon-leading">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input type="text" id="nav-search-input" placeholder="Où allez-vous ?" autocomplete="off">
+                <button class="itin-icon-btn itin-mic-btn" id="btn-mic-nav" onclick="startVoiceInput('nav-search-input')" title="Dicter l'adresse">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                </button>
+                <button class="itin-icon-btn itin-pin-btn" id="btn-pick-nav-dest" onclick="toggleNavMapPick()" title="Choisir sur la carte">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#1b1d22"/></svg>
+                </button>
+                <button class="itin-icon-btn" id="btn-clear-nav" onclick="clearNavSearch()" title="Effacer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="addr-suggestions" id="nav-search-suggestions"></div>
+        </div>
+
+        <div class="itin-section">
+            <label>Adresses enregistrées</label>
+            <div class="itin-select-row">
+                <span class="itin-icon-leading">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                </span>
+                <select id="nav-fav-dropdown" onchange="loadFavoriteAddressForNav(this.value)">
+                    <option value="">📋 Mes adresses (aucune)</option>
+                </select>
+                <span class="itin-select-chevron">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </span>
+            </div>
+        </div>
+
+        <div class="nav-search-modes">
+            <button id="nav-mode-dest" onclick="setNavSearchMode('dest')">🏁 Nouvelle destination</button>
+            <button id="nav-mode-stop" onclick="setNavSearchMode('stop')">📍 Ajouter un arrêt</button>
+        </div>
+    </div>
+
+    <!-- Badge étape suivante pendant navigation -->
+    <div id="nav-waypoint-badge"></div>
+
+    <!-- Toast alerte éco-conduite -->
+    <div id="eco-alert-toast"></div>
+
+    <!-- Widget Météo -->
+    <div id="weather-widget" title="Météo à ta position">
+        <div id="weather-icon">⛅</div>
+        <div id="weather-temp">--°</div>
+        <div id="weather-desc">MÉTÉO</div>
+    </div>
+
+    <!-- Switch Jour / Nuit -->
+    <div id="theme-switch-wrap">
+        <button id="theme-switch" onclick="toggleMapTheme()" title="Basculer mode jour/nuit">
+            <span class="switch-knob">🌙</span>
+        </button>
+        <span id="theme-switch-lbl">NUIT</span>
+    </div>
+
+
+    <!-- Boutons flottants de navigation -->
+    <!-- Bouton 3D toujours visible (indépendant du trajet) -->
+    <button id="nav-btn-3d" onclick="toggle3DMode()" title="Basculer vue 2D / 3D">3D</button>
+
+    <!-- Toast live share -->
+    <div id="liveshare-toast">📡 Partage live actif</div>
+
+    <div id="nav-side-controls">
+        <button id="nav-btn-search" onclick="openQuickReroute()" title="Nouvelle destination">🔍</button>
+        <button id="nav-btn-pin-stop" onclick="toggleNavPinStop()" title="Ajouter un arrêt sur la carte" style="display:none;">📍</button>
+        <button id="nav-btn-liveshare" onclick="toggleLiveShare()" title="Partager ma position en live">📡</button>
+        <button id="nav-btn-mute" onclick="toggleMuteFromNav()" title="Couper le son">🔊</button>
+        <button id="nav-btn-recenter" onclick="recenterMap()" title="Recentrer" style="display:none;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <line x1="12" y1="2" x2="12" y2="6"/>
+                <line x1="12" y1="18" x2="12" y2="22"/>
+                <line x1="2" y1="12" x2="6" y2="12"/>
+                <line x1="18" y1="12" x2="22" y2="12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Barre du bas style Google Maps -->
+    <div id="google-nav-bar">
+        <button id="google-nav-close" onclick="stopCourse()" title="Terminer le trajet">✕</button>
+        <div id="google-nav-center">
+            <div id="google-nav-time">--</div>
+            <div id="google-nav-sub">-- • --</div>
+        </div>
+        <button id="google-nav-alt" onclick="cycleAlternateRoute()" title="Itinéraires alternatifs">🔀</button>
+    </div>
+
+
+    <!-- Bannière de connectivité réseau -->
+    <div id="connectivity-banner"></div>
+
+    <!-- Bannière de suggestion de pause -->
+    <div id="rest-stop-banner">
+        <div id="rest-stop-icon">☕</div>
+        <div id="rest-stop-text">
+            <div id="rest-stop-title">Pause conseillée</div>
+            <div id="rest-stop-detail">--</div>
+        </div>
+        <button id="rest-stop-dismiss" onclick="dismissRestStopBanner()">✕</button>
+    </div>
+
+    <!-- Rappel sécurité au volant (au démarrage d'une course réelle) -->
+    <div id="safety-reminder-banner">
+        <span class="icon">🚦</span>
+        <div>Gardez les yeux sur la route. Le guidage vocal vous accompagne.</div>
+    </div>
+
+    <!-- Widget Info Trajet -->
+    <div id="info-widget" onclick="event.stopPropagation();">
+        <div id="info-badge" onclick="toggleInfoWidget()">
+            <div id="info-badge-icon">ℹ️</div>
+            <div id="info-badge-text">Info trajet</div>
+        </div>
+        <div id="info-widget-panel">
+            <div class="info-item"><span id="info-label-1">🏁 Dist. restante:</span> <span id="info-dist-left">--</span></div>
+            <div class="info-item"><span id="info-label-2">⏳ Temps restant:</span> <span id="info-eta">--</span></div>
+            <div class="info-item"><span>🏆 Points acquis:</span> <span id="info-points">--</span></div>
+            <button class="geo-driver-btn" id="btn-stop-info" onclick="stopCourse()" style="background:#dc3545; color:white; border:none; width: 100%; margin-top: 10px; border-radius: 8px; padding: 10px; font-weight: bold; cursor: pointer;">🛑 Terminer Trajet</button>
+        </div>
+    </div>
+
+    <!-- Panneau principal (Itinéraire + Profil) -->
+    <div id="ui-panel" class="itin-panel" onclick="event.stopPropagation();">
+        <button class="toggle-panel-btn" onclick="togglePanel(event)" id="toggle-icon"></button>
+
+        <!-- ═══ ONGLET TRAJET ═══ -->
+        <div class="panel-tab-content active" id="panel-tab-trajet">
+        <h2 class="itin-title" id="ui-panel-title">Itinéraire</h2>
+
+        <div class="form-group itin-section" id="itin-destination-section">
+            <label>Destination</label>
+            <div class="itin-input-row">
+                <span class="itin-icon-leading">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input type="text" id="end-addr" value="" placeholder="Où allez-vous ?" oninput="exactEndCoords=null; onEndAddrManualInput();" onblur="resolveTypedDestination()" autocomplete="off">
+                <button class="itin-icon-btn itin-mic-btn" id="btn-mic-end" onclick="startVoiceInput('end-addr')" title="Dicter l'adresse">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+                </button>
+                <button class="itin-icon-btn itin-pin-btn" id="btn-pick-end" onclick="toggleMapPick('end')" title="Choisir sur la carte">
+                    <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#1b1d22"/></svg>
+                </button>
+                <button class="itin-icon-btn" id="btn-clear-end" onclick="clearDestination()" title="Effacer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="addr-suggestions" id="end-addr-suggestions"></div>
+        </div>
+
+        <div class="itin-section" id="itin-saved-section">
+            <label>Adresses enregistrées</label>
+            <div class="itin-select-row">
+                <span class="itin-icon-leading">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                </span>
+                <select id="fav-dropdown" onchange="loadFavoriteAddress(this.value)">
+                    <option value="">Mes adresses (aucune)</option>
+                </select>
+                <span class="itin-select-chevron">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </span>
+                <button class="itin-icon-btn" id="btn-edit-fav" onclick="editSelectedFavorite()" title="Modifier ce contact" style="display:none;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button class="itin-icon-btn itin-add-btn" id="btn-add-fav" onclick="toggleCreateContactForm(true)" title="Créer un contact">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <span class="itin-icon-sep" id="btn-add-fav-sep"></span>
+                <button class="itin-icon-btn" onclick="deleteSelectedFavorite()" title="Supprimer ce favori">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>
+            </div>
+
+            <!-- Formulaire contact : ouvert par le bouton "+" de la ligne ci-dessus -->
+            <div id="create-contact-form" style="display:none;margin-top:10px;">
+                <div class="contact-form-title" style="font-size:12px;font-weight:700;color:#58a6ff;margin-bottom:6px;letter-spacing:0.3px;">👤 Nouveau contact</div>
+                <div class="contact-form-grid">
+                    <div class="itin-input-row" style="margin-top:8px;">
+                        <span class="itin-icon-leading">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                        </span>
+                        <input type="text" id="contact-nom" placeholder="Nom" autocomplete="family-name">
+                    </div>
+                    <div class="itin-input-row" style="margin-top:6px;">
+                        <span class="itin-icon-leading">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                        </span>
+                        <input type="text" id="contact-prenom" placeholder="Prénom" autocomplete="given-name">
+                    </div>
+                    <!-- Le conteneur porte le position:relative pour que la liste de
+                         suggestions se cale sous ce champ précis, comme pour Destination. -->
+                    <div class="contact-addr-wrap">
+                        <div class="itin-input-row" style="margin-top:6px;">
+                            <span class="itin-icon-leading">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                            </span>
+                            <input type="text" id="contact-adresse" placeholder="Adresse" autocomplete="off" oninput="contactAdresseCoords=null;">
+                            <button class="itin-icon-btn itin-mic-btn" id="mic-contact-adresse" onclick="startVoiceInput('contact-adresse')" title="Dicter l'adresse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
+                            <button class="itin-icon-btn itin-pin-btn" id="btn-pick-contact-addr" onclick="toggleContactMapPick()" title="Choisir sur la carte">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#1b1d22"/></svg>
+                            </button>
+                        </div>
+                        <div class="addr-suggestions" id="contact-adresse-suggestions"></div>
+                    </div>
+                    <div class="itin-input-row" style="margin-top:6px;">
+                        <span class="itin-icon-leading">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 012.1 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+                        </span>
+                        <input type="tel" id="contact-telephone" placeholder="📱 +33612345678" autocomplete="tel">
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="itin-save-fav" onclick="saveContactAsFavorite()" style="flex:1;margin-top:0;background:rgba(0,150,255,0.08);color:#58a6ff;border-color:rgba(0,150,255,0.25);">💾 Enregistrer</button>
+                    <button class="itin-save-fav" onclick="toggleCreateContactForm(false)" style="flex:0 0 auto;margin-top:0;width:auto;padding:10px 14px;">✕</button>
+                </div>
+                <div id="contact-form-status" class="trip-option-hint" style="margin-top:6px;display:none;"></div>
+            </div>
+        </div>
+
+        <div class="itin-mode-toggle">
+            <span class="itin-mode-label active" id="mode-label-real">📍 Réel</span>
+            <label class="itin-switch">
+                <input type="checkbox" id="mode-switch" onchange="updateStartModeUI()">
+                <span class="itin-slider"></span>
+            </label>
+            <span class="itin-mode-label" id="mode-label-sim">🚗 Simu</span>
+        </div>
+
+        <button class="itin-start-btn" id="btn-start" onclick="handleStartClick()">
+            <span class="itin-start-btn-content">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                Démarrer
+            </span>
+            <span class="itin-start-btn-loading">
+                <span class="itin-start-spinner"></span>
+                Chargement...
+            </span>
+        </button>
+
+        <button class="itin-free-btn" id="btn-free" onclick="startFreeCourse()">
+            <span class="itin-free-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <span class="itin-free-text">
+                <span class="itin-free-title">Trajet libre</span>
+                <span class="itin-free-sub">Sans destination</span>
+            </span>
+        </button>
+
+        <div id="status">Chargement du GPS...</div>
+
+        <div class="itin-footer">
+            <div id="panel-gps-status"><span class="gps-dot"></span><span id="panel-gps-text">Recherche GPS...</span></div>
+            <div class="itin-signal" id="panel-signal">
+                <svg viewBox="0 0 24 18" fill="currentColor" width="18" height="14"><rect x="1" y="12" width="4" height="6" rx="1"/><rect x="7" y="8" width="4" height="10" rx="1"/><rect x="13" y="4" width="4" height="14" rx="1"/><rect x="19" y="0" width="4" height="18" rx="1"/></svg>
+            </div>
+        </div>
+
+        </div><!-- fin panel-tab-trajet -->
+
+        <!-- ═══ ONGLET PROFIL ═══ -->
+        <div class="panel-tab-content" id="panel-tab-profil">
+        <h2 class="itin-title" id="profil-itin-title">Profil</h2>
+
+            <!-- === PROFIL SÉLECTIONNÉ (en haut) === -->
+            <div class="itin-section" style="margin-bottom:12px;">
+                <label>Profil sélectionné</label>
+                <div class="itin-select-row">
+                    <span class="itin-icon-leading">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                    </span>
+                    <select id="profile-dropdown" onchange="selectProfile(this.value)">
+                        <option value="">👤 Aucun profil créé</option>
+                    </select>
+                    <span class="itin-select-chevron">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </span>
+                    <button class="itin-icon-btn itin-add-btn" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    <span class="itin-icon-sep" id="btn-create-profile-sep"></span>
+                    <button class="itin-icon-btn" onclick="deleteSelectedProfile()" title="Supprimer ce profil">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                </div>
+                <!-- Formulaire inline création profil (caché par défaut) -->
+                <div id="create-profile-inline" style="display:none;margin-top:8px;">
+                    <div class="itin-input-row">
+                        <span class="itin-icon-leading">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                        </span>
+                        <input type="text" id="new-profile-name" placeholder="Prénom (nouveau profil)"
+                               onkeydown="if(event.key==='Enter') createProfile();">
+                        <button class="itin-icon-btn" onclick="createProfile()" title="Créer le profil">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        </button>
+                        <button class="itin-icon-btn" onclick="hideCreateProfileInline()" title="Annuler" style="color:#ff6b6b;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="profile-summary" style="display:none;"></div>
+            </div>
+
+            <div class="profil-section-title" id="profil-section-title-monprofil">Mon profil</div>
+
+            <!-- === MA CATÉGORIE === -->
+            <div id="badge-category-card">
+                <div id="badge-category-title">🏅 MA CATÉGORIE</div>
+                <div id="badge-category-main">
+                    <div id="badge-category-icon">🥉</div>
+                    <div id="badge-category-info">
+                        <div id="badge-category-name" style="color:#cd7f32;">Bronze</div>
+                        <div id="badge-category-sub">0 badge obtenu</div>
+                    </div>
+                </div>
+                <div id="badge-count-row">
+                    <div id="badge-count-icons"></div>
+                </div>
+                <div id="badge-progress-bar-wrap">
+                    <div id="badge-progress-bar-fill" style="width:0%;background:#cd7f32;"></div>
+                </div>
+                <div id="badge-progress-label">0 / 3 badges pour Argent</div>
+            </div>
+
+            <!-- === MES STATISTIQUES ===
+                 Même format que les lignes suivantes (.profil-row / .profil-row-btn).
+                 Elle ouvre sa propre modale historique (openStatsModal) et non
+                 openProfilSheet : son contenu n'existe pas dans le panneau, il est
+                 construit à la volée par renderStatsModal(). -->
+            <div class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openStatsModal()">
+                    <span class="profil-row-label">📊 Mes statistiques</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
+            </div>
+
+            <!-- === GALERIE DES TROPHÉES === -->
+            <div id="trophy-gallery-section" class="profil-row">
+                <button id="trophy-gallery-toggle" class="profil-row-btn" onclick="openProfilSheet('trophy')">
+                    <span class="tg-left" style="color:#8892b0;">
+                        Galerie des trophées
+                        <span class="tg-count" id="trophy-gallery-count">0 / 8</span>
+                    </span>
+                    <span class="tg-arrow">›</span>
+                </button>
+                <div id="trophy-gallery-body">
+                    <div id="trophy-grid"></div>
+                    <div id="trophy-gallery-hint" style="text-align:center;font-size:11px;color:#4a5568;margin-top:12px;line-height:1.5;display:none;">
+                        🎬 Appuie sur un trophée débloqué pour revoir sa vidéo
+                    </div>
+                </div>
+            </div>
+
+            <!-- === MON VÉHICULE === -->
+            <div id="vehicle-panel-section" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:8px;border-radius:16px;border:1px solid rgba(0,140,255,0.2);flex-shrink:0;align-self:stretch;">
+                <button type="button" onclick="openProfilSheet('vehicle')" id="vehicle-panel-toggle" style="
+                    width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+                    padding:13px 15px;cursor:pointer;
+                    background:linear-gradient(170deg,#0f1825,#0a0e17);
+                    border:none;border-radius:16px;
+                    color:#8892b0;font-size:11px;font-weight:700;
+                    letter-spacing:2px;text-align:left;text-transform:uppercase;
+                ">
+                    <span>Mon véhicule</span>
+                    <span id="vehicle-panel-chevron" style="font-size:14px;color:#4a5568;">›</span>
+                </button>
+                <div id="vehicle-panel-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#0a0e17,#080b12);border-top:1px solid rgba(0,140,255,0.08);">
+                    <!-- Points du permis -->
+                    <div style="margin-bottom:clamp(12px,3vw,16px);padding-bottom:clamp(12px,3vw,14px);border-bottom:1px solid rgba(0,140,255,0.10);">
+                        <label class="vcell-label">📋 Votre nombre de points sur le permis</label>
+                        <div style="display:flex;align-items:center;gap:clamp(8px,2vw,12px);">
+                            <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig()" value="12" min="0" max="12" class="vcell-input" style="width:clamp(50px,15vw,70px);font-size:clamp(13px,3.8vw,14px);padding:clamp(8px,2vw,10px);border:1px solid rgba(0,140,255,0.15);border-radius:8px;background:rgba(10,14,23,0.7);color:#c9d1d9;text-align:center;">
+                            <span style="font-size:clamp(12px,3vw,13px);color:#4a5568;min-width:30px;text-align:center;font-weight:700;"id="points-display">/12</span>
+                        </div>
+                    </div>
+                    <label class="vcell-label" style="display:block;margin-bottom:clamp(8px,2vw,10px);"><span class="ui-dot sm"></span>Votre type de véhicule</label>
+                    <div style="display:flex;gap:8px;margin-bottom:14px;" id="vehicle-type-btns">
+                        <button type="button" class="vtype-btn active" data-type="thermique" onclick="selectVehicleType('thermique')">🔥 Thermique</button>
+                        <button type="button" class="vtype-btn" data-type="hybride" onclick="selectVehicleType('hybride')">⚡🔥 Hybride</button>
+                        <button type="button" class="vtype-btn" data-type="electrique" onclick="selectVehicleType('electrique')">⚡ Électrique</button>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div class="vcell" id="vcell-thermo-conso">
+                            <label class="vcell-label">L/100 km</label>
+                            <input type="number" id="vehicle-consumption" oninput="saveVehicleConfig()" value="7" min="1" max="30" step="0.5" class="vcell-input">
+                        </div>
+                        <div class="vcell" id="vcell-thermo-price">
+                            <label class="vcell-label" id="fuel-price-label">Prix (€/L)</label>
+                            <input type="number" id="fuel-price" oninput="saveVehicleConfig()" value="1.75" min="0.5" max="4" step="0.001" class="vcell-input" readonly>
+                        </div>
+                        <div class="vcell" id="vcell-elec-conso">
+                            <label class="vcell-label">kWh/100 km</label>
+                            <input type="number" id="vehicle-consumption-elec" oninput="saveVehicleConfig()" value="18" min="5" max="50" step="0.5" class="vcell-input">
+                        </div>
+                        <div class="vcell" id="vcell-elec-price">
+                            <label class="vcell-label">€/kWh</label>
+                            <input type="number" id="elec-price" oninput="saveVehicleConfig()" value="0.20" min="0.05" max="1" step="0.01" class="vcell-input">
+                        </div>
+                    </div>
+                    <!-- === CARBURANT + PRIX MOYEN LOCAL (rayon 3 km) === -->
+                    <div id="vcell-fuel-kind" style="margin-top:12px;">
+                        <label class="vcell-label" style="display:block;margin-bottom:7px;"><span class="ui-dot sm"></span>Carburant utilisé</label>
+                        <div class="critair-row" id="fuel-kind-row" style="margin-bottom:8px;">
+                            <button type="button" class="fuel-kind-pill" data-fuel="gazole" onclick="selectFuelKind('gazole')">Gazole</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="sp95" onclick="selectFuelKind('sp95')">SP95</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="e10" onclick="selectFuelKind('e10')">E10</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="sp98" onclick="selectFuelKind('sp98')">SP98</button>
+                        </div>
+                        <div class="fuel-auto-row">
+                            <label class="fuel-manual-check">
+                                <input type="checkbox" id="fuel-price-manual" onchange="setFuelPriceManual(this.checked)">
+                                <span>Saisir le prix moi-même</span>
+                            </label>
+                            <button type="button" id="fuel-price-refresh" class="fuel-refresh-btn" onclick="refreshLocalFuelAverage(true)" title="Recalculer la moyenne locale">↻</button>
+                        </div>
+                        <div class="trip-option-hint" id="fuel-price-source">Moyenne des stations dans un rayon de 3 km autour de toi</div>
+                    </div>
+                    <div class="trip-option-hint" style="margin-top:8px;">Utilisé pour estimer le coût énergie de chaque trajet</div>
+
+                    <!-- === VIGNETTE CRIT'AIR (ZFE) === -->
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,140,255,0.10);">
+                        <label class="vcell-label" style="display:block;margin-bottom:7px;">Vignette Crit'Air</label>
+                        <div class="critair-row" id="critair-row">
+                            <button type="button" class="critair-pill" data-level="EL" onclick="selectCritAir('EL')">E</button>
+                            <button type="button" class="critair-pill" data-level="V1" onclick="selectCritAir('V1')">1</button>
+                            <button type="button" class="critair-pill" data-level="V2" onclick="selectCritAir('V2')">2</button>
+                            <button type="button" class="critair-pill" data-level="V3" onclick="selectCritAir('V3')">3</button>
+                            <button type="button" class="critair-pill" data-level="V4" onclick="selectCritAir('V4')">4</button>
+                            <button type="button" class="critair-pill" data-level="V5" onclick="selectCritAir('V5')">5</button>
+                            <button type="button" class="critair-pill" data-level="NC" onclick="selectCritAir('NC')">NC</button>
+                        </div>
+                        <label class="vcell-label" style="display:block;margin-bottom:5px;">Catégorie du véhicule</label>
+                        <select class="zfe-select" id="zfe-vehicle-category" onchange="selectZFECategory(this.value)">
+                            <option value="vp">Voiture particulière</option>
+                            <option value="vul">Utilitaire léger (VUL)</option>
+                            <option value="pl">Poids lourd</option>
+                            <option value="deux_rm">Deux-roues motorisé</option>
+                            <option value="autobus_autocars">Autobus / autocar</option>
+                        </select>
+                        <div class="trip-option-hint" style="margin-top:8px;">Sert à vérifier si tu peux circuler dans les ZFE traversées par ton trajet</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === AIDE À LA CONDUITE === -->
+            <div id="aide-conduite-section" class="profil-row">
+                <button type="button" id="aide-conduite-toggle" class="profil-row-btn" onclick="openProfilSheet('aide')">
+                    <span>Aide à la conduite</span>
+                    <span class="ac-arrow">›</span>
+                </button>
+                <div id="aide-conduite-body">
+                    <div class="ac-row">
+                        <div class="ac-row-info">
+                            <div class="ac-row-label">Affichage du trafic</div>
+                            <div class="ac-row-hint">Ralentissements et incidents en temps réel sur la carte</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="traffic-toggle-btn" onchange="onTrafficToggleChange(this)">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="ac-row">
+                        <div class="ac-row-info">
+                            <div class="ac-row-label">Menu rapide (appui long)</div>
+                            <div class="ac-row-hint">Masque les boutons flottants : appui long sur la carte pour les rappeler en cercle</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="hotbox-toggle-btn" onchange="onHotboxToggleChange(this)">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="ac-row">
+                        <div class="ac-row-info">
+                            <div class="ac-row-label">Compteur éco-conduite</div>
+                            <div class="ac-row-hint">Score et freinages/accélérations brusques en temps réel</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="eco-counter-toggle" onchange="onEcoCounterToggleChange()">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="ac-row">
+                        <div class="ac-row-info">
+                            <div class="ac-row-label">Alerte ZFE / Crit'Air</div>
+                            <div class="ac-row-hint">Prévient avant d'entrer dans une zone interdite à ta vignette</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="zfe-toggle" onchange="onZFEToggleChange()">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="ac-row">
+                        <div class="ac-row-info">
+                            <div class="ac-row-label">Alerte "Je suis à 10 min"</div>
+                            <div class="ac-row-hint">Notification + bouton WhatsApp quand il reste ~10 min d'arrivée</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="tenmin-toggle" onchange="onTenMinToggleChange()">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div id="tenmin-contacts-section" style="display:none;margin-top:10px;">
+                        <div class="ac-row-hint" style="margin-bottom:6px;">Contacts associés à tes adresses favorites :</div>
+                        <div id="tenmin-contacts-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                        <div class="ac-row-hint" style="margin-top:6px;">Modifie le contact depuis <strong style="color:#58a6ff;">Trajet → Adresses enregistrées</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Score éco-conduite live (visible pendant la navigation) -->
+            <div id="eco-score-bar">
+                <div>
+                    <div class="eco-label">Score éco-conduite</div>
+                    <div class="eco-sub">Freinages et accélérations brusques</div>
+                </div>
+                <div style="margin-left:auto;text-align:center;">
+                    <span id="eco-score-live">100</span><span style="font-size:11px;color:#4a5568;">/100</span>
+                </div>
+            </div>
+
+            <div class="drivers-section" id="drivers-container"></div>
+
+            <div class="itin-section" id="profil-options-trajet" style="margin-top:12px;">
+                <label>Options du trajet</label>
+                <label class="trip-option-row" style="margin:0;">
+                    <input type="checkbox" id="test-pause-toggle" onchange="onTestPauseModeChange()">
+                    🧪 Tester la pause aire (mode Simu)
+                </label>
+                <div class="trip-option-hint">En Simu Salif : arrêt auto sur la 1ère aire, pause réduite à 20 sec</div>
+                <label class="trip-option-row" style="margin-top:10px;">
+                    <input type="checkbox" id="buildings-3d-toggle" checked onchange="toggleBuildings3D()">
+                    🏢 Bâtiments 3D
+                </label>
+                <div class="trip-option-hint">Désactiver pour une meilleure visibilité en ville</div>
+            </div>
+
+            <!-- === SAUVEGARDE PROFIL === -->
+            <div id="backup-section" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:8px;border-radius:16px;border:1px solid rgba(0,140,255,0.2);flex-shrink:0;align-self:stretch;">
+                <button type="button" onclick="toggleBackupSection()" style="
+                    width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
+                    padding:13px 15px;cursor:pointer;
+                    background:linear-gradient(170deg,#0f1825,#0a0e17);
+                    border:none;border-radius:16px;
+                    color:#8892b0;font-size:11px;font-weight:700;
+                    letter-spacing:2px;text-transform:uppercase;
+                    -webkit-tap-highlight-color:transparent;
+                    transition:background 0.2s;text-align:left;
+                ">
+                    <span>Sauvegarde profil</span>
+                    <span id="backup-chevron" style="font-size:12px;color:#4a5568;transition:transform 0.3s ease;">▼</span>
+                </button>
+                <div id="backup-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#0a0e17,#080b12);border-top:1px solid rgba(0,140,255,0.08);border-radius:0 0 16px 16px;">
+                    <div style="font-size:11px;color:#4a5568;line-height:1.5;margin-bottom:12px;">
+                        Exporte tous tes badges, objectifs, favoris, réglages et historique dans un fichier JSON. Importe-le pour restaurer ton profil sur un autre appareil.
+                    </div>
+                    <button class="itin-save-fav" onclick="exportProfile()" style="background:linear-gradient(135deg,#0d4a7a,#0a2f50);border:1px solid rgba(0,140,255,0.3);margin-top:0;">
+                        📤 Exporter mon profil (.json)
+                    </button>
+                    <button class="itin-save-fav" onclick="document.getElementById('import-profile-input').click()" style="margin-top:8px;background:linear-gradient(135deg,#1b4d2e,#0d3320);border:1px solid rgba(40,167,69,0.3);">
+                        📥 Importer un profil (.json)
+                    </button>
+                    <input type="file" id="import-profile-input" accept=".json" style="display:none;" onchange="importProfile(this)">
+                    <div id="import-profile-status" style="display:none;margin-top:8px;padding:10px 12px;border-radius:10px;font-size:12px;font-weight:700;"></div>
+
+                    <!-- Lecteur du journal d'erreurs. Sans lui, gps_error_log n'était
+                         consultable qu'à la console : impossible sur le téléphone, là où
+                         se produisent justement les bugs invisibles au simulateur. -->
+                    <div style="margin-top:14px;border-top:1px solid rgba(0,140,255,0.08);padding-top:12px;">
+                        <button class="itin-save-fav" onclick="toggleErrorLogView()" style="margin-top:0;background:linear-gradient(135deg,#3a2a0d,#241a08);border:1px solid rgba(255,150,0,0.3);">
+                            🩺 Journal d'erreurs
+                        </button>
+                        <div id="error-log-view" style="display:none;margin-top:10px;">
+                            <div id="error-log-list" style="max-height:40vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
+                            <div style="display:flex;gap:8px;margin-top:8px;">
+                                <button class="itin-save-fav" onclick="copyErrorLog()" style="margin-top:0;flex:1;background:linear-gradient(135deg,#0d4a7a,#0a2f50);border:1px solid rgba(0,140,255,0.3);">📋 Copier</button>
+                                <button class="itin-save-fav" onclick="clearErrorLog()" style="margin-top:0;flex:1;background:linear-gradient(135deg,#4a1520,#2e0d14);border:1px solid rgba(220,53,69,0.35);">🗑 Vider</button>
+                            </div>
+                            <!-- Repli de copie : dans une WebView Android, navigator.clipboard
+                                 est souvent indisponible ou refusé. Même parade que l'export
+                                 de profil — un textarea que l'utilisateur copie à la main. -->
+                            <textarea id="error-log-copybox" readonly style="display:none;width:100%;height:120px;margin-top:8px;background:#060a12;color:#cbd5e0;border:1px solid rgba(0,140,255,0.25);border-radius:8px;font-size:10px;padding:8px;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </div><!-- fin panel-tab-profil -->
+
+        <!-- ═══ ONGLET OBJECTIFS ═══ -->
+        <div class="panel-tab-content" id="panel-tab-objectifs">
+        <h2 class="itin-title">Objectifs</h2>
+
+            <div class="profil-section-title">Objectifs de la semaine</div>
+
+            <div id="weekly-goals-timer-panel" style="font-size:11px;color:#4a5568;margin-bottom:14px;font-weight:700;letter-spacing:0.5px;"></div>
+
+            <div id="weekly-goals-list-panel"></div>
+
+            <div id="weekly-goals-bonus-panel" style="margin-top:16px;text-align:center;"></div>
+
+            <!-- ⚡ DEBUG — SUPPRIMER APRÈS TEST -->
+            <div style="margin-top:20px;text-align:center;border-top:1px dashed rgba(255,100,0,0.3);padding-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                <button onclick="_debugFillGoals95()" style="background:rgba(255,100,0,0.15);border:1px dashed rgba(255,100,0,0.5);color:#ff9500;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    ⚡ DEBUG — Objectifs 95%
+                </button>
+                <button onclick="_debugLoadTestContacts()" style="background:rgba(88,200,255,0.15);border:1px dashed rgba(88,200,255,0.5);color:#58c8ff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    🎤 DEBUG — Charger contacts vocal
+                </button>
+            </div>
+
+    </div><!-- fin panel-tab-objectifs -->
+    </div><!-- fin ui-panel -->
+
+    <!-- Indicateur de vitesse actuelle -->
+    <!-- Compteur vitesse style Waze -->
+    <div id="nav-speed-display">
+        <!-- Arc SVG de fond + arc de progression -->
+        <svg id="speedometer-svg" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+            <!-- Fond sombre semi-transparent -->
+            <circle cx="55" cy="55" r="50" fill="rgba(10,14,23,0.82)" stroke="none"/>
+            <!-- Arc de fond (gris) : 220° de -220° à 40° -->
+            <circle id="speedometer-bg-circle" cx="55" cy="55" r="42"
+                fill="none" stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="183 314"
+                transform="rotate(148 55 55)"/>
+            <!-- Arc de progression (coloré) -->
+            <circle id="speedometer-arc-fill" cx="55" cy="55" r="42"
+                fill="none" stroke="#4cd964" stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="0 314"
+                transform="rotate(148 55 55)"/>
+        </svg>
+        <div id="nav-speed-value">0</div>
+        <div id="nav-speed-unit">km/h</div>
+    </div>
+    <!-- Pastille vitesse limite (indépendante, positionnée en haut à droite du compteur) -->
+    <div id="speed-limit-badge">
+        <div id="speed-limit-value">50</div>
+    </div>
+    <!-- Diagnostic de la limite affichée : ouvert par appui long sur la pastille -->
+    <div id="speed-limit-debug"></div>
+
+    <div id="nav-bottom-bar">
+        <div class="nav-stats-row">
+            <button id="nav-google-close" onclick="stopCourse()" title="Terminer la navigation">✕</button>
+            <div class="nav-stat-box">
+                <div class="nav-stat-label">POINTS DU TRAJET</div>
+                <div class="nav-stat-value" id="nav-points">+0 pts</div>
+            </div>
+            <div class="nav-stat-box" id="nav-eta-box">
+                <div class="nav-stat-label">TEMPS RESTANT</div>
+                <div class="nav-stat-value" id="nav-eta">--</div>
+            </div>
+            <div class="nav-stat-box">
+                <div class="nav-stat-label">MULTIPLICATEUR</div>
+                <div class="nav-stat-value" id="nav-multiplier">x1.5</div>
+            </div>
+        </div>
+        <!-- Compteur éco live (visible si option activée) -->
+        <div id="nav-eco-counter" style="display:none;justify-content:center;gap:18px;padding:5px 12px 6px;border-top:1px solid rgba(0,140,255,0.08);">
+            <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#4a5568;">
+                <span>🛑</span>
+                <span>Freinages :</span>
+                <span id="eco-brake-count" style="font-weight:800;color:#f85149;">0</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#4a5568;">
+                <span>⚡</span>
+                <span>Accélérations :</span>
+                <span id="eco-accel-count" style="font-weight:800;color:#f39c12;">0</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#4a5568;">
+                <span>🌿</span>
+                <span>Score :</span>
+                <span id="eco-score-counter" style="font-weight:800;color:#28a745;">100</span>
+            </div>
+        </div>
+    </div>
+
+    <button id="recenter-btn" onclick="recenterMap()" title="Recentrer">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <line x1="12" y1="2" x2="12" y2="6"/>
+            <line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="6" y2="12"/>
+            <line x1="18" y1="12" x2="22" y2="12"/>
+        </svg>
+    </button>
+    <div id="map"></div>
+    <div id="map-3d"></div>
+
+    <div id="map-pick-hint">
+        <span id="map-pick-hint-text"></span>
+        <button onclick="cancelModalMapPick()">✕ Annuler</button>
+    </div>
+
+    <!-- Anneau de progression de l'appui long. Posé AU POINT DE PRESSION, il se remplit
+         pendant HOTBOX_PRESS_MS : sans lui, les 400 ms d'attente sont aveugles et rien
+         n'indique que le geste est en cours ni qu'il a été maintenu assez longtemps.
+         Hors de #hotbox, qui n'existe qu'une fois le cercle ouvert. -->
+    <div id="hb-press" aria-hidden="true">
+        <svg viewBox="0 0 40 40">
+            <circle class="hb-press-track" cx="20" cy="20" r="18"></circle>
+            <circle class="hb-press-fill"  cx="20" cy="20" r="18"></circle>
+        </svg>
+    </div>
+
+    <!-- Hotbox radiale : ouverte par appui long sur la carte, entrées injectées par buildHotbox() -->
+    <div id="hotbox" aria-hidden="true">
+        <div id="hotbox-veil"></div>
+        <div id="hotbox-ring">
+            <div id="hotbox-title"></div>
+            <div id="hotbox-core">✕</div>
+            <div id="hotbox-label"></div>
+        </div>
+    </div>
+
+    <div id="hotbox-hint">
+        <div id="hotbox-hint-target">👆</div>
+        <div id="hotbox-hint-bubble">
+            <span>Appui long au centre de la carte pour ouvrir le menu rapide.</span>
+            <button onclick="dismissHotboxHint()" title="Masquer">✕</button>
+        </div>
+    </div>
+
+    <!-- Feuille « Stations autour de moi » : scan par rayon, ouvert depuis la hotbox -->
+    <div id="gas-scan-sheet" onclick="event.stopPropagation();">
+        <!-- Pas de onclick ici : le tap ET le glissement sont gérés ensemble par
+             initGasScanDrag(), qui distingue l'un de l'autre au relâchement. -->
+        <div id="gas-scan-head">
+            <span style="width:17px;"></span>
+            <span id="gas-scan-title">Station essence</span>
+            <span id="gas-scan-chevron">▼</span>
+            <button id="gas-scan-close" onclick="event.stopPropagation(); closeGasScan();" title="Fermer">✕</button>
+        </div>
+        <div id="gas-scan-body">
+            <div id="gas-scan-fuels"></div>
+            <!-- Boutons de tri injectés par _renderGasScanModes() : le second dépend
+                 du type de véhicule (prix pour une pompe, puissance pour une borne). -->
+            <div id="gas-scan-modes"></div>
+            <div id="gas-scan-radius-row">
+                <input type="range" id="gas-scan-radius" min="1" max="10" step="0.5" value="5"
+                       oninput="onGasScanRadiusInput(this.value)" onchange="onGasScanRadiusCommit(this.value)">
+                <span id="gas-scan-radius-val">5 km</span>
+            </div>
+            <div id="gas-scan-status"></div>
+            <div id="gas-scan-list"></div>
+        </div>
+    </div>
+
+    <div id="trip-modal-overlay" onclick="event.stopPropagation();">
+        <div id="trip-modal">
+            <div class="trip-modal-handle" id="trip-modal-handle">
+                <h3>Confirmer le trajet</h3>
+                <button class="modal-close-x" onclick="closeTripModal(true)">✕</button>
+            </div>
+            <div class="trip-modal-body">
+            <div class="form-group">
+                <label>Départ</label>
+                <div class="input-with-btn">
+                    <input type="text" id="modal-start-addr" placeholder="Position GPS..." oninput="onModalStartInput()" autocomplete="off">
+                    <button class="itin-icon-btn itin-mic-btn" id="mic-modal-start-addr" onclick="startVoiceInput('modal-start-addr')" title="Dicter l'adresse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
+                    <button class="btn-map" id="btn-pick-modal-start" onclick="pickOnMapForModal('start')"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#0d1420"/></svg></button>
+                    <button class="itin-icon-btn btn-swap-addr" id="btn-swap-start" onclick="swapModalAddresses()" title="Inverser départ / arrivée" style="color:#58a6ff;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="20" x2="8" y2="4"/><polyline points="4 8 8 4 12 8"/><line x1="16" y1="4" x2="16" y2="20"/><polyline points="12 16 16 20 20 16"/></svg></button>
+                    <button class="itin-icon-btn" onclick="clearModalStart()" title="Effacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+                <div class="addr-suggestions" id="modal-start-addr-suggestions"></div>
+            </div>
+
+
+
+            <!-- Étapes intermédiaires (multi-arrêts) -->
+            <div id="modal-waypoints-container"></div>
+            <button id="btn-add-waypoint" onclick="addModalWaypoint()">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Ajouter une étape
+            </button>
+
+            <div class="form-group">
+                <label>Arrivée</label>
+                <div class="input-with-btn">
+                    <input type="text" id="modal-end-addr" placeholder="Où allez-vous ?" oninput="onModalEndInput()" autocomplete="off">
+                    <button class="itin-icon-btn itin-mic-btn" id="mic-modal-end-addr" onclick="startVoiceInput('modal-end-addr')" title="Dicter l'adresse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
+                    <button class="btn-map" id="btn-pick-modal-end" onclick="pickOnMapForModal('end')"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#0d1420"/></svg></button>
+                    <button class="itin-icon-btn btn-swap-addr" id="btn-swap-end" onclick="swapModalAddresses()" title="Inverser départ / arrivée" style="color:#58a6ff;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="20" x2="8" y2="4"/><polyline points="4 8 8 4 12 8"/><line x1="16" y1="4" x2="16" y2="20"/><polyline points="12 16 16 20 20 16"/></svg></button>
+                    <button class="itin-icon-btn" onclick="clearModalEnd()" title="Effacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+                <div class="addr-suggestions" id="modal-end-addr-suggestions"></div>
+            </div>
+
+
+            <!-- Section itinéraires déroulante -->
+            <div id="route-choice-section" style="display:none;">
+                <div class="modal-collapsible-title" onclick="toggleRouteChoicePanel()">
+                    <span>Choix itinéraire</span>
+                    <span id="route-choice-chevron" style="margin-left:auto;font-size:14px;color:#4da3ff;transition:transform 0.2s;">▶</span>
+                </div>
+                <div id="route-choice-panel" style="display:none;">
+                    <div class="route-alternatives" id="route-alternatives"></div>
+                </div>
+            </div>
+
+            <!-- Section stations essence / bornes électriques -->
+            <div id="gas-stations-section">
+                <div class="modal-collapsible-title" style="cursor:pointer;user-select:none;" onclick="toggleGasStationsPanel()">
+                    <span id="gas-section-title">Stations sur le trajet</span>
+                    <span id="gas-toggle-chevron" style="margin-left:auto;font-size:14px;color:#4da3ff;transition:transform 0.2s;">▶</span>
+                </div>
+                <div id="gas-stations-panel" style="display:none;">
+                    <div id="gas-fuel-selector" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
+                    <div id="gas-stations-loading" style="display:none;">🔄 Recherche des prix en temps réel...</div>
+                    <div id="gas-stations-list"></div>
+                </div>
+            </div>
+
+            <!-- Option péages -->
+            <div id="modal-toll-section" style="display:none;">
+                <div class="modal-collapsible-title" onclick="toggleTollOption()" style="cursor:pointer;">
+                    <span>Éviter les péages</span>
+                    <span id="toll-toggle-chevron" style="margin-left:auto;font-size:14px;color:#4da3ff;transition:transform 0.2s;">▶</span>
+                </div>
+                <div id="toll-toggle-panel" style="display:none;padding:6px 0 8px;">
+                    <div style="display:flex;gap:8px;">
+                        <button id="toll-btn-oui" class="toll-yn-btn" onclick="setAvoidTolls(true)">Oui</button>
+                        <button id="toll-btn-non" class="toll-yn-btn active-non" onclick="setAvoidTolls(false)">Non</button>
+                    </div>
+                    <input type="checkbox" id="avoid-tolls-toggle-modal" style="display:none;" onchange="onAvoidTollsChange(this)">
+                </div>
+            </div>
+
+            <div class="trip-preview" id="trip-preview">
+                <div class="modal-collapsible-title" onclick="toggleTripInfoPanel()" style="cursor:pointer;user-select:none;">
+                    <span>Informations trajet</span>
+                    <span id="trip-info-chevron" style="margin-left:auto;font-size:14px;color:#4da3ff;transition:transform 0.2s;">▶</span>
+                </div>
+                <div id="trip-info-details" class="trip-info-details">
+                    <div class="trip-preview-item"><span>• Temps estimé</span><span id="preview-time">--</span></div>
+                    <div class="trip-preview-item"><span>• Distance</span><span id="preview-distance">--</span></div>
+                    <div class="trip-preview-item"><span>• Points max (sans excès)</span><span id="preview-points">--</span></div>
+                    <div class="trip-info-separator"></div>
+                    <div class="trip-preview-item"><span id="preview-fuel-label">• Coût carburant estimé</span><span id="preview-fuel-cost">--</span></div>
+                    <div class="trip-preview-item"><span>• Péages estimés</span><span id="preview-toll-cost">--</span></div>
+                    <div class="trip-info-separator"></div>
+                    <div class="trip-preview-item trip-preview-total"><span>• Coût total estimé</span><span id="preview-total-cost">--</span></div>
+                </div>
+                <div id="zfe-preview-card">
+                    <div id="zfe-preview-title"></div>
+                    <div id="zfe-preview-body"></div>
+                </div>
+            </div>
+            <div class="modal-status" id="modal-status"></div>
+            <div class="modal-actions">
+                <button class="modal-cancel-btn" onclick="closeTripModal(true)">Annuler</button>
+                <button class="modal-validate-btn" id="btn-validate-trip" onclick="validateAndLaunchTrip()" disabled>Lancer le trajet</button>
+            </div>
+            </div><!-- .trip-modal-body -->
+        </div>
+    </div>
+
+    <!-- Repli d'export : une WebView Android ne sait pas télécharger une URL blob:.
+         Dans ce cas on affiche le JSON pour copie manuelle plutôt que de tenter un
+         téléchargement qui échoue silencieusement ou fait planter l'application. -->
+    <div id="export-json-overlay" onclick="if(event.target===this)closeExportJsonModal()">
+        <div id="export-json-box">
+            <div id="export-json-title">Sauvegarde du profil</div>
+            <div id="export-json-hint">Le téléchargement direct n'est pas disponible dans cette application. Copie ce texte et colle-le dans une note ou un e-mail pour le conserver.</div>
+            <textarea id="export-json-text" readonly spellcheck="false"></textarea>
+            <div id="export-json-actions">
+                <button class="ej-btn ej-btn-main" id="export-json-copy" onclick="copyExportJson()">📋 Tout copier</button>
+                <button class="ej-btn" onclick="closeExportJsonModal()">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+ 
+
+    <!-- ═══ JS applicatif — L'ORDRE DE CHARGEMENT EST SIGNIFICATIF ═══
+         Scripts CLASSIQUES (surtout pas type="module") : ils partagent le meme
+         scope global, exactement comme l'ancien <script> unique, et fonctionnent
+         en file:// . Les fichiers sont decoupes dans l'ordre d'origine et du code
+         s'execute au chargement (map.addControl, loadProfilesFromStorage(),
+         addDriver(), IIFE initXxx...) : NE PAS REORDONNER.
+         00-helpers-partages.js regroupe setupAddressAutocomplete() et
+         initVehicleConfigUI(), appelees plus haut qu'elles n'etaient definies :
+         il doit rester en premier. ═══ -->
+    <script src="js/00-helpers-partages.js"></script>
+    <script src="js/01-core-utils.js"></script>
+    <script src="js/02-profil-export.js"></script>
+    <script src="js/03-carte-3d.js"></script>
+    <script src="js/04-routes-alternatives.js"></script>
+    <script src="js/05-vitesse-limites.js"></script>
+    <script src="js/06-voix.js"></script>
+    <script src="js/07-gps-position.js"></script>
+    <script src="js/08-panneau-itineraire.js"></script>
+    <script src="js/09-nav-recherche.js"></script>
+    <script src="js/10-paris-hotbox.js"></script>
+    <script src="js/11-scan-stations.js"></script>
+    <script src="js/12-gamification.js"></script>
+    <script src="js/13-stats-eco.js"></script>
+    <script src="js/14-eta-navigation.js"></script>
+    <script src="js/15-multiarrets-vehicule.js"></script>
+    <script src="js/16-zfe.js"></script>
+    <script src="js/17-stations-sources.js"></script>
+    <script src="js/18-stations-marqueurs.js"></script>
+    <script src="js/19-bornes-elec-et-vitesse.js"></script>
+
+</body>
+</html>

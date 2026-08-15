@@ -1,0 +1,23 @@
+# === Projet Capacitor autonome ===
+# Iphone/gobysalif possède SON PROPRE dépôt git et un node_modules de 165 Mo.
+# L'inclure ici en ferait soit un sous-module implicite, soit 3 600 fichiers de
+# dépendances dans l'historique. Il se versionne chez lui.
+Iphone/
+
+# === Historique manuel d'avant git ===
+# 149 copies horodatées, remplacées par l'historique des commits. Les fichiers
+# RESTENT sur le disque — ils ne sont simplement plus suivis. À supprimer le jour
+# où tu auras confiance dans l'historique git (rien ne presse).
+backup/
+
+# === Système / éditeur ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+
+# === Sorties de travail ===
+node_modules/
+*.log

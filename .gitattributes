@@ -1,0 +1,22 @@
+# ⚠ AUCUNE CONVERSION DE FIN DE LIGNE, SUR AUCUN FICHIER.
+#
+# Les sources du projet (index.html, css/styles.css, js/*.js, AGENTS.md) sont en
+# UTF-8 sans BOM et en LF seul, y compris sous Windows. `core.autocrlf` étant
+# souvent à `true` sur une installation Windows, git réécrirait les octets à
+# chaque aller-retour index/copie de travail — exactement le genre de
+# modification silencieuse contre laquelle AGENTS.md met en garde (l'incident
+# CP1252 du 14/08/2026 : 4926 caractères cassés sans qu'aucune commande
+# n'échoue). `-text` désactive toute normalisation : git stocke et restitue les
+# octets tels quels, et un `git diff` propre reste la preuve qu'un fichier n'a
+# pas été altéré.
+* -text
+
+# Binaires : jamais de diff textuel ni de fusion ligne à ligne.
+*.ogg  binary
+*.mp4  binary
+*.mov  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.zip  binary

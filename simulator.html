@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salif GPS — Simulateur Pixel 9A</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #1a1a2e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: auto;
+            padding: 20px 0;
+        }
+
+        /* Barre d'outils du simulateur */
+        #sim-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 10px 16px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #sim-toolbar span {
+            color: #58a6ff;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .sim-btn {
+            background: rgba(0,140,255,0.12);
+            border: 1px solid rgba(0,140,255,0.3);
+            color: #58a6ff;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .sim-btn:hover { background: rgba(0,140,255,0.25); }
+        .sim-btn.active { background: rgba(0,140,255,0.3); border-color: rgba(0,150,255,0.6); }
+        #sim-scale-label { color: #4a5568; font-size: 11px; }
+
+        /* Châssis du téléphone */
+        #phone-chassis {
+            position: relative;
+            background: #0d0d0d;
+            border-radius: 48px;
+            box-shadow:
+                0 0 0 2px #2a2a2a,
+                0 0 0 6px #1a1a1a,
+                0 40px 80px rgba(0,0,0,0.8),
+                0 0 0 7px #111;
+            transition: transform 0.3s ease;
+        }
+
+        /* Écran */
+        #phone-screen {
+            position: relative;
+            overflow: hidden;
+            border-radius: 36px;
+            background: #000;
+            isolation: isolate;
+        }
+
+        /* Barre système simulée (haut) */
+        #status-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 44px;
+            background: rgba(0,0,0,0.75);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+        #status-bar .sb-time {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        #status-bar .sb-icons {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #status-bar .sb-icons svg {
+            width: 16px; height: 16px; fill: #fff;
+        }
+        #status-bar .sb-battery {
+            width: 24px; height: 12px;
+            border: 1.5px solid #fff;
+            border-radius: 3px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 1.5px;
+        }
+        #status-bar .sb-battery::after {
+            content: '';
+            position: absolute;
+            right: -5px; top: 50%;
+            transform: translateY(-50%);
+            width: 3px; height: 6px;
+            background: #fff;
+            border-radius: 0 2px 2px 0;
+        }
+        #status-bar .sb-battery-fill {
+            height: 100%;
+            width: 70%;
+            background: #4dff88;
+            border-radius: 1px;
+        }
+
+        /* Encoche / Dynamic Island simulée */
+        #notch {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 110px;
+            height: 30px;
+            background: #000;
+            border-radius: 20px;
+            z-index: 10000;
+            pointer-events: none;
+            box-shadow: 0 0 0 1px #1a1a1a;
+        }
+
+        /* Barre de geste Android (bas) */
+        #gesture-bar {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 34px;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        #gesture-bar .gesture-pill {
+            width: 120px;
+            height: 4px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 2px;
+        }
+
+        /* L'iframe de l'app */
+        #app-frame {
+            display: block;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Boutons latéraux du châssis */
+        .phone-btn-right {
+            position: absolute;
+            right: -4px;
+            background: #1a1a1a;
+            border-radius: 0 3px 3px 0;
+            width: 4px;
+        }
+        .phone-btn-right.power { top: 140px; height: 70px; }
+        .phone-btn-left {
+            position: absolute;
+            left: -4px;
+            background: #1a1a1a;
+            border-radius: 3px 0 0 3px;
+            width: 4px;
+        }
+        .phone-btn-left.vol-up { top: 120px; height: 50px; }
+        .phone-btn-left.vol-dn { top: 185px; height: 50px; }
+
+        /* Indicateur de scale */
+        #sim-info {
+            margin-top: 12px;
+            color: #4a5568;
+            font-size: 11px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sim-toolbar">
+    <span>📱 SIMULATEUR PIXEL 9A</span>
+    <button class="sim-btn active" onclick="setScale(0.5)" id="btn-50">50%</button>
+    <button class="sim-btn" onclick="setScale(0.65)" id="btn-65">65%</button>
+    <button class="sim-btn" onclick="setScale(0.8)" id="btn-80">80%</button>
+    <button class="sim-btn" onclick="setScale(1)" id="btn-100">100%</button>
+    <button class="sim-btn" onclick="reloadApp()">🔄 Recharger</button>
+    <button class="sim-btn" onclick="toggleOrientation()" id="btn-orient">⟳ Portrait</button>
+    <span id="sim-scale-label">Échelle : 50%</span>
+</div>
+
+<div id="phone-chassis">
+    <!-- Boutons physiques -->
+    <div class="phone-btn-right power"></div>
+    <div class="phone-btn-left vol-up"></div>
+    <div class="phone-btn-left vol-dn"></div>
+
+    <div id="phone-screen">
+        <!-- Barre système -->
+        <div id="status-bar">
+            <div class="sb-time" id="sim-clock">19:53</div>
+            <div class="sb-icons">
+                <!-- Signal -->
+                <svg viewBox="0 0 24 24"><rect x="1" y="13" width="4" height="8" rx="1"/><rect x="7" y="9" width="4" height="12" rx="1"/><rect x="13" y="5" width="4" height="16" rx="1"/><rect x="19" y="1" width="4" height="20" rx="1" opacity="0.3"/></svg>
+                <!-- WiFi -->
+                <svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0" opacity="0.3"/><path d="M1.42 9a16 16 0 0 1 21.16 0" opacity="0.2"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1.5"/></svg>
+                <!-- Batterie -->
+                <div class="sb-battery"><div class="sb-battery-fill"></div></div>
+            </div>
+        </div>
+
+        <!-- Encoche -->
+        <div id="notch"></div>
+
+        <!-- L'app -->
+        <!-- `microphone` est indispensable à la Web Speech API : sans lui la politique de
+             permissions de l'iframe bloque la dictée, même sur un navigateur qui la gère. -->
+        <iframe id="app-frame" src="index.html" allow="geolocation; accelerometer; gyroscope; microphone"></iframe>
+
+        <!-- Barre de geste -->
+        <div id="gesture-bar">
+            <div class="gesture-pill"></div>
+        </div>
+    </div>
+</div>
+
+<div id="sim-info">
+    Pixel 9A · 1080×2424px · 6.3" · Appuie sur F5 pour recharger l'app
+</div>
+
+<script>
+    // Dimensions exactes Pixel 9A en pixels CSS (densité logique ~2.625x)
+    // Résolution physique : 1080×2424 → CSS : ~412×923px
+    const DEVICE = {
+        portrait:  { w: 412, h: 923 },
+        landscape: { w: 923, h: 412 }
+    };
+
+    let currentScale = 0.5;
+    let isLandscape = false;
+
+    function getDevice() {
+        return isLandscape ? DEVICE.landscape : DEVICE.portrait;
+    }
+
+    function applyLayout() {
+        const d = getDevice();
+        const chassis = document.getElementById('phone-chassis');
+        const screen  = document.getElementById('phone-screen');
+        const frame   = document.getElementById('app-frame');
+        const notch   = document.getElementById('notch');
+        const statusBar = document.getElementById('status-bar');
+        const gestureBar = document.getElementById('gesture-bar');
+
+        // Dimensions physiques du châssis (légèrement plus grand que l'écran)
+        const padH = 16, padV = 20;
+        const chassisW = d.w + padH * 2;
+        const chassisH = d.h + padV * 2;
+
+        chassis.style.width  = chassisW + 'px';
+        chassis.style.height = chassisH + 'px';
+        chassis.style.transform = `scale(${currentScale})`;
+        chassis.style.transformOrigin = 'top center';
+
+        screen.style.width  = d.w + 'px';
+        screen.style.height = d.h + 'px';
+        screen.style.margin = `${padV}px ${padH}px`;
+        screen.style.position = 'relative';
+
+        // L'iframe occupe TOUTE la hauteur de l'écran
+        // Les barres status/gesture se superposent par-dessus (pointer-events:none)
+        frame.style.width  = d.w + 'px';
+        frame.style.height = d.h + 'px';
+        frame.style.marginTop = '0';
+        frame.style.display = 'block';
+        frame.style.position = 'absolute';
+        frame.style.top = '0';
+        frame.style.left = '0';
+
+        notch.style.display = isLandscape ? 'none' : 'block';
+
+        // Ajuster la hauteur du châssis pour le scale
+        const scaledH = chassisH * currentScale;
+        document.body.style.minHeight = (scaledH + 120) + 'px';
+    }
+
+    function setScale(s) {
+        currentScale = s;
+        document.querySelectorAll('.sim-btn[id^="btn-"]').forEach(b => b.classList.remove('active'));
+        const keys = { 0.5: '50', 0.65: '65', 0.8: '80', 1: '100' };
+        const btn = document.getElementById('btn-' + keys[s]);
+        if (btn) btn.classList.add('active');
+        document.getElementById('sim-scale-label').textContent = `Échelle : ${Math.round(s * 100)}%`;
+        applyLayout();
+    }
+
+    function toggleOrientation() {
+        isLandscape = !isLandscape;
+        const btn = document.getElementById('btn-orient');
+        btn.textContent = isLandscape ? '⟳ Paysage' : '⟳ Portrait';
+        applyLayout();
+        reloadApp();
+    }
+
+    function reloadApp() {
+        const frame = document.getElementById('app-frame');
+        frame.src = frame.src;
+    }
+
+    // Horloge live
+    function updateClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('sim-clock').textContent = `${h}:${m}`;
+    }
+    updateClock();
+    setInterval(updateClock, 10000);
+
+    // Init
+    applyLayout();
+</script>
+</body>
+</html>
