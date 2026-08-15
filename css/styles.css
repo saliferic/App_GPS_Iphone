@@ -2576,6 +2576,16 @@
         .vcell-input.fuel-refreshing { border-color: rgba(0,150,255,0.45); animation: fuelPulse 1s ease-in-out infinite; }
         @keyframes fuelPulse { 0%,100% { opacity: 0.55; } 50% { opacity: 0.9; } }
 
+        /* Légendes sous les réglages (« Utilisé pour estimer le coût énergie… », origine
+           du prix carburant, portée de la vignette Crit'Air…). La classe existait dans le
+           HTML depuis le début mais n'avait AUCUNE règle : ces textes héritaient donc de
+           la couleur du panneau, presque illisible sur le fond sombre — or ce sont eux qui
+           expliquent d'où sort un prix qu'on ne peut pas modifier. */
+        .trip-option-hint {
+            color: #ffffff; font-size: clamp(10px, 2.9vw, 11px);
+            line-height: 1.45; margin-top: 6px;
+        }
+
         /* === CARBURANT : choix du type + moyenne locale === */
         .fuel-kind-pill {
             flex: 1; padding: clamp(5px, 1.5vw, 7px) clamp(1px, 0.5vw, 2px); border-radius: 9px;

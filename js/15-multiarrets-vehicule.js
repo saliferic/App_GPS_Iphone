@@ -648,11 +648,19 @@
         const FUEL_AVG_TTL_MS    = 6 * 60 * 60 * 1000;  // au-delà, la moyenne est repêchée
         const FUEL_AVG_MOVE_KM   = 3;                   // déplacement qui périme le cache
         const FUEL_KIND_LABEL    = { gazole: 'Gazole', sp95: 'SP95', e10: 'E10', sp98: 'SP98' };
+        const FUEL_KINDS         = ['gazole', 'sp95', 'e10', 'sp98'];
         let _fuelAvgInFlight = false;   // une seule requête à la fois (ouverture répétée du panneau)
 
+        /* ⚠ Le repli est E10, pas SP95. Le SP95 n'est plus vendu que par ~8 % des stations
+           du flux data.economie.gouv.fr (mesuré sur 100 stations autour de Paris : 8 SP95,
+           87 E10, 94 gazole, 79 SP98) : avec SP95 par défaut, un utilisateur qui n'a jamais
+           touché aux pastilles voyait « Aucun prix SP95 relevé dans 3 km » — non pas parce
+           que le relevé échouait, mais parce que personne autour de lui n'en vend. Le prix
+           carburant n'était donc JAMAIS calculé tant qu'on n'avait pas deviné qu'il fallait
+           changer de carburant à la main. */
         function getFuelKind() {
             const k = localStorage.getItem('gps_fuel_type');
-            return FUEL_KIND_LABEL[k] ? k : 'sp95';
+            return FUEL_KIND_LABEL[k] ? k : 'e10';
         }
 
         function isFuelPriceManual() {
@@ -730,6 +738,41 @@
             _setFuelSourceHint(_fuelSourceText(_loadFuelAvgMeta()));
         }
 
+        /* ⚠ UN PANNEAU OUVERT AVANT LE PREMIER FIX RESTAIT MUET POUR TOUJOURS. Le relevé
+           n'était tenté qu'à l'ouverture de « Mon véhicule » (`initVehicleConfigUI`) : ouvert
+           dans les secondes qui suivent le lancement — le cas normal, la permission de
+           géolocalisation vient à peine d'être accordée —, `lastRealCoords` est encore nul et
+           RIEN ne repassait ensuite, même une fois la position acquise. D'où « Position GPS
+           indisponible » affiché en permanence sous un téléphone qui, lui, savait très bien
+           où il était. On guette donc le premier fix, mais de façon BORNÉE : ~32 s puis on
+           abandonne en le disant. Un guet sans fin tournerait pour l'éternité chez qui a
+           refusé la géolocalisation. */
+        const FUEL_GPS_RETRY_MS  = 4000;
+        const FUEL_GPS_RETRY_MAX = 8;
+        let _fuelGpsRetryTimer = null;
+
+        function _hasGpsFix() {
+            return (typeof lastRealCoords !== 'undefined') && !!normalizeLngLat(lastRealCoords);
+        }
+
+        function _disarmFuelGpsRetry() {
+            if (_fuelGpsRetryTimer) { clearInterval(_fuelGpsRetryTimer); _fuelGpsRetryTimer = null; }
+        }
+
+        function _armFuelGpsRetry() {
+            if (_fuelGpsRetryTimer) return;   // un seul guet, quelles que soient les réouvertures
+            let restant = FUEL_GPS_RETRY_MAX;
+            _fuelGpsRetryTimer = setInterval(() => {
+                const fix = _hasGpsFix();
+                if (!fix && --restant > 0) return;
+                _disarmFuelGpsRetry();
+                if (fix) refreshLocalFuelAverage(false);
+                else if (!_loadFuelAvgMeta()) _setFuelSourceHint(
+                    'Position GPS indisponible — moyenne locale non calculée. '
+                    + 'Active la localisation, puis touche ↻.');
+            }, FUEL_GPS_RETRY_MS);
+        }
+
         /* Recalcule la moyenne locale. `force` court-circuite le cache (bouton ↻ et
            changement de carburant) ; sans lui, une moyenne de moins de 6 h relevée à
            moins de 3 km d'ici est réutilisée telle quelle — inutile de solliciter
@@ -754,9 +797,11 @@
                 if (meta) _applyAutoFuelPrice(meta);
                 _setFuelSourceHint(meta
                     ? `Position GPS indisponible — ${_fuelSourceText(meta).charAt(0).toLowerCase()}${_fuelSourceText(meta).slice(1)}`
-                    : 'Position GPS indisponible — moyenne locale non calculée.');
+                    : 'Position GPS indisponible — recherche du signal…');
+                _armFuelGpsRetry();
                 return null;
             }
+            _disarmFuelGpsRetry();
             if (_fuelAvgInFlight) return null;
             if (typeof fetchGasPointFR !== 'function' || typeof extractGasPrice !== 'function') {
                 _setFuelSourceHint('Source des prix indisponible.');
@@ -781,9 +826,19 @@
 
                 if (prix.length === 0) {
                     if (meta) _applyAutoFuelPrice(meta);
+                    /* Impasse la plus fréquente, et la plus déroutante : le relevé a marché,
+                       les stations sont là, mais aucune ne vend CE carburant (SP95 surtout).
+                       Dire seulement « aucun prix » laisse croire à une panne. On nomme donc
+                       les carburants réellement pompables ici — on tient déjà `raw`, ça ne
+                       coûte pas une requête de plus — pour que la pastille à toucher soit
+                       évidente. */
+                    const dispo = FUEL_KINDS.filter(k => k !== kind && (raw || []).some(s => {
+                        const p = extractGasPrice(s, k);
+                        return p != null && p > 0.5 && p < 5;
+                    })).map(k => FUEL_KIND_LABEL[k]);
                     _setFuelSourceHint(`Aucun prix ${FUEL_KIND_LABEL[kind]} relevé dans ${FUEL_AVG_RADIUS_KM} km`
-                        + (meta ? ` — moyenne précédente conservée (${meta.price.toFixed(3)} €/L)` : ' — valeur par défaut conservée')
-                        + '.');
+                        + (dispo.length ? ` — ici, les stations vendent : ${dispo.join(', ')}. Touche la pastille correspondante.` : '.')
+                        + (meta ? ` Moyenne précédente conservée (${meta.price.toFixed(3)} €/L).` : ' Valeur par défaut conservée.'));
                     return null;
                 }
 
