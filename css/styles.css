@@ -1412,7 +1412,35 @@
         .dest-marker-root.start .dest-ring-3 { border-color: rgba(80,255,140,0.15); }
         .dest-marker-root.start .dest-core   { filter: drop-shadow(0 2px 8px rgba(30,180,80,0.6)) drop-shadow(0 0 14px rgba(80,255,140,0.35)); }
         /* === ONGLETS DU PANNEAU PRINCIPAL === */
-        .panel-tab-content { display: none; flex-direction: column; flex: 1; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; padding-bottom: 16px; }
+        /* ⚠ `overflow-x: hidden` OBLIGATOIRE À CÔTÉ DE `overflow-y: auto`.
+           Quand un seul axe est rendu défilant, la spec CSS force l'autre de `visible` à
+           `auto` : un `overflow-y: auto` solitaire crée donc un ascenseur HORIZONTAL en
+           prime dès qu'un enfant dépasse. La consigne vivait dans la requête média paysage
+           seulement ; le portrait affichait la barre (relevé en simulateur le 15/08/2026).
+
+           ⚠⚠ LE DÉBORD EST PORTÉ PAR CE CONTENEUR, PAS PAR LE TITRE SEUL.
+           Le bandeau collant `.itin-title` couvre les gouttières de #ui-panel par des
+           marges latérales négatives (voir sa règle plus bas). Tant que ce conteneur
+           s'arrêtait au ras du contenu, ces marges le faisaient déborder de 14,4 px de
+           chaque côté : c'était LA source de l'ascenseur horizontal — et y répondre par un
+           simple `overflow-x: hidden` ne faisait que ROGNER le bandeau, supprimant l'effet
+           recherché au lieu du défaut.
+           On élargit donc la boîte du conteneur du même débord (marges négatives) tout en
+           lui rendant la même valeur en padding : les enfants gardent exactement la largeur
+           qu'ils avaient, le bandeau tombe pile sur le bord de la boîte de padding, et il
+           n'y a plus rien qui dépasse. `overflow-x: hidden` ne sert plus que de filet.
+           La valeur DOIT rester identique à celle de la marge négative du titre. */
+        .panel-tab-content {
+            --bandeau-debord: clamp(10px, 3.5vw, 15px);
+            display: none; flex-direction: column; flex: 1;
+            overflow-y: auto; overflow-x: hidden;
+            min-height: 0; -webkit-overflow-scrolling: touch;
+            margin-left: calc(-1 * var(--bandeau-debord));
+            margin-right: calc(-1 * var(--bandeau-debord));
+            padding-left: var(--bandeau-debord);
+            padding-right: var(--bandeau-debord);
+            padding-bottom: 16px;
+        }
         .panel-tab-content.active { display: flex; }
 
         /* === TITRE D'ONGLET COLLANT ===
@@ -1439,8 +1467,13 @@
             position: sticky;
             top: 0;
             z-index: 5;
-            margin: 0 calc(-1 * clamp(10px, 3.5vw, 15px)) 14px;
-            padding: 10px clamp(10px, 3.5vw, 15px) 10px;
+            /* ⚠ Même débord que celui de .panel-tab-content, d'où la variable partagée :
+               le bandeau doit tomber EXACTEMENT sur le bord de la boîte de padding du
+               conteneur. Une valeur plus grande le ferait déborder — c'est-à-dire
+               réapparaître l'ascenseur horizontal ; une plus petite laisserait les
+               gouttières à découvert. */
+            margin: 0 calc(-1 * var(--bandeau-debord)) 14px;
+            padding: 10px var(--bandeau-debord) 10px;
             background: #0a0e17;
             /* Ombre portée vers le bas uniquement : signale qu'il y a du contenu dessous,
                sans dessiner de trait quand la liste est en haut de course. */
@@ -1513,7 +1546,14 @@
                    --panel-bottom-offset est mesuré en JS (updatePanelBottomOffset). */
                 bottom: var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px)));
                 border-radius: 20px 20px 0 0; padding: 12px 15px 15px;
-                border-top: 1px solid rgba(0,140,255,0.2); overflow-y: auto;
+                /* overflow-x explicite : sans lui, `overflow-y: auto` seul rend l'axe
+                   horizontal défilant à son tour (voir .panel-tab-content). Le portrait
+                   affichait donc une barre horizontale sous le bouton DÉMARRER, comme le
+                   paysage avant son correctif. Cette colonne ne défile jamais latéralement.
+                   ⚠ `#ui-panel.search-focus` repose `overflow: visible !important` : la
+                   forme courte remet les DEUX axes, c'est voulu — les suggestions doivent
+                   pouvoir sortir du panneau. */
+                border-top: 1px solid rgba(0,140,255,0.2); overflow-y: auto; overflow-x: hidden;
                 max-height: calc(100dvh - var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px))) - 60px);
                 min-height: 54px;
                 will-change: max-height;
@@ -1584,12 +1624,9 @@
                 overflow-y: auto; overflow-x: hidden;
             }
 
-            /* La zone d'onglet est le second conteneur défilant (le premier étant
-               #ui-panel lui-même) et n'avait pas de consigne horizontale : l'ascenseur
-               vertical du panneau lui prenant quelques pixels de largeur, les lignes de
-               saisie débordaient d'autant et une barre horizontale apparaissait au bas du
-               panneau. Rien ici ne défile latéralement. */
-            .panel-tab-content { overflow-x: hidden; }
+            /* (La consigne `.panel-tab-content { overflow-x: hidden }` vivait ici. Remontée
+               dans la règle de base le 15/08/2026 : le portrait souffrait du même défaut,
+               et la garder en double aurait laissé croire qu'elle est propre au paysage.) */
 
             /* Chaque picto et chaque gouttière de la ligne de saisie sont autant de
                caractères d'adresse en moins : on les resserre au strict nécessaire. */
