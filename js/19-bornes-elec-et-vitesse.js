@@ -12,19 +12,69 @@
         let _allEVStations = [];
         let evStationMarkers = [];
 
+        /* Cache de session, calqué sur celui des stations carburant (fetchStationsFR) :
+           même TTL, même forme de clé (bbox arrondie au ~km + empreinte de tracé, pour
+           résister aux micro-variations du tracé Mapbox entre deux appels). Il manquait
+           entièrement côté bornes — rouvrir le panneau en thermique était instantané,
+           alors qu'en électrique on repayait l'intégralité des requêtes Overpass à
+           chaque ouverture. C'est le rapport gain/risque le plus élevé du lot : aucune
+           requête n'est supprimée, seules les répétitions le sont. */
+        const EV_CACHE_TTL_MS = 15 * 60 * 1000;
+
+        function _evCacheKey(routeCoords) {
+            return tenterSansBruit(() => {
+                const bbox = turf.bbox(turf.lineString(routeCoords));
+                return 'ev_osm_v1_' + bbox.map(v => Math.round(v * 100) / 100).join('_')
+                     + '_' + routeFingerprint(routeCoords);
+            }, 'EV/cacheKey');
+        }
+
         async function fetchEVStationsAlongRoute(routeCoords) {
+            const cacheKey = _evCacheKey(routeCoords);
+            if (cacheKey) {
+                const hit = tenterSansBruit(() => {
+                    const brut = sessionStorage.getItem(cacheKey);
+                    if (!brut) return null;
+                    const { ts, data } = JSON.parse(brut);
+                    if (Date.now() - ts < EV_CACHE_TTL_MS) return data;
+                    sessionStorage.removeItem(cacheKey);
+                    return null;
+                }, 'EV/cacheLecture');
+                if (hit) {
+                    console.log(`[EV] ${hit.length} bornes servies depuis le cache de session`);
+                    return hit;
+                }
+            }
+
             const segments = buildRouteSegments(routeCoords);
             const seen = new Set(); const merged = [];
 
+            /* ⚠ NE PAS PLAFONNER LA CONCURRENCE DES SEGMENTS — mesuré, et contre-intuitif.
+               Le raisonnement « 8 segments × 4 miroirs = 32 requêtes sur des serveurs qui
+               n'accordent que ~2 créneaux par IP, donc des 429 » semble imparable ; il est
+               faux en pratique. Comparaison dans Chrome sur 6 bbox urbaines, jouée dans les
+               DEUX ordres pour écarter l'effet de chauffe des miroirs :
+
+                 6 d'un coup    4,1 s / 11 s     1090 bornes    0 segment perdu
+                 2 de front    16,2 s / 68,3 s    901-1090      0 à 2 segments perdus
+
+               Le lancement groupé gagne dans les deux sens, et ne perd rien. Sérialiser
+               allongeait la fenêtre pendant laquelle les miroirs pouvaient se dégrader, et
+               c'est CE temps supplémentaire qui provoquait les pertes qu'on croyait éviter.
+               Quiconque voudra « corriger » ce Promise.all doit refaire la mesure d'abord.
+
+               ⚠ On ne TRONQUE PAS non plus le trajet, contrairement à la phase 1 du
+               carburant : `maybeScanGasStationsLive()` sort immédiatement en électrique
+               (18-stations-marqueurs.js), il n'existe donc AUCUNE phase 2 pour rattraper en
+               route ce qu'on aurait coupé. Tronquer ici masquerait sans retour les bornes
+               au-delà du 80ᵉ km. */
             const results = await Promise.all(segments.map(async seg => {
                 const batch = [];
                 // Source unique : OpenStreetMap via Overpass (amenity=charging_station)
-                // 3 mirrors de fallback, pas de clé API, CORS ouvert
                 try {
                     const irvePts = await fetchIRVE(seg); // → fetchEVFromOverpass
                     irvePts.forEach(p => { p._source = 'osm'; batch.push(p); });
-                } catch(e) { console.warn('[EV] Overpass error:', e.message); }
-
+                } catch(e) { logAppError('EV/segment', e); }
                 return batch;
             }));
 
@@ -33,6 +83,15 @@
                 if (!seen.has(key)) { seen.add(key); merged.push(s); }
             }
             console.log(`[EV] ${merged.length} bornes récupérées`);
+            /* Un relevé vide n'est PAS mis en cache : c'est presque toujours le signe que
+               les miroirs Overpass ont tous échoué, pas qu'il n'y a aucune borne. Le
+               mémoriser 15 min condamnerait le conducteur à une liste vide pendant tout
+               ce temps, alors que la réouverture du panneau est précisément le geste par
+               lequel il espère y remédier. */
+            if (cacheKey && merged.length) {
+                tenterSansBruit(() => sessionStorage.setItem(cacheKey,
+                    JSON.stringify({ ts: Date.now(), data: merged })), 'EV/cacheEcriture');
+            }
             return merged;
         }
 
@@ -46,67 +105,153 @@
             return []; // plus utilisé, Overpass couvre déjà tout
         }
 
+        /* ⚠ POURQUOI LES BORNES SONT PLUS LENTES QUE LES STATIONS THERMIQUES (16/08/2026).
+           Ce ne sont pas les mêmes API, et aucun réglage ne comblera l'écart de nature :
+           le carburant vient d'un jeu ODS indexé (data.economie.gouv.fr, **0,16 s** mesuré,
+           3 essais), les bornes d'Overpass, un moteur qui exécute un filtre sur la base OSM
+           mondiale, hébergé par des miroirs bénévoles. Mesuré avec un User-Agent de
+           navigateur, même requête (bbox Paris 12×20 km) :
+
+             maps.mail.ru               200 en 4,4 s
+             overpass.private.coffee    200 en 6,7 s   (mais 504 après 31 s en heure chargée)
+             overpass.kumi.systems      200 en 9,1 s   (idem)
+             overpass.openstreetmap.ru  injoignable
+             overpass-api.de            406 — voir ci-dessous
+
+           ⚠⚠ **overpass-api.de est INUTILISABLE depuis un navigateur, et c'est un piège de
+           mesure.** L'instance officielle répond 406 à tout User-Agent de navigateur (et à
+           celui de node) ; elle n'accepte qu'un UA applicatif nommé. En `curl`, elle rendait
+           1,3 s là où les miroirs configurés donnaient 504 — j'ai d'abord conclu que « le
+           meilleur miroir était absent de la liste ». Faux : **le navigateur ne peut pas
+           poser `User-Agent`** (en-tête interdit par la spécification fetch), donc l'app ne
+           reproduira jamais ce chiffre. Le banc d'essai mesurait une requête que
+           l'application est structurellement incapable d'émettre. Règle générale : chronométrer
+           Overpass avec `curl` ou node ne dit rien de ce que fera le navigateur — refaire la
+           mesure en posant un UA de navigateur, sinon on optimise une fiction.
+
+           DEUX vrais défauts du code, eux bien réels :
+           1. **Le timeout de 12 s était plus court que la réponse.** Sur une bbox de segment
+              complet (100 km), les miroirs mettent 30 s ou rendent 504. On abandonnait donc à
+              12 s un miroir qui allait répondre — puis on recommençait sur le suivant.
+           2. **La boucle `for` était séquentielle** : chaque miroir mort se payait
+              intégralement avant d'essayer le suivant, soit jusqu'à 48 s POUR FINIR SUR UNE
+              LISTE VIDE. Ça se vit comme « c'est lent », alors que c'est « c'est lent PUIS ça
+              échoue ». On lance désormais en différé (« hedging ») : un miroir part seul, et
+              on n'ajoute le suivant que s'il n'a rien rendu au bout de EV_HEDGE_MS ; le
+              premier qui répond gagne, les autres sont annulés. Exercé pour de vrai, dans
+              Chrome : 518 bornes rendues, servies par le deuxième miroir après que le
+              premier ait tardé — l'ancienne boucle aurait payé un timeout complet avant
+              d'y arriver.
+              Un `Promise.any` d'emblée serait plus rapide encore, mais quadruplerait la
+              charge sur des serveurs bénévoles pour rien neuf fois sur dix. */
+        const EV_MIRRORS = [
+            'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+            'https://overpass.private.coffee/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter',
+            'https://overpass.openstreetmap.ru/cgi/interpreter',
+        ];
+        const EV_HEDGE_MS   = 6000;    // sans réponse à 6 s, on double la mise sur le suivant
+        const EV_TIMEOUT_MS = 25000;   // > aux 4,7 s mesurés sur le pire segment, avec marge
+
+        function _fetchOverpassHedged(query) {
+            return new Promise((resolve, reject) => {
+                const ctrls = [];
+                let lances = 0, echecs = 0, gagne = false;
+
+                const lancer = () => {
+                    if (gagne || lances >= EV_MIRRORS.length) return;
+                    const url  = EV_MIRRORS[lances++];
+                    const nom  = url.split('/')[2];
+                    const ctrl = new AbortController();
+                    ctrls.push(ctrl);
+                    const minuteur = setTimeout(() => ctrl.abort(), EV_TIMEOUT_MS);
+
+                    /* `fetch` avec un corps en chaîne pose `Content-Type: text/plain` ;
+                       Overpass attend un formulaire `data=…`. Les miroirs retenus tolèrent
+                       les deux (vérifié), mais l'en-tête explicite décrit ce qu'on envoie
+                       réellement et évite de dépendre de cette tolérance. */
+                    fetch(url, {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body:    'data=' + encodeURIComponent(query),
+                        signal:  ctrl.signal,
+                    })
+                        .then(res => res.ok ? res.json() : Promise.reject(new Error(`${nom} → ${res.status}`)))
+                        .then(data => {
+                            if (gagne) return;
+                            gagne = true;
+                            ctrls.forEach(c => c.abort());   // libère les miroirs encore en vol
+                            console.log(`[EV/Overpass] servi par ${nom}`);
+                            resolve(data);
+                        })
+                        .catch(e => {
+                            if (gagne) return;               // abandon provoqué par le gagnant
+                            console.warn(`[EV/Overpass] ${nom} :`, e.message);
+                            if (++echecs >= EV_MIRRORS.length) reject(new Error('tous les miroirs Overpass ont échoué'));
+                            else lancer();
+                        })
+                        .finally(() => clearTimeout(minuteur));
+
+                    // Renfort différé : ne part que si le précédent tarde vraiment.
+                    setTimeout(lancer, EV_HEDGE_MS);
+                };
+                lancer();
+            });
+        }
+
         async function fetchEVFromOverpass(seg) {
             const bbox  = `${seg.minLat.toFixed(4)},${seg.minLng.toFixed(4)},${seg.maxLat.toFixed(4)},${seg.maxLng.toFixed(4)}`;
-            const query = `[out:json][timeout:15];(node["amenity"="charging_station"](${bbox});way["amenity"="charging_station"](${bbox}););out center body;`;
-            const mirrors = [
-                'https://overpass.private.coffee/api/interpreter',
-                'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-                'https://overpass.kumi.systems/api/interpreter',
-                'https://overpass.openstreetmap.ru/cgi/interpreter',
-            ];
-            for (const url of mirrors) {
-                try {
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        body: 'data=' + encodeURIComponent(query),
-                        signal: AbortSignal.timeout(12000),
-                    });
-                    if (!res.ok) { console.warn(`[EV] ${url.split('/')[2]} → ${res.status}`); continue; }
-                    const data = await res.json();
-                    const elements = data?.elements || [];
-                    const stations = elements.map(el => {
-                        const tags = el.tags || {};
-                        const lat = el.center?.lat ?? el.lat;
-                        const lon = el.center?.lon ?? el.lon;
-                        if (!lat || !lon) return null;
-                        const powerKw = (() => {
-                            const vals = [
-                                tags['socket:type2:output'],
-                                tags['socket:ccs:output'],
-                                tags['socket:chademo:output'],
-                                tags['charging:fast:output'],
-                            ].map(v => parseFloat(String(v || '').replace(/[^0-9.]/g, '')))
-                             .filter(n => n > 0);
-                            return vals.length ? Math.max(...vals) : (parseFloat(tags['maxpower'] || tags['power'] || '') || null);
-                        })();
-                        const nb_pdc = parseInt(tags['capacity'] || tags['socket:type2'] || tags['socket:ccs'] || '1') || 1;
-                        const hasSocket = key => { const v = tags[key]; return v && v !== 'no' && v !== '0'; };
-                        return {
-                            _type: 'osm',
-                            latitude:  lat,
-                            longitude: lon,
-                            name:  tags.name || tags.operator || tags.brand || 'Borne de recharge',
-                            addr:  tags['addr:street']
-                                ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim()
-                                : (tags['addr:city'] || tags['addr:town'] || ''),
-                            power:  powerKw,
-                            nb_pdc: nb_pdc,
-                            connectors: {
-                                type2:   hasSocket('socket:type2') || hasSocket('socket:type2_combo'),
-                                ccs:     hasSocket('socket:ccs') || hasSocket('socket:type2_combo'),
-                                chademo: hasSocket('socket:chademo'),
-                            }
-                        };
-                    }).filter(Boolean);
-                    console.log(`[EV/Overpass] ${stations.length} bornes via ${url.split('/')[2]}`);
-                    return stations;
-                } catch(e) {
-                    console.warn(`[EV/Overpass] ${url.split('/')[2]} failed:`, e.message);
-                }
+            // `nwr` = node+way+relation en une passe, et `out center tags` au lieu de
+            // `body` : on ne rapatrie plus la liste des nœuds composant chaque way, dont
+            // le parseur ci-dessous n'a jamais rien fait. Même résultat, charge allégée.
+            const query = `[out:json][timeout:25];nwr["amenity"="charging_station"](${bbox});out center tags;`;
+            try {
+                const data = await _fetchOverpassHedged(query);
+                const elements = data?.elements || [];
+                const stations = elements.map(el => {
+                    const tags = el.tags || {};
+                    const lat = el.center?.lat ?? el.lat;
+                    const lon = el.center?.lon ?? el.lon;
+                    if (!lat || !lon) return null;
+                    const powerKw = (() => {
+                        const vals = [
+                            tags['socket:type2:output'],
+                            tags['socket:ccs:output'],
+                            tags['socket:chademo:output'],
+                            tags['charging:fast:output'],
+                        ].map(v => parseFloat(String(v || '').replace(/[^0-9.]/g, '')))
+                         .filter(n => n > 0);
+                        return vals.length ? Math.max(...vals) : (parseFloat(tags['maxpower'] || tags['power'] || '') || null);
+                    })();
+                    const nb_pdc = parseInt(tags['capacity'] || tags['socket:type2'] || tags['socket:ccs'] || '1') || 1;
+                    const hasSocket = key => { const v = tags[key]; return v && v !== 'no' && v !== '0'; };
+                    return {
+                        _type: 'osm',
+                        latitude:  lat,
+                        longitude: lon,
+                        name:  tags.name || tags.operator || tags.brand || 'Borne de recharge',
+                        addr:  tags['addr:street']
+                            ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim()
+                            : (tags['addr:city'] || tags['addr:town'] || ''),
+                        power:  powerKw,
+                        nb_pdc: nb_pdc,
+                        connectors: {
+                            type2:   hasSocket('socket:type2') || hasSocket('socket:type2_combo'),
+                            ccs:     hasSocket('socket:ccs') || hasSocket('socket:type2_combo'),
+                            chademo: hasSocket('socket:chademo'),
+                        }
+                    };
+                }).filter(Boolean);
+                console.log(`[EV/Overpass] ${stations.length} bornes sur le segment`);
+                return stations;
+            } catch(e) {
+                /* Échec de TOUS les miroirs : à journaliser pour de bon. C'est exactement
+                   le cas qui rendait une liste vide sans explication, et le journal
+                   (Profil → 🩺) est le seul endroit où on peut le constater depuis le
+                   téléphone. */
+                logAppError('EV/Overpass', e);
+                return [];
             }
-            console.warn('[EV/Overpass] Tous les mirrors ont échoué');
-            return [];
         }
 
         function parseEVStations(rawStations, routeCoords) {
