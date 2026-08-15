@@ -278,11 +278,96 @@
                     } catch(e) { /* silencieux */ }
                 }
 
-                const wpLng = station._resolvedLng || station.lng;
-                const wpLat = station._resolvedLat || station.lat;
-                const osrmData = await fetchRouteMapboxWithWaypoint(
-                    modalStartCoords, [wpLng, wpLat], modalEndCoords, avoidTolls
-                );
+                /* ═══ CHOIX DU POINT D'ÉTAPE : PAR LE DÉTOUR RÉEL, PAS PAR LA PRÉCISION ═══
+                   Mesuré le 15/08/2026 sur « 72 BLD DE VERDUN » à Courbevoie :
+
+                       trajet sans station        2 797 m
+                       via le point GÉOCODÉ       4 253 m   (+1 456 m)
+                       via le point BRUT du flux  3 601 m   (+  804 m)
+
+                   652 m de détour en trop, pour deux points distants de 80 m. Le boulevard
+                   a un TERRE-PLEIN CENTRAL : le point d'adresse, pourtant `accuracy=point`
+                   et donc « retenu » par `_gasPickBestPoint()`, tombe du côté où l'on ne
+                   peut pas entrer, et la voiture doit faire le tour du pâté de maisons.
+
+                   ⚠ LA LEÇON : **la précision d'un géocodage ne dit rien de son
+                   accessibilité en voiture.** `_gasPickBestPoint()` arbitre sur `accuracy`
+                   — excellent critère pour placer une pastille, sans rapport avec le coût
+                   d'un détour. Pour une ÉTAPE d'itinéraire, le seul juge est l'itinéraire
+                   lui-même. On calcule donc les deux et on garde le moins coûteux.
+
+                   Comparaison en DISTANCE et non en durée : la durée dépend du trafic
+                   instantané et ferait osciller le choix d'un appel à l'autre, pour un
+                   écart parfois insignifiant. La distance est stable et reproductible —
+                   c'est aussi elle que l'utilisateur voit sur le tracé.
+
+                   Le verdict est mémorisé sur la station (`_wpChoisi`) : re-sélectionner la
+                   même station ne relance pas la double interrogation. */
+                const wpGeo  = (station._resolvedLng != null && station._resolvedLat != null)
+                    ? [station._resolvedLng, station._resolvedLat] : null;
+                const wpBrut = [station.lng, station.lat];
+
+                let osrmData = null;
+                if (station._wpChoisi) {
+                    // Verdict déjà rendu pour cette station : un seul appel suffit.
+                    osrmData = await fetchRouteMapboxWithWaypoint(
+                        modalStartCoords, station._wpChoisi, modalEndCoords, avoidTolls
+                    );
+                } else if (wpGeo && _ecartMetres(wpGeo, wpBrut) > 15) {
+                    /* Deux candidats réellement distincts : on les départage. Les deux
+                       appels partent EN PARALLÈLE — les enchaîner doublerait l'attente
+                       ressentie au moment le plus visible, juste après le tap. */
+                    const [rGeo, rBrut] = await Promise.all([
+                        fetchRouteMapboxWithWaypoint(modalStartCoords, wpGeo,  modalEndCoords, avoidTolls).catch(() => null),
+                        fetchRouteMapboxWithWaypoint(modalStartCoords, wpBrut, modalEndCoords, avoidTolls).catch(() => null),
+                    ]);
+                    /* Chaque candidat est résumé par sa longueur ET sa part de voie à
+                       accès restreint. La seconde est indispensable : le plus COURT peut
+                       l'être parce qu'il traverse un chemin de service le long d'une voie
+                       ferrée (cas mesuré à Courbevoie). Voir `_choisirEtapeStation()`. */
+                    const bilan = (d) => {
+                        const r = d && d.routes && d.routes[0];
+                        if (!r) return { distanceM: Infinity, restreintM: 0 };
+                        return {
+                            distanceM: r.legs ? r.legs.reduce((s, l) => s + l.distance, 0) : r.distance,
+                            restreintM: _metresRestreints(r),
+                        };
+                    };
+                    const bGeo = bilan(rGeo), bBrut = bilan(rBrut);
+                    // `a` = le géocodé : il gagne les égalités, étant le mieux localisé
+                    // pour l'affichage.
+                    const verdict = _choisirEtapeStation(bGeo, bBrut);
+                    const geoGagne = !verdict || verdict.gagnant === 'a';
+                    osrmData = geoGagne ? rGeo : rBrut;
+                    station._wpChoisi = geoGagne ? wpGeo : wpBrut;
+
+                    const fmt = (b) => Number.isFinite(b.distanceM)
+                        ? `${Math.round(b.distanceM)}m (dont ${Math.round(b.restreintM)}m restreint)`
+                        : 'échec';
+                    console.log(`[StationWP] ${station.name || station.addr} — `
+                        + `géocodé ${fmt(bGeo)} / brut ${fmt(bBrut)} → `
+                        + `${geoGagne ? 'GÉOCODÉ' : 'BRUT'} retenu`
+                        + (verdict ? ` — ${verdict.motif}` : ''));
+
+                    /* La pastille suit le point réellement emprunté. Montrer la station
+                       ailleurs que là où l'itinéraire y entre induirait en erreur — même
+                       principe que l'arbitrage d'affichage de `_gasPickBestPoint()`. */
+                    if (!geoGagne) {
+                        station._resolvedLng = null;
+                        station._resolvedLat = null;
+                        _flushGasMarkers();
+                    }
+                } else {
+                    station._wpChoisi = wpGeo || wpBrut;
+                    osrmData = await fetchRouteMapboxWithWaypoint(
+                        modalStartCoords, station._wpChoisi, modalEndCoords, avoidTolls
+                    );
+                }
+
+                // Les deux tentatives ont échoué (réseau) : rien à tracer.
+                if (!osrmData || !osrmData.routes || !osrmData.routes[0]) {
+                    throw new Error('Itinéraire via la station indisponible');
+                }
 
                 const route = osrmData.routes[0];
                 const routeCoords = route.geometry.coordinates;

@@ -27,7 +27,8 @@ function chargerNoyau() {
     const noms = [
         'LICENSE_POINTS_MAX', '_readLicensePoints',
         'calcEnergyCost',
-        '_clampMapPadding',
+        '_clampMapPadding', '_cameraForBoundsSafe', '_ecartMetres',
+        '_metresRestreints', '_choisirEtapeStation',
         'normalizeFrHouseNumber', 'normalizeStationAddr', '_deburr',
         'ZFE_AMENDES', 'ZFE_CAT_CLASSE', 'getZFEAmende',
         'extractGasCoords', 'extractGasPrice', 'getBestPrice',
@@ -147,6 +148,162 @@ section('Padding de la carte');
     verifie('valeurs absurdes neutralisées',
         borne({ top: NaN, bottom: undefined, left: 'x', right: -50 }, 400, 800),
         { top: 0, bottom: 0, left: 0, right: 0 });
+}
+
+// ── Cadrage de repli ────────────────────────────────────────────────────────────
+section('Cadrage de repli');
+{
+    const { _cameraForBoundsSafe: cadre } = N;
+
+    /* Les valeurs relevées sur l'appareil le 15/08/2026 : canevas 411x842, padding
+       du modal ouvert. C'est le cas où Mapbox a rendu un centre NaN. Le repli, lui,
+       doit produire un cadrage exploitable. */
+    const PAD = { top: 50, bottom: 410.5238037109375, left: 40, right: 40 };
+    {
+        // Paris → Lyon, trajet réel.
+        const r = cadre([[2.35, 45.76], [4.83, 48.85]], 411, 842, PAD);
+        verifie('trajet réel : un cadrage est rendu', r !== null, true);
+        verifie('centre fini', Number.isFinite(r.center[0]) && Number.isFinite(r.center[1]), true);
+        verifie('zoom fini', Number.isFinite(r.zoom), true);
+        verifie('zoom sous le plafond', r.zoom <= 18, true);
+        /* Le centre de la CAMÉRA tombe au SUD du milieu des bornes. C'est contre-intuitif
+           mais c'est bien le résultat voulu : le modal masque la moitié basse, le trajet
+           doit donc s'afficher dans la bande HAUTE de l'écran — et pour qu'un contenu
+           monte à l'écran, la caméra descend. Un centre resté sur le milieu des bornes
+           signerait un padding ignoré, et le trajet finirait derrière le modal. */
+        verifie('caméra décalée au sud (trajet remonté au-dessus du modal)', r.center[1] < (45.76 + 48.85) / 2, true);
+    }
+
+    // Bornes ponctuelles : pas de division par zéro, on garde le zoom maximal.
+    {
+        const r = cadre([[2.35, 48.85], [2.35, 48.85]], 411, 842, PAD);
+        verifie('bornes confondues → zoom maximal', r.zoom, 18);
+        verifie('bornes confondues → centre fini', Number.isFinite(r.center[1]), true);
+    }
+
+    /* LES DEUX SOURCES DE NaN QUE `isLngLat` LAISSE PASSER. Chacune rendait un centre
+       NaN chez Mapbox ; ici elles doivent rendre `null` ou un résultat fini, jamais
+       un objet à moitié faux. */
+    {
+        // Latitude au pôle : la projection de Mercator y diverge.
+        const r = cadre([[2.0, -90], [3.0, 90]], 411, 842, PAD);
+        verifie('latitude ±90 : jamais de NaN', r === null || Number.isFinite(r.center[1]), true);
+        verifie('latitude ±90 : zoom jamais NaN', r === null || Number.isFinite(r.zoom), true);
+    }
+    {
+        // Bande utile nulle : padding qui consomme toute la hauteur.
+        const r = cadre([[2.35, 45.76], [4.83, 48.85]], 411, 842, { top: 500, bottom: 500, left: 0, right: 0 });
+        verifie('bande verticale nulle → null', r, null);
+    }
+    {
+        const r = cadre([[2.35, 45.76], [4.83, 48.85]], 411, 842, { top: 0, bottom: 0, left: 300, right: 200 });
+        verifie('bande horizontale nulle → null', r, null);
+    }
+
+    // Entrées inexploitables : `null`, jamais une exception ni un NaN.
+    verifie('bornes non numériques → null', cadre([[NaN, 1], [2, 3]], 411, 842, PAD), null);
+    verifie('bornes mal formées → null', cadre([[2, 3]], 411, 842, PAD), null);
+    verifie('bornes absentes → null', cadre(null, 411, 842, PAD), null);
+    verifie('canevas dégénéré → null', cadre([[2.35, 45.76], [4.83, 48.85]], 0, 0, PAD), null);
+    verifie('padding absent toléré', cadre([[2.35, 45.76], [4.83, 48.85]], 411, 842, null) !== null, true);
+
+    /* Cohérence d'échelle : un trajet DEUX FOIS plus étendu doit tomber à un niveau de
+       zoom plus bas d'exactement 1 — c'est la définition du zoom, et le seul contrôle
+       qui attrape une erreur de facteur (le sur-dézoom d'un facteur ~4 déjà rencontré
+       serait passé inaperçu autrement). */
+    {
+        const petit = cadre([[2.0, 48.0], [2.4, 48.0001]], 411, 842, { top: 0, bottom: 0, left: 0, right: 0 });
+        const grand = cadre([[2.0, 48.0], [2.8, 48.0001]], 411, 842, { top: 0, bottom: 0, left: 0, right: 0 });
+        verifieProche('doubler l’étendue retire exactement 1 au zoom', petit.zoom - grand.zoom, 1, 1e-3);
+    }
+}
+
+// ── Écart entre deux points ─────────────────────────────────────────────────────
+section('Écart en mètres');
+{
+    const { _ecartMetres: ecart } = N;
+
+    verifie('point identique → 0', ecart([2.35, 48.85], [2.35, 48.85]), 0);
+
+    /* Le cas qui a motivé la fonction : les deux candidats de la station
+       « 72 BLD DE VERDUN » (point géocodé et point brut du flux data.gouv), séparés
+       de ~80 m d'après le journal de l'app. C'est cet ordre de grandeur qui doit être
+       rendu fidèlement — le seuil de décision est à 15 m. */
+    verifieProche('les deux candidats de la station : ~80 m',
+        ecart([2.259823, 48.901528], [2.259, 48.902]), 80, 12);
+
+    // Un degré de latitude vaut ~110,5 km partout.
+    verifieProche('1° de latitude ≈ 110,5 km', ecart([2, 48], [2, 49]), 110540, 50);
+    /* Un degré de longitude RÉTRÉCIT avec la latitude — d'où le cosinus. L'oublier
+       surestimerait de 50 % à nos latitudes, et le seuil de 15 m perdrait son sens. */
+    verifieProche('1° de longitude à 48° ≈ 74,5 km', ecart([2, 48], [3, 48]), 74500, 400);
+
+    // La distance ne dépend pas du sens de lecture.
+    verifieProche('symétrique',
+        ecart([2.30, 48.90], [2.35, 48.85]) - ecart([2.35, 48.85], [2.30, 48.90]), 0, 1e-9);
+
+    /* Entrées inexploitables → `Infinity`, JAMAIS NaN : l'appelant compare à un seuil,
+       et `NaN > 15` vaut faux — il conclurait « les deux points sont confondus » et
+       n'arbitrerait pas, exactement le contraire du choix prudent. */
+    verifie('coordonnée manquante → Infinity', ecart([2.35, 48.85], null), Infinity);
+    verifie('valeur non numérique → Infinity', ecart([2.35, 48.85], ['x', 48.85]), Infinity);
+    verifie('tableau vide → Infinity', ecart([], []), Infinity);
+}
+
+// ── Point d'étape d'une station ─────────────────────────────────────────────────
+section('Point d’étape d’une station');
+{
+    const { _metresRestreints: restreints, _choisirEtapeStation: choisir } = N;
+
+    // Fabrique d'itinéraire au format Mapbox Directions, réduit à ce qui nous sert.
+    const etape = (dist, restreinte) => ({
+        distance: dist,
+        intersections: [{ classes: restreinte ? ['restricted'] : [] }],
+    });
+    const routeDe = (...etapes) => ({ legs: [{ steps: etapes }] });
+
+    verifie('aucune voie restreinte → 0', restreints(routeDe(etape(500, false), etape(300, false))), 0);
+    verifie('somme des ÉTAPES restreintes, pas leur nombre',
+        restreints(routeDe(etape(500, false), etape(120, true), etape(80, true))), 200);
+    /* Robustesse : ces objets viennent d'une API. Un champ manquant ne doit pas faire
+       lever une fonction dont dépend le calcul d'itinéraire. */
+    verifie('route absente → 0', restreints(null), 0);
+    verifie('legs absents → 0', restreints({}), 0);
+    verifie('steps absents → 0', restreints({ legs: [{}] }), 0);
+    verifie('intersections absentes → 0', restreints({ legs: [{ steps: [{ distance: 100 }] }] }), 0);
+
+    /* LE CAS RÉEL, mesuré le 15/08/2026 : station « 72 BLD DE VERDUN », trajet
+       58 Rue de Colombes → 157 Bd Bineau. Le candidat BRUT est 653 m PLUS COURT, mais
+       passe 525 m sur voie restreinte — le corridor de service d'une voie ferrée, que
+       l'utilisateur a identifié sur la carte. C'est le géocodé qui doit gagner. */
+    {
+        const geo  = { distanceM: 3203, restreintM: 71 };
+        const brut = { distanceM: 2550, restreintM: 525 };
+        const v = choisir(geo, brut);
+        verifie('le plus court est ÉCARTÉ s’il abuse de la voie restreinte', v.gagnant, 'a');
+        verifie('le motif cite la voie restreinte', v.motif.includes('restreinte'), true);
+    }
+
+    // Deux candidats également sains : la distance retrouve son rôle d'arbitre.
+    verifie('deux candidats sains → le plus court',
+        choisir({ distanceM: 3203, restreintM: 40 }, { distanceM: 2550, restreintM: 60 }).gagnant, 'b');
+    // Deux candidats également douteux : on ne peut plus que prendre le plus court.
+    verifie('deux candidats douteux → le plus court',
+        choisir({ distanceM: 3203, restreintM: 400 }, { distanceM: 2550, restreintM: 525 }).gagnant, 'b');
+
+    /* Le seuil doit laisser passer l'entrée sur une station-service — quelques dizaines
+       de mètres de cour privative — sans laisser passer un chemin technique. */
+    verifie('71 m de cour de station : candidat sain',
+        choisir({ distanceM: 3203, restreintM: 71 }, { distanceM: 9999, restreintM: 999 }).gagnant, 'a');
+
+    // Un itinéraire non calculable (réseau) ne doit pas gagner par défaut.
+    verifie('candidat a incalculable → b',
+        choisir({ distanceM: Infinity, restreintM: 0 }, { distanceM: 2550, restreintM: 525 }).gagnant, 'b');
+    verifie('candidat b incalculable → a',
+        choisir({ distanceM: 3203, restreintM: 71 }, { distanceM: Infinity, restreintM: 0 }).gagnant, 'a');
+    verifie('les deux incalculables → null', choisir(null, null), null);
+    // À égalité stricte, `a` gagne : c'est le candidat que l'appelant préfère par ailleurs.
+    verifie('égalité → a', choisir({ distanceM: 2000, restreintM: 10 }, { distanceM: 2000, restreintM: 10 }).gagnant, 'a');
 }
 
 // ── Normalisation d'adresses ────────────────────────────────────────────────────

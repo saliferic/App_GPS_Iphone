@@ -116,6 +116,176 @@
             return out;
         }
 
+        /* Calcul de cadrage AUTONOME — repli quand `cameraForBounds` de Mapbox refuse.
+
+           POURQUOI. Relevé sur appareil le 15/08/2026 : avec un padding identique à celui
+           d'un cadrage réussi quelques minutes plus tôt, et sur le même canevas,
+           `cameraForBounds` a rendu un centre NaN (`Invalid LngLat object: (NaN, NaN)`).
+           Le padding était donc hors de cause. Restaient les bornes — que la trace de
+           diagnostic ne consignait pas, d'où trois hypothèses successives invalidées.
+           Plutôt que d'en formuler une quatrième, on cesse de dépendre de ce calcul : la
+           projection de Mercator tient en quinze lignes, elle est ici entièrement sous
+           notre contrôle, et surtout TESTABLE — ce que l'interne de Mapbox n'est pas.
+
+           Deux sources de NaN sont neutralisées explicitement, parce que ce sont elles que
+           `isLngLat()` laisse passer (il accepte |lat| <= 90) :
+             — une latitude à ±90 exactement, dont la projection vaut l'infini ;
+             — une bande utile nulle ou négative après padding, qui donne un log de zéro.
+
+           Rend `null` — jamais un objet à moitié faux — quand aucun cadrage n'a de sens.
+           L'appelant décide alors quoi faire, au lieu de recevoir un centre NaN. */
+        const MERCATOR_LAT_MAX = 85.051129; // au-delà, la projection diverge
+
+        function _cameraForBoundsSafe(bounds, mapW, mapH, pad, maxZoom = 18, tileSize = 512) {
+            if (!Array.isArray(bounds) || bounds.length !== 2) return null;
+            const [sw, ne] = bounds;
+            if (!Array.isArray(sw) || !Array.isArray(ne)) return null;
+
+            const nombres = [sw[0], sw[1], ne[0], ne[1], mapW, mapH].map(Number);
+            if (!nombres.every(Number.isFinite)) return null;
+            if (mapW <= 0 || mapH <= 0) return null;
+
+            const p = {
+                top:    Math.max(0, Number(pad && pad.top)    || 0),
+                bottom: Math.max(0, Number(pad && pad.bottom) || 0),
+                left:   Math.max(0, Number(pad && pad.left)   || 0),
+                right:  Math.max(0, Number(pad && pad.right)  || 0)
+            };
+            const dispoW = mapW - p.left - p.right;
+            const dispoH = mapH - p.top - p.bottom;
+            // Bande nulle ou négative : c'est exactement le cas qui produit le centre NaN
+            // chez Mapbox. On refuse plutôt que de rendre un résultat inexploitable.
+            if (dispoW <= 0 || dispoH <= 0) return null;
+
+            const clampLat = (v) => Math.max(-MERCATOR_LAT_MAX, Math.min(MERCATOR_LAT_MAX, v));
+            const versMonde = (lng, lat) => {
+                const x = (lng + 180) / 360;
+                const phi = clampLat(lat) * Math.PI / 180;
+                const y = (1 - Math.log(Math.tan(phi) + 1 / Math.cos(phi)) / Math.PI) / 2;
+                return [x, y];
+            };
+
+            const [x1, y1] = versMonde(sw[0], sw[1]);
+            const [x2, y2] = versMonde(ne[0], ne[1]);
+            if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
+
+            const dx = Math.abs(x2 - x1);
+            const dy = Math.abs(y2 - y1);
+
+            /* Bornes ponctuelles (départ et arrivée confondus) : aucune étendue à faire
+               tenir, on garde le zoom maximal. Traité à part car `log2(x / 0)` vaut
+               l'infini et non un zoom. */
+            let zoom;
+            if (dx <= 0 && dy <= 0) {
+                zoom = maxZoom;
+            } else {
+                const zx = dx > 0 ? Math.log2(dispoW / (tileSize * dx)) : Infinity;
+                const zy = dy > 0 ? Math.log2(dispoH / (tileSize * dy)) : Infinity;
+                zoom = Math.min(zx, zy, maxZoom);
+            }
+            if (!Number.isFinite(zoom)) return null;
+            zoom = Math.max(0, zoom);
+
+            /* Décentrement dû à un padding asymétrique. Le centre des bornes doit tomber
+               au milieu de la BANDE UTILE, qui n'est pas le milieu du canevas dès que
+               `top` et `bottom` diffèrent — c'est le cas ici en permanence, le modal
+               occupant la moitié basse. Sans cette correction, le trajet serait cadré
+               derrière le modal. */
+            const echelle = tileSize * Math.pow(2, zoom);
+            const cx = (x1 + x2) / 2 - ((p.left - p.right) / 2) / echelle;
+            const cy = (y1 + y2) / 2 - ((p.top - p.bottom) / 2) / echelle;
+
+            const lng = cx * 360 - 180;
+            const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * cy))) * 180) / Math.PI;
+            if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+
+            return { center: [lng, lat], zoom: +zoom.toFixed(4) };
+        }
+
+
+        /* Distance approximative en mètres entre deux points [lng, lat].
+           Projection équirectangulaire : à l'échelle qui nous intéresse — comparer deux
+           candidats pour une même station, quelques dizaines de mètres — l'écart avec la
+           formule de haversine est très inférieur au mètre. On ne dépend donc pas de turf,
+           ce qui garde la fonction dans le noyau testable.
+           Rend `Infinity` sur une entrée inexploitable : un appelant qui compare à un seuil
+           conclura « trop loin », ce qui est le choix prudent. */
+        function _ecartMetres(a, b) {
+            if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
+            const [aLng, aLat, bLng, bLat] = [a[0], a[1], b[0], b[1]].map(Number);
+            if (![aLng, aLat, bLng, bLat].every(Number.isFinite)) return Infinity;
+            const latMoy = ((aLat + bLat) / 2) * Math.PI / 180;
+            const dx = (bLng - aLng) * 111320 * Math.cos(latMoy);
+            const dy = (bLat - aLat) * 110540;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════
+        // === CHOIX DU POINT D'ÉTAPE D'UNE STATION ===
+        // ═══════════════════════════════════════════════════════════════════
+
+        /* Mètres parcourus sur des voies à ACCÈS RESTREINT (parkings, cours de service,
+           chemins techniques longeant une voie ferrée). Mapbox les marque `restricted`
+           dans `intersections[].classes` ; elles sont carrossables sur le papier, mais un
+           itinéraire qui en emprunte des centaines de mètres est presque toujours faux.
+           On somme la distance des ÉTAPES concernées, pas leur nombre : deux pas de dix
+           mètres pour entrer sur une station n'ont rien à voir avec un demi-kilomètre de
+           chemin de service. */
+        function _metresRestreints(route) {
+            if (!route || !Array.isArray(route.legs)) return 0;
+            let total = 0;
+            for (const leg of route.legs) {
+                if (!leg || !Array.isArray(leg.steps)) continue;
+                for (const step of leg.steps) {
+                    if (!step || !Array.isArray(step.intersections)) continue;
+                    const restreinte = step.intersections.some(i =>
+                        i && Array.isArray(i.classes) && i.classes.includes('restricted'));
+                    if (restreinte) total += Number(step.distance) || 0;
+                }
+            }
+            return total;
+        }
+
+        /* Départage deux points candidats pour une même station (géocodage ou coordonnées
+           du flux) d'après les itinéraires qu'ils produisent.
+
+           ⚠ LA DISTANCE SEULE NE SUFFIT PAS — mesuré le 15/08/2026 à Courbevoie :
+               brut     2 550 m dont 525 m (21 %) de voie restreinte
+               géocodé  3 203 m dont  71 m  (2 %) de voie restreinte
+           Le plus COURT était le plus court parce qu'il traversait le corridor de service
+           d'une voie ferrée. Un critère de longueur ne distingue pas un raccourci légitime
+           d'un passage impossible ; la part de voie restreinte, si.
+
+           Règle : un candidat est « sain » tant qu'il ne dépasse pas `seuilRestreint` mètres
+           de voie restreinte — de quoi entrer sur une station-service sans couvrir un chemin
+           technique. Si un seul l'est, il gagne, même s'il est plus long. Sinon on retombe
+           sur la distance. À égalité stricte, `a` gagne : l'appelant y met le candidat qu'il
+           préfère par ailleurs (le mieux localisé pour l'affichage).
+
+           Rend la clé gagnante ET le motif — l'app le journalise, seul moyen de vérifier la
+           décision sur un cas réel depuis un téléphone. */
+        function _choisirEtapeStation(a, b, seuilRestreint = 200) {
+            const utilisable = (c) => c && Number.isFinite(Number(c.distanceM));
+            if (!utilisable(a) && !utilisable(b)) return null;
+            if (!utilisable(a)) return { gagnant: 'b', motif: 'seul itinéraire calculable' };
+            if (!utilisable(b)) return { gagnant: 'a', motif: 'seul itinéraire calculable' };
+
+            const rA = Number(a.restreintM) || 0;
+            const rB = Number(b.restreintM) || 0;
+            const sainA = rA <= seuilRestreint;
+            const sainB = rB <= seuilRestreint;
+
+            if (sainA !== sainB) {
+                return {
+                    gagnant: sainA ? 'a' : 'b',
+                    motif: `voie restreinte ${Math.round(sainA ? rB : rA)} m contre ${Math.round(sainA ? rA : rB)} m`
+                };
+            }
+            const gagnant = Number(a.distanceM) <= Number(b.distanceM) ? 'a' : 'b';
+            return { gagnant, motif: 'itinéraire le plus court' };
+        }
+
 
         // ═══════════════════════════════════════════════════════════════════
         // === NORMALISATION D'ADRESSES FRANÇAISES (avant géocodage) ===

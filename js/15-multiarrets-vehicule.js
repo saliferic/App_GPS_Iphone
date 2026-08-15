@@ -103,6 +103,14 @@
                 logAppError('fitMapToModalRoute', new Error('bornes invalides : ' + JSON.stringify(bounds)));
                 return;
             }
+
+            /* (Un garde-fou « bbox quasi ponctuelle » a occupé cette place le 15/08/2026.
+               Retiré le jour même : les relevés ont montré qu'il ne se déclenchait pas
+               dans le cas fautif, et le repli `_cameraForBoundsSafe()` en fin de fonction
+               couvre désormais des bornes confondues de façon générale — il rend le zoom
+               maximal au lieu de diviser par zéro. Deux mécanismes pour une même cause
+               supposée, dont un jamais atteint, coûtent plus qu'ils ne protègent.) */
+
             const isLandscape = window.matchMedia('(max-height: 600px) and (orientation: landscape)').matches;
             const modalEl = document.getElementById('trip-modal');
             /* resize INCONDITIONNEL. Il était réservé à `map.loaded()`, or c'est
@@ -112,6 +120,39 @@
                jamais sur un poste de bureau : encore un écart que le simulateur ne
                reproduit pas. */
             tenterSansBruit(() => map.resize(), 'fitMapToModalRoute/resize');
+
+            /* ⚠⚠ LE PADDING DE LA CAMÉRA EST REMIS À ZÉRO — CAUSE RACINE DU 15/08/2026,
+               reproduite et vérifiée, pas supposée.
+
+               La boucle de suivi GPS pose un padding SUR LA CAMÉRA à chaque position reçue
+               (`map.jumpTo({ …, padding })`, voir updateCameraFollow dans 13-stats-eco.js).
+               ⚠ `jumpTo` et `easeTo` INSCRIVENT durablement ce padding sur la caméra —
+               contrairement à `flyTo`, qui ne le fait pas : c'est cette asymétrie qui a
+               égaré trois hypothèses successives. Il vaut 461 px de bas sur un écran de
+               923. Et Mapbox ADDITIONNE le padding de la caméra à celui passé à `fitBounds` :
+
+                   0 + 461  (caméra)  +  50 + 473  (le nôtre)  =  984   >   923 (hauteur)
+
+               La bande utile devient NÉGATIVE, le zoom cesse d'être un nombre, et
+               `cameraForBounds` construit un centre NaN — c'est le fameux
+               « Invalid LngLat object: (NaN, NaN) », qui accuse les coordonnées alors que
+               celles-ci sont irréprochables. `_clampMapPadding()` ne pouvait rien y voir :
+               il borne NOTRE padding contre le canevas, sans rien savoir de celui déjà posé.
+
+               D'où le caractère intermittent : tout dépend de ce que la boucle de suivi a
+               fait juste avant, donc de la façon dont on est arrivé sur « Démarrer ». Un
+               relevé sur appareil montre `padCam: {bottom: 461}` au moment de l'échec, et
+               `0` sur les cadrages qui réussissent.
+
+               Remettre à zéro ne protège pas que `fitBounds` : un padding résiduel décale
+               aussi le rendu de tout `easeTo`, donc le repli en fin de fonction. Le trajet
+               sortait alors par le HAUT de l'écran avec un zoom pourtant correct — le
+               symptôme « on ne voit pas le tracé en entier » signalé le 15/08.
+
+               L'aperçu prend la main sur le cadrage : il doit partir d'une caméra neutre et
+               ne dépendre que du padding qu'il calcule lui-même. La boucle de suivi repose
+               le sien dès la reprise de la navigation. */
+            tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }), 'fitMapToModalRoute/resetPadding');
 
             _modalFitBounds = bounds;
             _modalFitViewportH = window.innerHeight;
@@ -242,7 +283,12 @@
                 /* `cvBrut` expose la taille rendue par le canevas À CÔTÉ de celle du rect :
                    si les deux diffèrent, la trace le dit au lieu de le laisser deviner.
                    C'est l'écart qui a produit le sur-dézoom, il doit rester sous les yeux. */
+                /* ⚠ LES BORNES DOIVENT FIGURER DANS LA TRACE. Leur absence a coûté trois
+                   hypothèses invalidées : avec un padding et un canevas identiques à ceux
+                   d'un cadrage réussi, seul le contenu des bornes pouvait encore expliquer
+                   le centre NaN — et c'était la seule donnée qu'on ne relevait pas. */
                 logDiag('fit', {
+                    bornes: JSON.stringify(bounds),
                     rect: Math.round(mapW) + 'x' + Math.round(mapH),
                     cvBrut: cv ? (cv.clientWidth + 'x' + cv.clientHeight) : '-',
                     dpr: window.devicePixelRatio,
@@ -250,13 +296,46 @@
                     pad: padding, modalH: (modalEl && modalEl.offsetHeight) || 0,
                     land: isLandscape, panning: isUserPanning,
                     pitch: +map.getPitch().toFixed(0), bearing: +map.getBearing().toFixed(0),
-                    zAvant: +map.getZoom().toFixed(2), zVise: camZoom
+                    zAvant: +map.getZoom().toFixed(2), zVise: camZoom,
+                    zRepli: (_cameraForBoundsSafe(bounds, mapW, mapH, padding) || {}).zoom ?? null,
+
+                    /* ── ÉTATS AJOUTÉS LE 15/08/2026, APRÈS QUATRE HYPOTHÈSES ÉCARTÉES ──
+                       Bornes, canevas et padding relevés sur appareil se sont révélés
+                       IDENTIQUES à ceux d'un cadrage qui réussit en test — et pourtant
+                       `cameraForBounds` y rend NaN. La cause est donc dans un état de la
+                       carte que la trace ne montrait pas. Les trois candidats restants,
+                       tous capables de produire un centre NaN sans rien lever :
+                         — `trW`/`trH` : la taille INTERNE de Mapbox. C'est elle, et non le
+                           rect ni le canevas, qui sert au calcul. Si `resize()` n'a pas
+                           propagé, `top + bottom` peut dépasser une hauteur périmée alors
+                           que tout paraît normal au dehors ;
+                         — `padCam` : un padding resté sur la caméra, qui s'ajouterait au
+                           nôtre (écarté en test sous Chrome, à confirmer sur l'appareil) ;
+                         — `proj` : en projection « globe », le calcul de cadrage de Mapbox
+                           n'est pas celui de Mercator et diverge dans des cas connus.
+                       À retirer une fois la cause établie — voir la dette au point 5. */
+                    trW: (map.transform && Math.round(map.transform.width)) ?? null,
+                    trH: (map.transform && Math.round(map.transform.height)) ?? null,
+                    padCam: (() => { try { return map.getPadding(); } catch (e) { return null; } })(),
+                    proj: (() => { try { return (map.getProjection() || {}).name || null; } catch (e) { return null; } })(),
+                    anime: (() => { try { return !!(map.isMoving() || map.isEasing()); } catch (e) { return null; } })(),
                 });
                 setTimeout(() => {
                     // ⚠ PAS de logAppError : on est DANS une trace de diagnostic.
                     // Journaliser l'echec d'une journalisation n'apporte rien.
                     try {
-                        logDiag('fit+1.8s', { z: +map.getZoom().toFixed(2), panning: isUserPanning, course: isCourseStarted });
+                        /* ⚠ LE CENTRE, PAS SEULEMENT LE ZOOM. Un cadrage peut avoir le bon
+                           zoom et le mauvais centre — c'est même le seul cas compatible
+                           avec la capture du 15/08/2026, où l'échelle était juste mais le
+                           trajet hors champ. Sans le centre, cette trace ne pouvait pas
+                           départager « le cadrage était faux » de « une autre commande
+                           caméra est passée après ». */
+                        const c = map.getCenter();
+                        logDiag('fit+1.8s', {
+                            z: +map.getZoom().toFixed(2),
+                            centre: [+c.lng.toFixed(5), +c.lat.toFixed(5)],
+                            panning: isUserPanning, course: isCourseStarted
+                        });
                     } catch (e) {}
                 }, 1800);
 
@@ -274,6 +353,23 @@
             } catch (e) {
                 logAppError('fitMapToModalRoute/fitBounds', e);
                 if (DEBUG) console.warn('[fit] padding', padding, 'canevas', mapW + '×' + mapH);
+
+                /* REPLI — le cadrage ne doit pas être abandonné parce que Mapbox a refusé.
+                   Jusqu'ici, ce catch se contentait de journaliser : l'utilisateur restait
+                   avec la carte là où elle était (zoom 16 sur la destination, relevé sur
+                   appareil), sans aucun moyen de voir son trajet. `_cameraForBoundsSafe()`
+                   refait le calcul en projection de Mercator, sous notre contrôle et
+                   couvert par les tests. Il rend `null` s'il n'y a rien de sensé à faire —
+                   auquel cas on laisse la caméra tranquille plutôt que de la déplacer au
+                   hasard. */
+                const repli = _cameraForBoundsSafe(bounds, mapW, mapH, padding);
+                if (repli) {
+                    logDiag('fit/repli', { z: repli.zoom, centre: repli.center.map(v => +v.toFixed(5)) });
+                    tenterSansBruit(() => map.easeTo({
+                        center: repli.center, zoom: repli.zoom,
+                        bearing: 0, pitch: 0, duration: 600
+                    }), 'fitMapToModalRoute/repliEaseTo');
+                }
             }
         }
 
