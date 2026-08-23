@@ -22,6 +22,19 @@
            publiée sur l'objet global), un `let` non. */
         let userPanningResumeTimer = null;
 
+        /* Masquage des marqueurs de stations / bornes sur la carte (entrée hotbox
+           « Masquer stations »). Déclaré ICI pour la raison ci-dessus : il est LU par 10
+           (catalogue hotbox), 11 (marqueurs du scan) et 18 (marqueurs de trajet), donc par
+           trois fichiers dont le premier précède celui qui aurait pu le déclarer.
+
+           ⚠ VOLONTAIREMENT NON PERSISTÉ — pas de clé localStorage. C'est un geste de
+           lisibilité ponctuel (« je veux voir mon départ et mon arrivée sans les pastilles
+           de prix »), pas un réglage. Persisté, il produirait le pire des symptômes : des
+           semaines plus tard, une app sans aucune station, sans message, et dont le seul
+           remède se cache derrière un appui long sur la carte. L'état repart donc visible
+           à chaque lancement. */
+        let _stationsHidden = false;
+
         // `LICENSE_POINTS_MAX` a rejoint js/00-noyau-calculs.js (chargé avant ce fichier)
         // avec `_readLicensePoints()`, la fonction qui l'exploite.
 

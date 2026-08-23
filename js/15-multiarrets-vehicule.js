@@ -1,6 +1,43 @@
         // === MULTI-ARRÊTS : MODAL ===
         // ═══════════════════════════════════════════════════════════════
 
+        /* Index de l'étape en cours de saisie, ou null hors de ce mode. Lu uniquement
+           par les trois fonctions ci-dessous, toutes dans ce fichier : il n'a donc pas
+           à remonter dans 00-helpers-partages.js (js/14 n'appelle qu'exitWaypointFocus). */
+        let _wpFocusIdx = null;
+
+        /* Point d'entrée du bouton « Ajouter une étape » UNIQUEMENT. La distinction
+           d'avec addModalWaypoint() est le cœur du mécanisme : rebuildWaypointRows()
+           rappelle cette dernière une fois par étape existante après une suppression,
+           et entrer en mode focus à chacun de ces appels réduirait la feuille au
+           hasard, sur la dernière étape reconstruite. */
+        function addModalWaypointFromButton() {
+            addModalWaypoint();
+            enterWaypointFocus(modalWaypoints.length - 1);
+        }
+
+        function enterWaypointFocus(idx) {
+            const row = document.getElementById(`waypoint-row-${idx}`);
+            const modal = document.getElementById('trip-modal');
+            if (!row || !modal) return;
+            _wpFocusIdx = idx;
+            row.classList.add('wp-editing');
+            modal.classList.add('wp-focus');
+            document.getElementById(`waypoint-input-${idx}`)?.focus();
+        }
+
+        /* Sortie du mode : étape renseignée (autocomplétion ou ping carte), étape
+           supprimée, ou modal réinitialisé. Idempotente — js/14 l'appelle sans savoir
+           si le mode était actif. On retire la classe de TOUTES les lignes plutôt que
+           de la seule _wpFocusIdx : rebuildWaypointRows() renumérote les lignes, et un
+           résidu de .wp-editing masquerait ses voisines à la prochaine entrée. */
+        function exitWaypointFocus() {
+            document.getElementById('trip-modal')?.classList.remove('wp-focus');
+            document.querySelectorAll('#modal-waypoints-container .wp-editing')
+                .forEach(el => el.classList.remove('wp-editing'));
+            _wpFocusIdx = null;
+        }
+
         function addModalWaypoint(label = '', coords = null) {
             const idx = modalWaypoints.length;
             modalWaypoints.push({ coords, label });
@@ -29,6 +66,8 @@
             // Activer l'autocomplétion sur ce champ
             setupAddressAutocomplete(`waypoint-input-${idx}`, `waypoint-suggestions-${idx}`, (coords, lbl) => {
                 modalWaypoints[idx] = { coords, label: lbl || document.getElementById(`waypoint-input-${idx}`).value };
+                // L'étape est renseignée : la feuille peut se redéployer.
+                exitWaypointFocus();
                 refreshWaypointMarkers();
                 recalcIfReady();
             });
@@ -37,6 +76,9 @@
         }
 
         function removeModalWaypoint(idx) {
+            // Avant rebuildWaypointRows() : c'est lui qui détruit la ligne porteuse de
+            // .wp-editing, et sortir après laisserait la feuille repliée sur du vide.
+            exitWaypointFocus();
             modalWaypoints.splice(idx, 1);
             rebuildWaypointRows();
             refreshWaypointMarkers();
@@ -64,6 +106,9 @@
         }
 
         function resetModalWaypoints() {
+            // Appelée par openTripModal() et closeTripModal() : le modal ne doit jamais
+            // se rouvrir replié sur une saisie d'étape abandonnée au trajet précédent.
+            exitWaypointFocus();
             modalWaypoints = [];
             document.getElementById('modal-waypoints-container').innerHTML = '';
             clearWaypointMarkers();
@@ -458,15 +503,36 @@
             const allCoords = [startCoords, ...waypoints, endCoords];
             const coordStr = allCoords.map(c => `${c[0]},${c[1]}`).join(';');
             const alts = waypoints.length === 0 ? 'true' : 'false';
-            const baseParams = `?geometries=geojson&steps=true&banner_instructions=true&overview=full&alternatives=${alts}&annotations=maxspeed,speed,distance&access_token=${MAPBOX_TOKEN}`;
+            /* ⚠⚠ `congestion` N'EXISTE QUE SUR `driving-traffic` — le glisser dans les
+               paramètres COMMUNS ferait échouer le repli en `InvalidInput` (« Annotations
+               'congestion' is only available on the driving-traffic profile »), et la
+               deuxième tentative est précisément celle qui sauve le trajet quand la
+               première a échoué. Les annotations sont donc paramétrées par tentative, et
+               non figées dans une chaîne partagée. C'est aussi pour cela que le tracé n'est
+               coloré que lorsque `traffic: true` : sans ce profil, il n'y a pas de donnée
+               de congestion du tout — pas « pas de bouchon ». */
+            const ANNOTATIONS_BASE = 'maxspeed,speed,distance';
+            const paramsAvec = ann => `?geometries=geojson&steps=true&banner_instructions=true&overview=full&alternatives=${alts}&annotations=${ann}&access_token=${MAPBOX_TOKEN}`;
+            const baseParams = paramsAvec(ANNOTATIONS_BASE);
             const tollParam = avoidTolls ? '&exclude=toll' : '';
 
-            // Tentative 1 : driving-traffic (trafic temps réel, préféré)
+            /* ⚠ `traffic` DIT QUEL PROFIL A RÉPONDU (18/08/2026) — champ ajouté, rien d'autre
+               n'a changé ici. Les deux tentatives rendaient jusqu'ici des objets
+               indiscernables, alors que leurs `duration` ne veulent pas dire la même chose :
+               l'une intègre le trafic temps réel, l'autre est en circulation libre. Tant
+               qu'on ne faisait que TRACER l'itinéraire, la nuance était sans effet ; elle
+               devient décisive dès qu'on relit une durée — `refreshEtaFromTraffic()` (js/19)
+               refuse de remplacer une estimation avec trafic par une estimation à vide, ce
+               qui reviendrait à dégrader l'ETA à chaque rafraîchissement passé en repli.
+               Les appelants qui l'ignorent continuent de fonctionner à l'identique. */
+
+            // Tentative 1 : driving-traffic (trafic temps réel, préféré) — seule à porter
+            // `congestion`, qui colore les ralentissements sur le tracé (voir js/03).
             try {
-                const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordStr}${baseParams}${tollParam}`;
+                const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordStr}${paramsAvec(ANNOTATIONS_BASE + ',congestion')}${tollParam}`;
                 const res = await fetchResilient(url, {}, { timeoutMs: fastTimeout ? 6000 : 15000, retries: 1 });
                 const data = await res.json();
-                if (data.routes && data.routes.length > 0) return { code: "Ok", routes: data.routes };
+                if (data.routes && data.routes.length > 0) return { code: "Ok", routes: data.routes, traffic: true };
             } catch(e) { /* on tente le fallback */ }
 
             // Tentative 2 : driving sans trafic (plus fiable sur longue distance / hors réseau dense)
@@ -474,7 +540,7 @@
             const resFallback = await fetchResilient(urlFallback, {}, { timeoutMs: fastTimeout ? 8000 : 20000, retries: 1 });
             const dataFallback = await resFallback.json();
             if (!dataFallback.routes || dataFallback.routes.length === 0) throw new Error("Itinéraire introuvable.");
-            return { code: "Ok", routes: dataFallback.routes };
+            return { code: "Ok", routes: dataFallback.routes, traffic: false };
         }
 
         // Corrige les coords d'une station via géocodage Mapbox de son adresse
@@ -589,15 +655,22 @@
                le détour imposé en coûtait plusieurs centaines.
                Repli si le symptôme inverse réapparaissait : remettre
                `&approaches=unrestricted;curb;unrestricted` dans baseParams. */
-            const baseParams = `?geometries=geojson&steps=true&banner_instructions=true&overview=full&alternatives=false&annotations=maxspeed,speed,distance&access_token=${MAPBOX_TOKEN}`;
+            /* Mêmes règles que `fetchRouteMapbox()` : annotations paramétrées PAR TENTATIVE
+               (`congestion` n'existe que sur `driving-traffic`) et drapeau `traffic` rendu.
+               Sans cela, choisir un arrêt station éteignait la coloration des ralentissements
+               pour tout le reste du trajet — une incohérence d'autant plus déroutante qu'elle
+               dépendait d'un choix sans rapport. */
+            const ANNOTATIONS_BASE = 'maxspeed,speed,distance';
+            const paramsAvec = ann => `?geometries=geojson&steps=true&banner_instructions=true&overview=full&alternatives=false&annotations=${ann}&access_token=${MAPBOX_TOKEN}`;
+            const baseParams = paramsAvec(ANNOTATIONS_BASE);
             const tollParam = avoidTolls ? '&exclude=toll' : '';
 
             // Tentative 1 : driving-traffic
             try {
-                const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordStr}${baseParams}${tollParam}`;
+                const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordStr}${paramsAvec(ANNOTATIONS_BASE + ',congestion')}${tollParam}`;
                 const res = await fetchResilient(url, {}, { timeoutMs: 15000, retries: 1 });
                 const data = await res.json();
-                if (data.routes && data.routes.length > 0) return { code: "Ok", routes: data.routes };
+                if (data.routes && data.routes.length > 0) return { code: "Ok", routes: data.routes, traffic: true };
             } catch(e) { /* fallback */ }
 
             // Tentative 2 : driving sans trafic
@@ -605,7 +678,7 @@
             const resFallback = await fetchResilient(urlFallback, {}, { timeoutMs: 20000, retries: 1 });
             const dataFallback = await resFallback.json();
             if (!dataFallback.routes || dataFallback.routes.length === 0) throw new Error("Itinéraire via station introuvable.");
-            return { code: "Ok", routes: dataFallback.routes };
+            return { code: "Ok", routes: dataFallback.routes, traffic: false };
         }
 
         // === CONFIG VÉHICULE (consommation + prix carburant) ===
@@ -906,6 +979,8 @@
             document.getElementById('vcell-fuel-kind')?.classList.toggle('disabled', isElec);
             updateFuelCostLabel();
             saveVehicleConfig();
+            // Le filtre ⛽/⚡ du panneau stations décrivait l'ancien véhicule (js/18).
+            tenterSansBruit(() => resetGasPanelKind(), 'selectVehicleType/panelKind');
 
             // Mise à jour en temps réel des stations si un trajet est disponible
             const route = modalPendingRoute?.osrmData?.routes?.[0]

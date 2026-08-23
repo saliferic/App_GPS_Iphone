@@ -584,36 +584,68 @@
             if (zfeAlertsEnabled()) setTimeout(() => { loadZFEData().catch(() => {}); }, 3000);
         }
 
-        // Estimation du coût des péages basée sur la distance sur autoroute (~0.09€/km en moyenne en France)
+        /* Estimation du coût des péages. Tout le calcul est dans `estimateTollFromRoute()`
+           (js/00-noyau-calculs.js), où il est testé ; il ne reste ici que la lecture de
+           `avoidTolls`, qui est un état de l'app et n'a rien à faire dans le noyau.
+           ⚠ `routes[0]` était déréférencé avant d'être testé (`!osrmData.routes[0].legs`) :
+           une réponse `{ routes: [] }` levait un TypeError au lieu de rendre 0. */
+        /* ⚠ POUR RÉARMER LE JOURNAL DE DIAGNOSTIC DES PÉAGES — quatre bugs ont été trouvés
+           avec, aucun ne l'aurait été sans. `estimateTollFromRoute()` accepte un second
+           argument optionnel qu'il remplit par référence ; il suffit de le repasser et de
+           le journaliser :
+
+               const d = {};
+               const cout = estimateTollFromRoute(route, d);
+               const plat = (o, vide) => Object.entries(o || {}).sort((a,b) => b[1]-a[1])
+                   .map(([k,v]) => `${k}=${v.toFixed(1)}km`).join(', ') || vide;
+               logDiag('peages', {
+                   cout: cout.toFixed(2) + '€',
+                   routeTotale: (d.kmTotalRoute||0).toFixed(1) + 'km',
+                   ITINERAIRE:  plat(d.kmParAutoroute, '(aucune)'),
+                   parReseau:   plat(d.kmParReseau, '(aucun)'),
+                   euroroute:   (d.kmEuroroute||0).toFixed(1) + 'km',
+                   EURO_DETAIL: plat(d.eurorouteDetail, '(aucun)'),
+                   nonReconnus: plat(d.refsNonReconnus, '(aucun)'),
+                   sansRef:     (d.kmSansRef||0).toFixed(1) + 'km',
+                   horsFr:      (d.kmHorsFr||0).toFixed(1) + 'km',
+                   refExploitable: d.refExploitable,
+               });
+
+           ⚠ `logDiag()`, JAMAIS `console.log()` : un `console.log` n'existe que dans les
+           DevTools d'un navigateur de bureau, donc il est invisible sur l'APK Android — là
+           où se font les vrais relevés. `logDiag()` écrit dans `gps_diag_log`, le journal
+           que l'app sait afficher elle-même (les entrées « 🔬 »). Chaînes pré-formatées
+           plutôt qu'objets imbriqués : `logDiag` fait un `JSON.stringify`, et des objets à
+           deux niveaux y deviennent illisibles.
+           ⚠ Toujours vérifier que les DISTANCES TOTALES concordent avec le calculateur de
+           référence avant de conclure à une erreur de calcul — trois diagnostics ont été
+           menés sur des itinéraires différents avant qu'on s'en aperçoive. */
         function estimateTollCost(osrmData) {
             if (avoidTolls) return 0;
-            if (!osrmData || !osrmData.routes || !osrmData.routes[0].legs) return 0;
+            const route = osrmData && osrmData.routes && osrmData.routes[0];
 
-            let tollDistKm = 0;
-            osrmData.routes[0].legs.forEach(leg => {
-                (leg.steps || []).forEach(step => {
-                    if (step.duration > 0 && step.distance > 500) {
-                        const stepSpeedKmh = (step.distance / step.duration) * 3.6;
-                        if (stepSpeedKmh > 80) {
-                            const coords = step.maneuver && step.maneuver.location;
-                            if (coords) {
-                                const lng = coords[0], lat = coords[1];
-                                // Frontières ajustées : la France-Belgique est à ~50.3-50.4 sur l'axe A1
-                                const inBelgium = lat > 50.3 && lng > 2.5 && lat < 51.5 && lng < 6.4;
-                                const inGermany = lng > 6.8 && lat > 47.3 && lat < 55;
-                                const inSpain = lat < 43.0 && lng > -9.4;
-                                const inItaly = lng > 6.6 && lat < 46.5 && lat > 43.5;
-                                const inSuisse = lng > 5.9 && lng < 10.5 && lat > 45.8 && lat < 47.8;
-                                const excluded = inBelgium || inGermany || inSpain || inItaly || inSuisse;
-                                if (!excluded) {
-                                    tollDistKm += step.distance / 1000;
-                                }
-                            }
-                        }
-                    }
+            /* ⚠ RÉARMÉ LE 20/08/2026 pour le cas transfrontalier Paris → Bruxelles
+               (24 € app / 16,30 € réels chez Mappy ET ViaMichelin). À retirer ensuite —
+               le mode d'emploi complet est dans le commentaire ci-dessus. */
+            const d = {};
+            const cout = estimateTollFromRoute(route, d);
+            if (route) {
+                const plat = (o, vide) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
+                    .map(([k, v]) => `${k}=${v.toFixed(1)}km`).join(', ') || vide;
+                logDiag('peages', {
+                    cout: cout.toFixed(2) + '€',
+                    routeTotale: (d.kmTotalRoute || 0).toFixed(1) + 'km',
+                    ITINERAIRE:  plat(d.kmParAutoroute, '(aucune)'),
+                    parReseau:   plat(d.kmParReseau, '(aucun)'),
+                    HORS_FR:     (d.kmHorsFr || 0).toFixed(1) + 'km',
+                    euroroute:   (d.kmEuroroute || 0).toFixed(1) + 'km',
+                    EURO_DETAIL: plat(d.eurorouteDetail, '(aucun)'),
+                    nonReconnus: plat(d.refsNonReconnus, '(aucun)'),
+                    sansRef:     (d.kmSansRef || 0).toFixed(1) + 'km',
+                    refExploitable: d.refExploitable,
                 });
-            });
-            return tollDistKm * 0.08;
+            }
+            return cout;
         }
 
         async function calculateTripPreview() {
@@ -656,7 +688,15 @@
                 const totalDurationHours = (route.legs ? route.legs.reduce((s, l) => s + l.duration, 0) : route.duration) / 3600;
                 const maxPoints = distanceMeters * POINTS_PER_METER;
                 modalPendingRoute = {
-                    osrmData: { code: "Ok", routes: [route] },
+                    /* ⚠ `traffic` DOIT ÊTRE REPORTÉ. On ne garde ici qu'UNE route du lot,
+                       mais le drapeau décrit la RÉPONSE, pas la route : le jeter revenait à
+                       dire « profil inconnu » alors qu'on sait très bien lequel a répondu.
+                       Symptôme observé le 18/08/2026 : aucune couleur de ralentissement sur
+                       le tracé, alors que le trafic était bien dense — `startCourse()`
+                       recevait `traffic: undefined` et refusait donc de peindre. Même piège
+                       corrigé dans `selectAlternativeRoute()` (js/04) : toute reconstruction
+                       de `osrmData` doit reporter le drapeau. */
+                    osrmData: { code: "Ok", routes: [route], traffic: osrmData.traffic },
                     startCoords: startCoordsResolved,
                     endCoords: endCoordsResolved,
                     waypoints: waypointCoords,
@@ -708,8 +748,21 @@
                     logAppError('calculateTripPreview/affichage', errAffichage);
                 }
 
+                /* Zones de pause posées sur la carte DÈS L'APERÇU (21/08/2026). Elles
+                   n'apparaissaient qu'au lancement du trajet, `fetchRestAreasAlongRoute()`
+                   n'étant appelée que par `startCourse()` : sur l'écran « Confirmer le
+                   trajet », un Paris–Bruxelles de 3 h n'affichait donc aucun picto ☕.
+                   Or voir ses trois occasions AVANT de partir fait partie de la mécanique.
+                   ⚠ On passe `currentTurfLine` : `fullRouteLine` n'existe pas encore ici, et
+                   la renseigner ferait croire au reste de l'app qu'un trajet est en cours.
+                   Appel volontairement NON attendu — Overpass met 4 à 10 s, l'aperçu ne
+                   doit pas l'attendre ; les pictos arrivent quand ils arrivent. */
+                tenterSansBruit(() => fetchRestAreasAlongRoute(totalDurationHours, currentTurfLine),
+                                'calculateTripPreview/airesDeRepos');
+
                 // Afficher les résultats
                 document.getElementById('preview-time').innerText = formatTime(totalDurationHours);
+                document.getElementById('preview-arrival').innerText = formatArrivalTime(totalDurationHours);
                 document.getElementById('preview-distance').innerText = distanceKm.toFixed(1) + " km";
                 document.getElementById('preview-points').innerText = maxPoints.toFixed(2) + " pts";
 
@@ -720,7 +773,7 @@
                 const totalCost = fuelCost + tollCost;
 
                 document.getElementById('preview-fuel-cost').innerText = fuelCost.toFixed(2) + " €";
-                document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : (tollCost > 0 ? "~" + tollCost.toFixed(2) + " €" : "Aucun");
+                document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = "~" + totalCost.toFixed(2) + " €";
                 updateFuelCostLabel();
 

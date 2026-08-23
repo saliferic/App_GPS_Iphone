@@ -1,0 +1,1191 @@
+/* ============================================================================
+   THÈME « NEO » — dark glass + accent acide, appliqué au panneau ITINÉRAIRE
+   ============================================================================
+
+   Surcouche. Chaque règle est préfixée `body.theme-neo` : sans cette classe sur
+   <body>, ce fichier est inerte et `styles.css` reste seul maître. Même parti
+   pris que `experiments/theme-cartoon/` — un thème doit pouvoir se débrancher
+   sans toucher une ligne du style historique.
+
+   Chargé APRÈS styles.css dans <head> : il gagne par la cascade à spécificité
+   égale, et par spécificité (`body.theme-neo #ui-panel` = 1,1,1) sur les règles
+   en `#ui-panel` du fichier d'origine, y compris celles des media queries.
+
+   ⚠ Périmètre volontairement limité à l'onglet ITINÉRAIRE (+ ce qui est
+   structurellement partagé : champs, listes de suggestions, feuille). Objectifs
+   et Profil réutilisent `.itin-input-row` / `.itin-select-row` et héritent donc
+   des champs, mais leur mise en page propre n'a pas été reprise.
+   ============================================================================ */
+
+body.theme-neo {
+    /* Fond : neutre froid quasi-noir, pas de bleu. C'est lui qui fait ressortir
+       le verre du panneau ; le dégradé navy d'origine luttait contre. */
+    --neo-bg:          #08090C;
+    --neo-surface:     rgba(16, 18, 23, 0.74);
+    /* Repli opaque : utilisé là où le flou n'est pas disponible (@supports plus
+       bas) et pour les fonds qui doivent masquer le contenu qui défile dessous. */
+    --neo-surface-op:  #101217;
+    --neo-raise:       rgba(255, 255, 255, 0.045);
+    --neo-raise-hi:    rgba(255, 255, 255, 0.075);
+    --neo-line:        rgba(255, 255, 255, 0.09);
+    --neo-line-hi:     rgba(255, 255, 255, 0.18);
+
+    --neo-text:        #F4F6F8;
+    --neo-dim:         #A2A9B4;
+    --neo-mute:        #6B7280;
+
+    /* Accent lime : réservé aux CTA et à la donnée vive. Tout ce qui était
+       #58a6ff « par défaut » redescend en gris — sinon l'accent ne signale plus
+       rien. */
+    --neo-acc:         #C8FF3D;
+    --neo-acc-ink:     #0B0D07;   /* texte posé SUR l'accent */
+    --neo-acc-soft:    rgba(200, 255, 61, 0.13);
+    --neo-acc-line:    rgba(200, 255, 61, 0.42);
+    --neo-danger:      #FF5C5C;
+
+    --neo-r-panel:     26px;
+    --neo-r-field:     16px;
+    --neo-r-btn:       18px;
+    --neo-blur:        blur(22px) saturate(140%);
+
+    --neo-font: 'Space Grotesk', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+    background: var(--neo-bg);
+    font-family: var(--neo-font);
+}
+
+/* ---------------------------------------------------------------------------
+   1. LE PANNEAU — une plaque devient du verre
+   ---------------------------------------------------------------------------
+   Le fond translucide n'est pas décoratif ici : la carte reste perceptible sous
+   la feuille, ce qui maintient le lien entre ce qu'on saisit et où on est.
+
+   ⚠ Coût GPU. Le flou ne porte que sur la boîte du panneau (pas sur tout
+   l'écran comme le filtre du thème cartoon, qui a coûté sa mise en pause), et
+   ce panneau est réduit ou escamoté pendant la navigation. À surveiller quand
+   même sur mobile bas de gamme : la variable --neo-blur est le seul point à
+   toucher pour le désactiver.
+   --------------------------------------------------------------------------- */
+body.theme-neo #ui-panel {
+    background: var(--neo-surface);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border: 1px solid var(--neo-line);
+    /* Filet clair sur l'arête haute : c'est ce liseré qui fait lire la surface
+       comme du verre éclairé par le dessus plutôt que comme un aplat gris. */
+    border-top: 1px solid var(--neo-line-hi);
+    border-radius: var(--neo-r-panel);
+    /* Une seule ombre, portée et large. Le halo bleu d'origine
+       (0 0 60px rgba(0,80,200,.06)) teintait le fond et brouillait l'accent. */
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+    color: var(--neo-dim);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body.theme-neo #ui-panel { background: var(--neo-surface-op); }
+}
+
+/* Les contrôles de formulaire n'héritent PAS de la police du document : sans
+   cette règle, boutons et listes déroulantes restaient en police système et
+   le panneau se lisait en deux typographies. */
+body.theme-neo #ui-panel button,
+body.theme-neo #ui-panel input,
+body.theme-neo #ui-panel select,
+body.theme-neo .addr-suggestions { font-family: var(--neo-font); }
+
+/* Poignée de drag (mobile) : neutre, plus courte, plus discrète. */
+body.theme-neo #ui-panel::before {
+    background: var(--neo-line-hi);
+    width: 36px;
+    height: 4px;
+}
+
+body.theme-neo .toggle-panel-btn,
+body.theme-neo .itin-hamburger { color: var(--neo-mute); }
+body.theme-neo .toggle-panel-btn:hover,
+body.theme-neo .itin-hamburger:hover { color: var(--neo-text); }
+
+/* ---------------------------------------------------------------------------
+   2. TITRE — typographie expressive
+   ---------------------------------------------------------------------------
+   Le titre passe de 15px / +3px d'interlettrage / MAJUSCULES à un display de
+   28px serré, aligné à gauche. Le gros écart de taille entre titre et libellés
+   est ce qui date le plus une interface : 15px partout se lit « 2019 ».
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-title,
+body.theme-neo #ui-panel-title {
+    font-size: clamp(22px, 6.5vw, 28px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    text-align: left;
+    color: var(--neo-text);
+    margin: 2px 0 16px;
+}
+/* Le titre collant doit masquer le contenu qui glisse dessous. Sur un panneau
+   translucide, un aplat opaque ferait une bande morte : on lui donne son propre
+   flou, la carte continue donc de transparaître à travers l'en-tête. */
+body.theme-neo #ui-panel .panel-tab-content > .itin-title {
+    background: rgba(16, 18, 23, 0.82);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    box-shadow: 0 10px 12px -10px rgba(0, 0, 0, 0.8);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body.theme-neo #ui-panel .panel-tab-content > .itin-title { background: var(--neo-surface-op); }
+}
+
+/* Libellés de section : micro-typo, très espacée, très sourde. Ils ne sont plus
+   là pour être lus mais pour être retrouvés. */
+body.theme-neo #ui-panel label,
+body.theme-neo .itin-section label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: var(--neo-mute);
+    margin-bottom: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   3. CHAMPS — pilules hautes
+   ---------------------------------------------------------------------------
+   54 px de haut environ : c'est la cible tactile confortable au volant, et le
+   format qui a remplacé partout le champ de 40 px à bordure fine.
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-input-row,
+body.theme-neo .itin-select-row {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+    padding: 15px 16px;
+    gap: 12px;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+body.theme-neo .itin-input-row:hover,
+body.theme-neo .itin-select-row:hover { background: var(--neo-raise-hi); }
+/* Focus : l'accent, et un halo court. Pas de `box-shadow` de 20px bleue — le
+   champ actif doit se distinguer, pas s'illuminer. */
+body.theme-neo .itin-input-row:focus-within {
+    background: var(--neo-raise-hi);
+    border-color: var(--neo-acc-line);
+    box-shadow: 0 0 0 3px var(--neo-acc-soft);
+}
+body.theme-neo .itin-input-row input,
+body.theme-neo .itin-select-row select {
+    font-family: var(--neo-font);
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--neo-text);
+    letter-spacing: -0.01em;
+}
+body.theme-neo .itin-input-row input::placeholder { color: var(--neo-mute); }
+body.theme-neo .itin-select-row select option {
+    background: var(--neo-surface-op);
+    color: var(--neo-text);
+}
+
+/* Pictos : tous neutres au repos. Seul le pin garde l'accent en permanence —
+   c'est la seule action de la ligne qui ouvre un mode (choisir sur la carte). */
+body.theme-neo .itin-icon-leading,
+body.theme-neo .itin-icon-btn,
+body.theme-neo .itin-select-chevron { color: var(--neo-mute); }
+body.theme-neo .itin-input-row:focus-within .itin-icon-leading { color: var(--neo-text); }
+body.theme-neo .itin-icon-btn:hover { color: var(--neo-text); }
+body.theme-neo .itin-pin-btn,
+body.theme-neo .itin-add-btn { color: var(--neo-acc); }
+body.theme-neo .itin-pin-btn:hover,
+body.theme-neo .itin-add-btn:hover { color: var(--neo-acc); filter: brightness(1.15); }
+body.theme-neo .itin-pin-btn.active {
+    color: var(--neo-acc);
+    filter: drop-shadow(0 0 7px rgba(200, 255, 61, 0.55));
+}
+body.theme-neo .itin-mic-btn { color: var(--neo-dim); }
+body.theme-neo .itin-mic-btn:hover { color: var(--neo-text); }
+body.theme-neo .itin-mic-btn.recording { color: var(--neo-danger); }
+body.theme-neo .itin-icon-sep { background: var(--neo-line); }
+
+/* Liste de suggestions : détachée du champ (elle flotte au lieu d'y être
+   soudée), arrondie sur ses quatre coins, verre elle aussi. */
+body.theme-neo .addr-suggestions {
+    background: rgba(16, 18, 23, 0.92);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+    margin-top: 6px;
+    overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+}
+body.theme-neo .addr-suggestion {
+    color: var(--neo-dim);
+    font-size: 14px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--neo-line);
+}
+body.theme-neo .addr-suggestion:hover,
+body.theme-neo .addr-suggestion.highlighted {
+    background: var(--neo-acc-soft);
+    color: var(--neo-text);
+    /* Barre d'accent à gauche plutôt qu'un fond plein : la ligne survolée se
+       repère sans que le texte perde son contraste. */
+    box-shadow: inset 3px 0 0 var(--neo-acc);
+}
+
+/* ---------------------------------------------------------------------------
+   4. RÉEL / SIMU — interrupteur
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-mode-toggle { margin: 4px 0 16px; }
+body.theme-neo .itin-mode-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--neo-mute);
+}
+body.theme-neo .itin-mode-label.active { color: var(--neo-text); }
+body.theme-neo .itin-slider {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+}
+body.theme-neo .itin-slider::before { background: var(--neo-dim); }
+body.theme-neo .itin-switch input:checked + .itin-slider {
+    background: var(--neo-acc);
+    border-color: var(--neo-acc);
+}
+body.theme-neo .itin-switch input:checked + .itin-slider::before { background: var(--neo-acc-ink); }
+
+/* ---------------------------------------------------------------------------
+   5. DÉMARRER — un seul bouton plein dans tout le panneau
+   ---------------------------------------------------------------------------
+   Aplat lime, texte noir. C'est le contraste le plus fort de l'écran, donc la
+   hiérarchie ne se discute plus.
+
+   Les trois animations d'origine sont coupées (pulsation permanente de l'ombre,
+   balayage de reflet toutes les 3,2 s, second reflet au chargement) : sur un
+   aplat vif elles se voient beaucoup plus, et un bouton qui clignote en
+   permanence est le marqueur d'interface le plus daté de la liste. Le spinner
+   de chargement, lui, est conservé — il porte une information.
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-start-btn {
+    background: var(--neo-acc);
+    border: none;
+    border-radius: var(--neo-r-btn);
+    color: var(--neo-acc-ink);
+    font-family: var(--neo-font);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    padding: 17px;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 28px rgba(200, 255, 61, 0.18);
+    animation: none !important;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+body.theme-neo .itin-start-btn::before,
+body.theme-neo .itin-start-btn::after { display: none !important; }
+body.theme-neo .itin-start-btn:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 10px 34px rgba(200, 255, 61, 0.28);
+    transform: none;
+    color: var(--neo-acc-ink);
+}
+/* Retour d'appui franc : c'est ce qui remplace le clignotement — l'interface
+   réagit quand on la touche, elle ne s'agite pas toute seule. */
+body.theme-neo .itin-start-btn:active { transform: scale(0.985); }
+body.theme-neo .itin-start-btn:disabled {
+    background: var(--neo-raise);
+    color: var(--neo-mute);
+    box-shadow: none;
+    filter: none;
+}
+body.theme-neo .itin-start-spinner {
+    border-color: rgba(11, 13, 7, 0.3);
+    border-top-color: var(--neo-acc-ink);
+}
+
+/* ---------------------------------------------------------------------------
+   6. CARTES — « Go home » / « Go work » / Trajet libre
+   ---------------------------------------------------------------------------
+   Traitement bento : le picto sort du flux de texte et prend sa propre pastille
+   carrée. C'est ce qui transforme trois boutons en trois cartes lisibles d'un
+   coup d'œil, sans toucher à la grille 1fr 1fr existante.
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-free-btn {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-btn);
+    color: var(--neo-dim);
+    padding: 14px;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+body.theme-neo .itin-free-btn:hover {
+    background: var(--neo-raise-hi);
+    border-color: var(--neo-line-hi);
+    color: var(--neo-text);
+}
+body.theme-neo .itin-free-btn:active { transform: scale(0.99); }
+body.theme-neo .itin-free-icon {
+    width: 34px; height: 34px;
+    flex: 0 0 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--neo-raise-hi);
+    border-radius: 11px;
+    color: var(--neo-dim);
+    transition: background 0.18s ease, color 0.18s ease;
+}
+body.theme-neo .itin-free-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--neo-text);
+}
+body.theme-neo .itin-free-sub {
+    font-size: 11px;
+    color: var(--neo-mute);
+    letter-spacing: 0;
+}
+/* Lieu renseigné : la pastille s'allume. L'écart d'état se lit sur le picto,
+   pas sur une bordure de 1 px à 25 % d'opacité qu'il fallait chercher. */
+body.theme-neo .itin-place-btn.has-place { border-color: var(--neo-line); }
+body.theme-neo .itin-place-btn.has-place .itin-free-icon {
+    background: var(--neo-acc-soft);
+    color: var(--neo-acc);
+}
+body.theme-neo .itin-place-btn.has-place .itin-free-sub { color: var(--neo-dim); }
+body.theme-neo .itin-places-row { gap: 8px; }
+body.theme-neo .itin-place-btn { padding: 12px 11px; gap: 10px; }
+body.theme-neo .itin-place-btn .itin-free-icon {
+    width: 30px; height: 30px; flex: 0 0 30px;
+    border-radius: 10px;
+}
+
+/* Boutons secondaires de formulaire (Enregistrer / Annuler / Supprimer).
+   `!important` obligatoire : ces trois boutons portent des styles INLINE dans
+   index.html (fond bleu, couleur, bordure), qui l'emportent sur toute règle de
+   feuille quelle que soit sa spécificité. */
+body.theme-neo .itin-save-fav {
+    background: var(--neo-raise) !important;
+    border: 1px solid var(--neo-line) !important;
+    border-radius: 12px;
+    color: var(--neo-dim) !important;
+    font-family: var(--neo-font);
+    font-weight: 600;
+    letter-spacing: 0;
+    padding: 12px;
+}
+body.theme-neo .itin-save-fav:hover {
+    background: var(--neo-acc-soft) !important;
+    border-color: var(--neo-acc-line) !important;
+    color: var(--neo-text) !important;
+}
+body.theme-neo .contact-form-title { color: var(--neo-acc) !important; }
+
+/* ---------------------------------------------------------------------------
+   7. PIED DE PANNEAU
+   --------------------------------------------------------------------------- */
+body.theme-neo .itin-footer {
+    border-top: 1px solid var(--neo-line);
+    padding-top: 12px;
+}
+body.theme-neo #panel-gps-status {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--neo-mute);
+}
+body.theme-neo .gps-dot { background: var(--neo-mute); }
+/* GPS accroché = donnée vive, donc accent. Le vert #28a745 d'origine aurait
+   introduit une troisième couleur pour dire la même chose. */
+body.theme-neo #panel-gps-status.connected { color: var(--neo-acc); }
+body.theme-neo #panel-gps-status.connected .gps-dot {
+    background: var(--neo-acc);
+    box-shadow: 0 0 8px rgba(200, 255, 61, 0.7);
+}
+body.theme-neo .itin-signal { color: var(--neo-mute); }
+body.theme-neo #status { color: var(--neo-danger); font-weight: 600; letter-spacing: 0; }
+
+/* ---------------------------------------------------------------------------
+   8. BOUTON DE BASCULE DU THÈME
+   ---------------------------------------------------------------------------
+   Posé dans #ui-panel, en haut à droite, à gauche du chevron de repli.
+
+   ⚠ z-index 1004 : au-dessus de la zone de capture tactile `#ui-panel::after`
+   (1002), qui couvre les 28 premiers pixels du panneau en mobile et avalerait
+   sinon l'appui. Piège déjà rencontré et documenté sur le thème cartoon.
+
+   Il vit hors du thème (pas de préfixe `body.theme-neo`) : il doit rester
+   visible pour pouvoir RE-basculer une fois le thème actif. */
+#neo-theme-btn {
+    position: absolute; top: 8px; right: 42px;
+    z-index: 1004;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    color: #8A8F9A;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 11px;
+    cursor: pointer;
+    transition: 0.18s;
+}
+#neo-theme-btn:hover { color: #F4F6F8; border-color: rgba(255, 255, 255, 0.25); }
+#neo-theme-btn[aria-pressed="true"] {
+    background: rgba(200, 255, 61, 0.14);
+    border-color: rgba(200, 255, 61, 0.42);
+    color: #C8FF3D;
+}
+/* En état réduit le panneau ne montre plus que poignée et titre : le bouton n'y
+   a plus sa place et se cognerait au chevron recentré. */
+#ui-panel.panel-min #neo-theme-btn,
+#ui-panel.minimized #neo-theme-btn { display: none; }
+
+/* ---------------------------------------------------------------------------
+   9. MOBILE — la feuille
+   ---------------------------------------------------------------------------
+   Re-déclaré dans la media query parce que `styles.css` y repose border-radius
+   et border-top sur `#ui-panel` : hors media query, nos valeurs desktop
+   s'appliqueraient aussi au portrait.
+   --------------------------------------------------------------------------- */
+@media (max-width: 600px) and (orientation: portrait) {
+    body.theme-neo #ui-panel {
+        border-radius: 28px 28px 0 0;
+        border-top: 1px solid var(--neo-line-hi);
+        border-left: none; border-right: none; border-bottom: none;
+        padding: 14px 16px 16px;
+        box-shadow: 0 -14px 50px rgba(0, 0, 0, 0.6);
+    }
+    body.theme-neo #ui-panel.search-focus #end-addr-suggestions {
+        border: 1px solid var(--neo-line);
+        border-radius: var(--neo-r-field);
+        margin-bottom: 8px;
+        box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.7);
+    }
+}
+
+/* Écrans courts en paysage : le panneau devient une colonne collée à gauche,
+   sans coins arrondis à gauche. */
+@media (max-height: 600px) and (orientation: landscape) {
+    body.theme-neo #ui-panel {
+        border-radius: 0 var(--neo-r-panel) var(--neo-r-panel) 0;
+        border-left: none;
+    }
+}
+
+/* Respect du réglage système : plus aucune transition ni transformation. */
+@media (prefers-reduced-motion: reduce) {
+    body.theme-neo #ui-panel *,
+    body.theme-neo #ui-panel *::before,
+    body.theme-neo #ui-panel *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+
+/* ============================================================================
+   ============================================================================
+   DÉCLINAISON AUX AUTRES PAGES
+   ============================================================================
+   ============================================================================
+
+   Même grammaire partout, quatre règles seulement :
+
+     1. SURFACE — les dégradés navy (#0a0e17 → #0f1825) deviennent un gris
+        neutre unique. C'est ce qui faisait le plus « 2019 » : un dégradé bleu
+        différent sur chaque bloc.
+     2. FILET — rgba(0,140,255,…) devient blanc à faible opacité. Une bordure
+        n'a pas à être colorée pour se voir.
+     3. ACCENT — le lime est RARE : état actif, donnée vive, action principale.
+        Tout ce qui était bleu « par défaut » redescend en gris.
+     4. SÉMANTIQUE — rouge = danger, or = trophée. Conservés. Le vert de
+        réussite, lui, disparaît au profit du lime : deux couleurs positives
+        dans la même app ne se distinguaient de toute façon pas.
+
+   ⚠ NON REPRIS, volontairement :
+     - le HUD de navigation (bandeau de virage vert, pastille de limitation,
+       compteur). Ces trois-là copient des conventions routières ou Google Maps ;
+       les repeindre en lime ferait perdre en lisibilité au volant ce qu'on
+       gagnerait en cohérence. Ils restent identiques dans les deux thèmes.
+     - la feuille « Stations autour de moi », la hotbox radiale, les modales de
+       coffre et de vidéo de badge. Gros volumes de CSS propre, à faire dans une
+       passe dédiée si le thème est retenu.
+   ============================================================================ */
+
+/* Police : les surfaces hors #ui-panel ont leurs propres contrôles, qui
+   n'héritent pas de la police du document. */
+body.theme-neo #trip-modal button, body.theme-neo #trip-modal input,
+body.theme-neo #nav-panel-overlay button, body.theme-neo #nav-panel-overlay input,
+body.theme-neo #profil-sheet button, body.theme-neo #stats-modal button,
+body.theme-neo #main-bottom-nav button,
+body.theme-neo #weekly-goals-modal button { font-family: var(--neo-font); }
+
+
+/* ---------------------------------------------------------------------------
+   10. BARRE D'ONGLETS PERMANENTE — la chrome que toutes les pages partagent
+   ---------------------------------------------------------------------------
+   Elle est visible en permanence, y compris pendant un trajet : c'est le seul
+   élément vu sur 100 % des écrans, donc le premier à basculer.
+   --------------------------------------------------------------------------- */
+body.theme-neo #main-bottom-nav {
+    background: rgba(10, 11, 15, 0.86);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border-top: 1px solid var(--neo-line);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body.theme-neo #main-bottom-nav { background: #0A0B0F; }
+}
+body.theme-neo .main-nav-tab { color: var(--neo-mute); }
+body.theme-neo .main-nav-tab:hover { color: var(--neo-dim); }
+body.theme-neo .main-nav-tab.active,
+body.theme-neo.nav-active #nav-tab-trajet { color: var(--neo-acc); }
+/* Le trait d'onglet actif : pleine largeur de l'onglet, sans halo. Le trait
+   court à 20 %/20 % avec son ombre portée bleue était le détail le plus daté de
+   la barre — l'indicateur d'onglet est aujourd'hui plein, net et sans glow. */
+body.theme-neo .main-nav-tab.active::before,
+body.theme-neo.nav-active #nav-tab-trajet::before {
+    left: 28%; right: 28%;
+    height: 3px;
+    background: var(--neo-acc);
+    box-shadow: none;
+}
+body.theme-neo .main-nav-tab span {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: none;
+}
+/* La pastille de notification reste jaune : elle signale « du nouveau », pas un
+   état actif. En lime elle se confondrait avec l'onglet sélectionné. */
+
+/* Feuille Objectifs / Profil ouverte par-dessus la navigation. */
+body.theme-neo #nav-panel-overlay {
+    background: var(--neo-surface);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border-top: 1px solid var(--neo-line-hi);
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -14px 50px rgba(0, 0, 0, 0.6);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body.theme-neo #nav-panel-overlay { background: var(--neo-surface-op); }
+}
+body.theme-neo #nav-panel-overlay-header { border-bottom: 1px solid var(--neo-line); }
+body.theme-neo #nav-panel-overlay-handle { background: var(--neo-line-hi); width: 36px; }
+body.theme-neo #nav-panel-overlay-title {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.02em;
+    text-transform: none; color: var(--neo-text);
+}
+body.theme-neo #nav-panel-overlay-close { color: var(--neo-mute); }
+body.theme-neo #nav-panel-overlay-close:hover { color: var(--neo-text); }
+body.theme-neo #nav-panel-overlay-backdrop { background: rgba(0, 0, 0, 0.55); }
+
+
+/* ---------------------------------------------------------------------------
+   11. BANDEAU DE STATS EN NAVIGATION (points / multiplicateur / ETA)
+   ---------------------------------------------------------------------------
+   Les seuls gros chiffres vivants de l'app. C'est ici que la typo à chiffres
+   géants paie vraiment : `tabular-nums` fige la largeur des chiffres, sinon la
+   valeur tremble latéralement à chaque incrément pendant la conduite.
+   --------------------------------------------------------------------------- */
+body.theme-neo #nav-bottom-bar {
+    background: rgba(10, 11, 15, 0.9);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border-top: 1px solid var(--neo-line);
+}
+body.theme-neo .nav-stat-label {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+    color: var(--neo-mute);
+}
+body.theme-neo .nav-stat-value {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--neo-text);
+}
+body.theme-neo #nav-points { color: var(--neo-acc); }
+body.theme-neo #nav-eta { color: var(--neo-text); font-size: 24px; }
+/* Le multiplicateur garde son orangé : c'est un bonus temporaire, pas un état
+   permanent, et il doit se distinguer des points. */
+
+
+/* ---------------------------------------------------------------------------
+   12. ONGLET OBJECTIFS
+   --------------------------------------------------------------------------- */
+body.theme-neo #weekly-goals-modal {
+    background: var(--neo-surface-op);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-panel);
+    color: var(--neo-text);
+}
+body.theme-neo #weekly-goals-header {
+    color: var(--neo-text);
+    font-size: 20px; font-weight: 700; letter-spacing: -0.02em;
+}
+body.theme-neo #weekly-goals-timer { color: var(--neo-mute); }
+
+/* Carte d'objectif : surface plate, emblème en pastille. Le dégradé
+   #131b27 → #0c111a et l'ombre interne sont retirés — une liste de cartes en
+   relief se lit moins vite qu'une liste de cartes plates bien séparées. */
+body.theme-neo .wg-item {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-btn);
+    box-shadow: none;
+}
+/* Objectif atteint : la carte s'éclaire en lime, pas en vert. */
+body.theme-neo .wg-item.completed {
+    background: var(--neo-acc-soft);
+    border-color: var(--neo-acc-line);
+    box-shadow: none;
+}
+body.theme-neo .wg-emblem {
+    background: var(--neo-raise-hi);
+    border: 1px solid var(--neo-line);
+    border-radius: 13px;
+}
+body.theme-neo .wg-item.completed .wg-emblem {
+    background: rgba(200, 255, 61, 0.18);
+    border-color: var(--neo-acc-line);
+}
+body.theme-neo .wg-emblem-check { color: var(--neo-mute); }
+body.theme-neo .wg-item.completed .wg-emblem-check {
+    color: var(--neo-acc);
+    text-shadow: none;
+}
+body.theme-neo .wg-item-title { color: var(--neo-dim); font-weight: 600; }
+body.theme-neo .wg-item.completed .wg-item-title { color: var(--neo-text); }
+body.theme-neo .wg-val {
+    color: var(--neo-text); font-weight: 700;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+body.theme-neo .wg-item.completed .wg-val { color: var(--neo-acc); }
+body.theme-neo .wg-tot { color: var(--neo-mute); }
+body.theme-neo .wg-item-bar { background: rgba(0, 0, 0, 0.4); border-radius: 999px; }
+/* Barre de progression : aplat lime. Le dégradé bleu→vert d'origine faisait
+   changer la couleur de la barre selon son avancement, ce qui se lisait comme
+   un changement d'état alors que ce n'en était pas un. */
+body.theme-neo .wg-item-fill {
+    background: var(--neo-acc);
+    border-radius: 999px;
+}
+body.theme-neo .wg-item-fill.done { background: var(--neo-acc); box-shadow: none; }
+body.theme-neo .wg-tag {
+    color: var(--neo-acc);
+    background: var(--neo-acc-soft);
+    border-radius: 999px;
+    padding: 2px 7px;
+}
+body.theme-neo .wg-timer-pill {
+    border: 1px solid var(--neo-line);
+    background: var(--neo-raise);
+    color: var(--neo-dim);
+    letter-spacing: 0.1em;
+}
+body.theme-neo .wg-timer-cap { color: var(--neo-mute); letter-spacing: 0.14em; }
+body.theme-neo .wg-note {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+    color: var(--neo-dim);
+}
+body.theme-neo .wg-note strong { color: var(--neo-text); }
+body.theme-neo .wg-note .wg-note-strong { color: var(--neo-acc); }
+/* L'encart « phase d'observation » garde son orangé : c'est un avertissement. */
+body.theme-neo .wg-remaining { color: var(--neo-mute); }
+/* Semaine réussie : l'or reste. C'est une récompense, pas un état d'interface. */
+body.theme-neo .wg-claim-btn {
+    background: var(--neo-acc);
+    color: var(--neo-acc-ink);
+    border-radius: var(--neo-r-btn);
+    font-weight: 700; letter-spacing: 0.02em;
+    box-shadow: 0 8px 28px rgba(200, 255, 61, 0.18);
+}
+
+
+/* ---------------------------------------------------------------------------
+   13. ONGLET PROFIL — lignes de navigation
+   ---------------------------------------------------------------------------
+   `.profil-row` est le format partagé de Mes statistiques / Galerie des
+   trophées / Aide à la conduite / Historique. Une seule règle les couvre
+   toutes, comme dans le fichier d'origine.
+
+   Le libellé passe de 11px MAJUSCULES +2px d'interlettrage à du 14px en casse
+   normale : ces lignes sont des entrées de menu, pas des titres de section, et
+   les MAJUSCULES espacées les faisaient toutes se ressembler.
+   --------------------------------------------------------------------------- */
+body.theme-neo .profil-row {
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-btn);
+    margin-top: 6px; margin-bottom: 6px;
+}
+body.theme-neo .profil-row-btn {
+    background: var(--neo-raise);
+    border-radius: var(--neo-r-btn);
+    color: var(--neo-text);
+    font-size: 14px; font-weight: 600;
+    letter-spacing: -0.01em; text-transform: none;
+    padding: 15px 16px;
+}
+body.theme-neo .profil-row-btn:active { background: var(--neo-raise-hi); }
+body.theme-neo .profil-row-btn .profil-row-arrow,
+body.theme-neo #trophy-gallery-toggle .tg-arrow,
+body.theme-neo #aide-conduite-toggle .ac-arrow { color: var(--neo-mute); }
+/* Les pastilles `.tg-count` / `.th-count` de ces deux lignes ont été retirées du balisage
+   le 22/08/2026 ; leurs règles de thème sont parties avec elles. `.th-count-pill` (plus
+   bas) reste, elle vit dans la page Historique. */
+/* La puce blanche des titres devient l'accent : c'est le repère de rang le plus
+   répété de l'app, il porte donc le thème à lui seul sur une dizaine d'écrans. */
+body.theme-neo .ui-dot { background: var(--neo-acc); }
+
+/* Corps de section (Aide à la conduite, Trophées, Historique). */
+body.theme-neo #aide-conduite-body,
+body.theme-neo #trophy-gallery-body,
+body.theme-neo #trip-history-body {
+    background: rgba(0, 0, 0, 0.22);
+    border-top: 1px solid var(--neo-line);
+}
+body.theme-neo .ac-row { border-bottom: 1px solid var(--neo-line); }
+body.theme-neo .ac-row-label { color: var(--neo-text); font-weight: 600; }
+body.theme-neo .ac-row-hint { color: var(--neo-mute); }
+body.theme-neo .ac-toggle-slider { background: var(--neo-raise-hi); }
+body.theme-neo .ac-toggle-slider::before { background: var(--neo-dim); box-shadow: none; }
+body.theme-neo .ac-toggle-switch input:checked + .ac-toggle-slider { background: var(--neo-acc); }
+body.theme-neo .ac-toggle-switch input:checked + .ac-toggle-slider::before { background: var(--neo-acc-ink); }
+body.theme-neo .profil-section-title {
+    color: var(--neo-mute);
+    letter-spacing: 0.14em;
+    border-bottom: 1px solid var(--neo-line);
+}
+
+
+/* ---------------------------------------------------------------------------
+   14. TROPHÉES ET BADGES
+   ---------------------------------------------------------------------------
+   ⚠ `--tc-color` est posée par le JS, une couleur par trophée : on n'y touche
+   pas. Seuls le contenant et l'état verrouillé sont repris.
+   --------------------------------------------------------------------------- */
+body.theme-neo .trophy-cell {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+}
+body.theme-neo .trophy-name { color: var(--neo-mute); letter-spacing: 0.08em; }
+body.theme-neo .trophy-badge-count { background: var(--neo-raise-hi); color: var(--neo-dim); }
+body.theme-neo .trophy-lock { color: var(--neo-mute); }
+body.theme-neo #badge-category-card {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-btn);
+    box-shadow: none;
+}
+body.theme-neo #badge-category-title { color: var(--neo-mute); letter-spacing: 0.14em; }
+body.theme-neo #badge-category-name { letter-spacing: -0.02em; font-weight: 700; }
+body.theme-neo #badge-category-sub { color: var(--neo-dim); }
+body.theme-neo #badge-progress-bar-wrap { background: var(--neo-raise-hi); border-radius: 999px; }
+body.theme-neo #badge-progress-label { color: var(--neo-mute); }
+
+
+/* ---------------------------------------------------------------------------
+   15. PAGES PLEINES DU PROFIL (Statistiques, Trophées, Historique…)
+   --------------------------------------------------------------------------- */
+body.theme-neo #stats-modal-overlay,
+body.theme-neo #profil-sheet-overlay {
+    background: rgba(0, 0, 0, 0.7);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+body.theme-neo #profil-sheet,
+body.theme-neo #stats-modal {
+    background: var(--neo-surface-op);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-panel);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75);
+}
+body.theme-neo #profil-sheet-title,
+body.theme-neo #stats-modal-header h2 {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+    text-transform: none; color: var(--neo-text);
+}
+/* Fermeture : neutre, pas rouge. Fermer une page n'est pas une action
+   destructrice — le rouge doit rester réservé aux suppressions. */
+body.theme-neo #profil-sheet-close,
+body.theme-neo #stats-modal-close {
+    background: var(--neo-raise-hi);
+    border: 1px solid var(--neo-line);
+    color: var(--neo-dim);
+    width: 32px; height: 32px;
+}
+
+body.theme-neo .stats-period-btn {
+    border: 1px solid var(--neo-line);
+    background: var(--neo-raise);
+    color: var(--neo-mute);
+    border-radius: 999px;
+    font-weight: 600;
+}
+body.theme-neo .stats-period-btn.active {
+    background: var(--neo-acc);
+    border-color: var(--neo-acc);
+    color: var(--neo-acc-ink);
+}
+/* Bento : les KPI passent en cartes plus hautes, chiffre dominant. C'est le
+   seul endroit de l'app où la donnée est déjà tabulée — donc celui où le
+   traitement en grille de cartes se justifie sans rien réorganiser. */
+body.theme-neo .stats-kpi {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+    padding: 16px 14px;
+}
+body.theme-neo .stats-kpi-label { color: var(--neo-mute); letter-spacing: 0.12em; }
+body.theme-neo .stats-kpi-value {
+    font-size: 30px; font-weight: 700; color: var(--neo-text);
+    letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+}
+body.theme-neo .stats-kpi-unit { color: var(--neo-mute); }
+body.theme-neo .stats-section-title {
+    color: var(--neo-mute); letter-spacing: 0.14em;
+    border-bottom: 1px solid var(--neo-line);
+}
+body.theme-neo .stats-chart-wrap {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+}
+body.theme-neo .stats-empty { color: var(--neo-mute); }
+
+
+/* ---------------------------------------------------------------------------
+   16. HISTORIQUE DES TRAJETS
+   --------------------------------------------------------------------------- */
+body.theme-neo .th-year {
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+    background: var(--neo-raise);
+}
+body.theme-neo .th-year-label { color: var(--neo-text); letter-spacing: -0.01em; }
+body.theme-neo .th-month { border-left: 2px solid var(--neo-line-hi); }
+body.theme-neo .th-month-label { color: var(--neo-dim); }
+body.theme-neo .th-count-pill { color: var(--neo-mute); }
+body.theme-neo .trip-row-head:active { background: var(--neo-raise-hi); }
+body.theme-neo .trip-row-date { color: var(--neo-text); }
+body.theme-neo .trip-row-summary { color: var(--neo-mute); }
+body.theme-neo .trip-row-pts {
+    color: var(--neo-text); font-weight: 700;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+body.theme-neo .trip-row-pts-unit { color: var(--neo-mute); }
+body.theme-neo .trip-row-flag.ok { color: var(--neo-acc); background: var(--neo-acc-soft); }
+body.theme-neo .trip-row-chevron { color: var(--neo-mute); }
+body.theme-neo .trip-detail-label { color: var(--neo-mute); letter-spacing: 0.12em; }
+body.theme-neo .trip-detail-value {
+    color: var(--neo-text); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+body.theme-neo .trip-endpoint-role { color: var(--neo-mute); }
+body.theme-neo .trip-endpoint-addr { color: var(--neo-dim); }
+body.theme-neo .trip-endpoint-go {
+    background: var(--neo-acc-soft);
+    color: var(--neo-acc);
+}
+body.theme-neo .trip-endpoint-go:active { background: rgba(200, 255, 61, 0.26); }
+body.theme-neo .trip-history-hint { color: var(--neo-mute); }
+
+
+/* ---------------------------------------------------------------------------
+   17. APERÇU DE TRAJET — la page qui suit « Démarrer »
+   ---------------------------------------------------------------------------
+   Même feuille de verre que le panneau Itinéraire : ce sont deux états d'un
+   même geste (je prépare / je confirme), ils doivent se ressembler.
+   --------------------------------------------------------------------------- */
+body.theme-neo #trip-modal {
+    background: var(--neo-surface);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border: 1px solid var(--neo-line);
+    border-top: 1px solid var(--neo-line-hi);
+    border-radius: 28px 28px 0 0;
+    /* L'ombre d'origine cumulait trois halos bleus (dont un de 80px) qui
+       teintaient la carte tout autour de la feuille. */
+    box-shadow: 0 -14px 50px rgba(0, 0, 0, 0.6);
+    color: var(--neo-dim);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body.theme-neo #trip-modal { background: var(--neo-surface-op); }
+}
+body.theme-neo .trip-modal-handle::before { background: var(--neo-line-hi); width: 36px; }
+body.theme-neo #trip-modal h3 {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
+    text-transform: none; text-align: left; color: var(--neo-text);
+    margin: 4px 0 18px;
+}
+body.theme-neo #trip-modal .modal-close-x {
+    background: var(--neo-raise-hi);
+    border: 1px solid var(--neo-line);
+    color: var(--neo-dim);
+}
+body.theme-neo #trip-modal .form-group label {
+    font-size: 10px; letter-spacing: 0.14em; font-weight: 600;
+    color: var(--neo-mute);
+}
+body.theme-neo #trip-modal .input-with-btn {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+}
+body.theme-neo #trip-modal .input-with-btn:focus-within {
+    background: var(--neo-raise-hi);
+    border-color: var(--neo-acc-line);
+    box-shadow: 0 0 0 3px var(--neo-acc-soft);
+}
+body.theme-neo #trip-modal .input-with-btn input,
+body.theme-neo .input-with-btn input {
+    color: var(--neo-text); font-weight: 500;
+}
+body.theme-neo .btn-map,
+body.theme-neo #trip-modal .btn-map {
+    background: var(--neo-acc-soft);
+    border: 1px solid var(--neo-acc-line);
+    color: var(--neo-acc);
+    border-radius: 10px;
+    box-shadow: none;
+}
+body.theme-neo .btn-clear-addr,
+body.theme-neo #trip-modal .btn-clear-addr {
+    background: rgba(255, 92, 92, 0.08);
+    border: 1px solid rgba(255, 92, 92, 0.2);
+    color: var(--neo-danger);
+    border-radius: 10px;
+}
+
+body.theme-neo .modal-collapsible-title {
+    color: var(--neo-mute);
+    letter-spacing: 0.12em;
+    border-top: 1px solid var(--neo-line);
+}
+body.theme-neo .modal-collapsible-title span:first-of-type { color: var(--neo-dim); }
+body.theme-neo .modal-collapsible-title:hover span:first-of-type { color: var(--neo-text); }
+body.theme-neo .modal-collapsible-toggle {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+}
+body.theme-neo .modal-collapsible-toggle span:first-of-type { color: var(--neo-text); }
+body.theme-neo .modal-toggle-hint { color: var(--neo-mute); }
+body.theme-neo .gas-section-title { border-top: 1px solid var(--neo-line); }
+
+/* Oui / Non péages : le rouge et le vert d'origine disaient « mauvais / bon »
+   alors que la question est neutre (avec ou sans péage). L'état sélectionné se
+   dit désormais par l'accent, comme partout ailleurs. */
+body.theme-neo .toll-yn-btn {
+    border: 1px solid var(--neo-line);
+    background: var(--neo-raise);
+    color: var(--neo-mute);
+    border-radius: 999px;
+    font-weight: 600;
+}
+body.theme-neo .toll-yn-btn:hover { border-color: var(--neo-line-hi); color: var(--neo-text); }
+body.theme-neo .toll-yn-btn.active-oui,
+body.theme-neo .toll-yn-btn.active-non {
+    background: var(--neo-acc);
+    border-color: var(--neo-acc);
+    color: var(--neo-acc-ink);
+}
+
+body.theme-neo .route-alt-card {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-field);
+}
+body.theme-neo .route-alt-card:hover { background: var(--neo-raise-hi); border-color: var(--neo-line-hi); }
+body.theme-neo .route-alt-card.selected {
+    background: var(--neo-acc-soft);
+    border-color: var(--neo-acc-line);
+    box-shadow: none;
+}
+body.theme-neo .route-alt-label { color: var(--neo-text); font-weight: 600; }
+body.theme-neo .route-alt-details { color: var(--neo-mute); }
+body.theme-neo .route-alt-badge { border-radius: 999px; }
+body.theme-neo .route-alt-badge.fastest,
+body.theme-neo .route-alt-badge.shortest { background: var(--neo-acc-soft); color: var(--neo-acc); }
+
+body.theme-neo .trip-preview-item { color: var(--neo-dim); }
+body.theme-neo .trip-preview-item span:last-child {
+    color: var(--neo-text); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+body.theme-neo .trip-preview-total { border-top: 1px solid var(--neo-line); }
+/* `!important` : ces deux déclarations le sont déjà dans styles.css. */
+body.theme-neo .trip-preview-total span {
+    color: var(--neo-dim) !important;
+    text-decoration: none !important;
+}
+body.theme-neo .trip-preview-total span:last-child {
+    color: var(--neo-acc) !important;
+    font-size: 22px !important;
+    letter-spacing: -0.02em;
+}
+body.theme-neo .trip-info-separator { background: var(--neo-line); }
+body.theme-neo .trip-option-hint { color: var(--neo-mute); }
+body.theme-neo .modal-status { color: var(--neo-mute); letter-spacing: 0; }
+
+/* Confirmer : le jumeau exact de « Démarrer », animation permanente comprise —
+   c'est-à-dire supprimée. */
+body.theme-neo .modal-validate-btn {
+    background: var(--neo-acc);
+    border: none;
+    border-radius: var(--neo-r-btn);
+    color: var(--neo-acc-ink);
+    font-weight: 700; font-size: 15px;
+    letter-spacing: 0.02em; text-transform: none;
+    box-shadow: 0 8px 28px rgba(200, 255, 61, 0.18);
+    animation: none !important;
+    transition: transform 0.12s ease, filter 0.2s ease;
+}
+body.theme-neo .modal-validate-btn:hover {
+    filter: brightness(1.06);
+    transform: none;
+    color: var(--neo-acc-ink);
+}
+body.theme-neo .modal-validate-btn:active { transform: scale(0.985); }
+body.theme-neo .modal-validate-btn:disabled {
+    background: var(--neo-raise);
+    color: var(--neo-mute);
+    box-shadow: none; filter: none;
+}
+body.theme-neo .modal-cancel-btn {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    color: var(--neo-dim);
+    border-radius: var(--neo-r-btn);
+    font-weight: 600; letter-spacing: 0.02em; text-transform: none;
+}
+body.theme-neo .modal-cancel-btn:hover {
+    background: var(--neo-raise-hi);
+    color: var(--neo-text);
+    border-color: var(--neo-line-hi);
+}
+
+
+/* ---------------------------------------------------------------------------
+   18. MODALES COURTES (sortie, arrivée, boutons flottants)
+   --------------------------------------------------------------------------- */
+body.theme-neo #exit-confirm-box {
+    background: var(--neo-surface-op);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-panel);
+}
+body.theme-neo #nav-btn-3d {
+    background: rgba(16, 18, 23, 0.86);
+    -webkit-backdrop-filter: var(--neo-blur);
+    backdrop-filter: var(--neo-blur);
+    border: 1px solid var(--neo-line);
+    color: var(--neo-dim);
+}
+body.theme-neo #nav-btn-3d.active-3d {
+    background: var(--neo-acc);
+    border-color: var(--neo-acc);
+    color: var(--neo-acc-ink);
+}
+
+
+/* ---------------------------------------------------------------------------
+   19. RESTES DE L'ONGLET PROFIL
+   ---------------------------------------------------------------------------
+   Blocs passés au travers de la première passe, tous pour la même raison : ils
+   portent leurs couleurs en STYLE INLINE (dans index.html ou écrit par le JS),
+   qui l'emporte sur la cascade quelle que soit la spécificité.
+
+   Deux d'entre eux — « Mon véhicule » et « Sauvegarde profil » — ont été
+   corrigés à la source : leur style inline recopiait mot pour mot le format
+   partagé `.profil-row`, ils utilisent désormais les classes. Rendu identique
+   dans le thème d'origine, et ils suivent maintenant les deux thèmes.
+   Les autres sont traités ici, au `!important`, sans toucher au JS.
+   --------------------------------------------------------------------------- */
+
+/* Corps dépliés de ces deux sections (fond en dégradé inline). */
+body.theme-neo #vehicle-panel-body,
+body.theme-neo #backup-body {
+    background: rgba(0, 0, 0, 0.22) !important;
+    border-top: 1px solid var(--neo-line) !important;
+}
+body.theme-neo #trophy-gallery-hint { color: var(--neo-mute) !important; }
+
+/* --- Carte « Style de conduite » (construite en JS, js/14) --- */
+body.theme-neo .drivers-section { border-top: 1px solid var(--neo-line); }
+body.theme-neo .driver-card {
+    background: var(--neo-raise);
+    border: 1px solid var(--neo-line);
+    border-radius: var(--neo-r-btn);
+}
+body.theme-neo .driver-card.speeding {
+    border-color: rgba(255, 92, 92, 0.45);
+    background: rgba(255, 92, 92, 0.07);
+    box-shadow: none;
+}
+body.theme-neo .driver-header { color: var(--neo-text); font-weight: 600; font-size: 14px; }
+body.theme-neo .driver-color-dot { border-color: rgba(0, 0, 0, 0.5); box-shadow: none; }
+body.theme-neo .driver-card select {
+    background: var(--neo-raise-hi);
+    border: 1px solid var(--neo-line);
+    border-radius: 10px;
+    color: var(--neo-text);
+    padding: 7px 9px;
+}
+body.theme-neo .driver-card select option { background: var(--neo-surface-op); color: var(--neo-text); }
+body.theme-neo .driver-stats-grid { color: var(--neo-mute); }
+body.theme-neo .stat-item {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--neo-line);
+    border-radius: 10px;
+}
+body.theme-neo .stat-item .val { color: var(--neo-text); }
+/* `.speed-limit` et `.points-box` (la ligne « Limite / points » de la carte conducteur)
+   ont disparu du balisage le 22/08/2026 — voir renderDriversUI (js/14). Leurs règles de
+   thème sont parties avec elles, y compris le sélecteur d'attribut
+   `.points-box span[style*="4da3ff"]` qui rattrapait la couleur inline du score. */
+body.theme-neo .profile-summary { color: var(--neo-acc); }
+
+/* --- Options du trajet (cases à cocher) ---
+   `.trip-option-row` n'a aucun style propre dans styles.css : c'est un <label>,
+   il héritait donc de la règle globale des libellés de section — 11px, capitales,
+   2px d'interlettrage. D'où deux options de réglage écrites comme des titres.
+   Ici ce sont des lignes à lire, pas des en-têtes à repérer. */
+body.theme-neo .trip-option-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 500;
+    text-transform: none; letter-spacing: 0;
+    color: var(--neo-text);
+    cursor: pointer;
+}
+body.theme-neo .trip-option-row input[type="checkbox"] {
+    accent-color: var(--neo-acc);
+    width: 18px; height: 18px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+/* Scopé à ce bloc : la classe `.trip-option-hint` sert aussi de ligne de statut
+   sous les formulaires contact et lieu, où ce retrait n'aurait aucun sens. */
+body.theme-neo #profil-options-trajet .trip-option-hint {
+    margin-left: 28px;   /* aligné sur le texte de l'option, pas sur la case */
+    line-height: 1.45;
+}
+
+/* --- Ascenseurs ---
+   Aucune règle de barre de défilement n'existe dans styles.css : les listes
+   longues (Profil, historique) affichaient donc l'ascenseur clair du système,
+   une barre blanche en travers d'une interface sombre. */
+body.theme-neo * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+body.theme-neo ::-webkit-scrollbar { width: 8px; height: 8px; }
+body.theme-neo ::-webkit-scrollbar-track { background: transparent; }
+body.theme-neo ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+}
+body.theme-neo ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }

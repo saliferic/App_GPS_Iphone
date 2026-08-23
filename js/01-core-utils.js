@@ -285,7 +285,36 @@
         window.addEventListener('error', (e) => {
             logAppError('window.onerror @ ' + (e.filename || '?') + ':' + (e.lineno || '?'), e.error || e.message);
         });
+        /* ⚠ BRUIT DE MAPBOX EN `file://` — FILTRÉ, ET SEULEMENT CELUI-LÀ (21/08/2026).
+           Symptôme : des rafales de « Failed to execute 'put' on 'Cache': Unexpected
+           internal error. » en `promesse non gérée`, jusqu'à 5 par calcul d'itinéraire.
+           Origine : **pas notre code** — le projet n'a ni service worker ni appel à l'API
+           Cache (vérifié). C'est Mapbox GL qui met ses tuiles en cache tout seul. L'indice
+           décisif est le `blob:null/…` de l'erreur voisine : un blob créé depuis une origine
+           **opaque**, c'est-à-dire `file://`. Or l'API Cache est inutilisable sur une origine
+           opaque : chaque `put` échoue, et Mapbox ne rattrape pas la promesse.
+           C'est donc inévitable et sans conséquence tant que l'app s'ouvre en `file://` —
+           un mode que ce projet assume (voir « scripts classiques, jamais `type=module` »).
+           ⚠ POURQUOI LE FILTRER PLUTÔT QUE LE LAISSER : `gps_error_log` est plafonné. Ces
+           rafales chassent les vraies erreurs du journal, et c'est exactement ce journal qui
+           a servi à débusquer les défauts du plan de pause. Un bruit inactionnable qui
+           expulse le signal coûte plus cher qu'il ne rapporte.
+           ⚠ FILTRE ÉTROIT, sur le message exact et rien d'autre. Ne pas élargir à « Cache »
+           ni à « Failed to execute » : on masquerait des pannes réelles. Le compte est
+           conservé et journalisé UNE fois, pour que le silence reste vérifiable — si ce
+           chiffre s'envole, c'est que Mapbox recharge ses tuiles en boucle. */
+        const BRUIT_CACHE_OPAQUE = "Failed to execute 'put' on 'Cache'";
+        let _bruitCacheCount = 0;
         window.addEventListener('unhandledrejection', (e) => {
+            const msg = (e.reason && e.reason.message) || String(e.reason || '');
+            if (msg.indexOf(BRUIT_CACHE_OPAQUE) !== -1) {
+                if (++_bruitCacheCount === 1) {
+                    logDiag('cache-opaque', {
+                        note: 'Mapbox/API Cache inutilisable en file:// (origine opaque) — bruit filtré',
+                    });
+                }
+                return;
+            }
             logAppError('promesse non gérée', e.reason);
         });
 

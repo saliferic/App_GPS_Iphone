@@ -7,9 +7,9 @@
     
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
    <link rel="stylesheet" href="css/styles.css" />
-   
-    
-    
+
+
+
 </head>
 <body>
 
@@ -82,21 +82,27 @@
         <!-- ── 15 s — La hotbox ── -->
         <div class="intro-scene" style="--t:15s">
             <div class="intro-kicker">Menu rapide</div>
+            <!-- Arc de la hotbox. Les entrées sont posées AU-DESSUS de la zone du doigt et
+                 s'enfoncent vers le fond sur les côtés : c'est exactement ce que fait
+                 _hbLayout() (js/10), reproduit ici en valeurs figées. L'ordre gauche→droite
+                 est celui du catalogue à l'arrêt, et --hs/--hbl/--ho portent la profondeur
+                 (échelle, flou, désaturation) comme les variables du même nom côté app. -->
+            <!-- Ordre et centre identiques à ce que produit le catalogue à l'arrêt :
+                 🚦 3D [🔍] ⛽ 🌙, loupe au milieu. C'est LA configuration d'ouverture, la
+                 scène doit donc montrer celle-là et pas une autre.
+                 Rangée à plat, comme _hbLayout() : pas de --hy, toutes sur la même
+                 ordonnée. Profondeur par la taille, le flou et un léger voile — jamais
+                 par la désaturation, qui rendrait les pictos méconnaissables. -->
             <div id="intro-hotbox">
-                <div id="intro-hb-core">✕</div>
-                <div class="intro-hb-item" style="--hx:0px;--hy:-78px">🔍</div>
-                <div class="intro-hb-item" style="--hx:50px;--hy:-60px">📍</div>
-                <div class="intro-hb-item" style="--hx:77px;--hy:-14px">📡</div>
-                <div class="intro-hb-item" style="--hx:68px;--hy:39px">🔊</div>
-                <div class="intro-hb-item" style="--hx:27px;--hy:73px">◎</div>
-                <div class="intro-hb-item" style="--hx:-27px;--hy:73px">3D</div>
-                <div class="intro-hb-item pick" style="--hx:-68px;--hy:39px">⛽</div>
-                <div class="intro-hb-item" style="--hx:-77px;--hy:-14px">🚦</div>
-                <div class="intro-hb-item" style="--hx:-50px;--hy:-60px">🌙</div>
+                <div class="intro-hb-item" style="--hx:-76px;--hs:.66;--hbl:1.2px;--ho:.8"><img class="hb-img" src="Images/trafic.png" alt=""></div>
+                <div class="intro-hb-item" style="--hx:-42px;--hs:.83;--hbl:.6px;--ho:.9"><img class="hb-img" src="Images/3d.png" alt=""></div>
+                <div class="intro-hb-item pick" style="--hx:0px;--hs:1;--hbl:0px;--ho:1"><img class="hb-img" src="Images/recherche_adresse.png" alt=""></div>
+                <div class="intro-hb-item" style="--hx:42px;--hs:.83;--hbl:.6px;--ho:.9"><img class="hb-img" src="Images/stations.png" alt=""></div>
+                <div class="intro-hb-item" style="--hx:76px;--hs:.66;--hbl:1.2px;--ho:.8"><img class="hb-img hb-img-nuit" src="Images/mode_nuit.png" alt=""></div>
                 <div id="intro-hb-finger">👆</div>
             </div>
             <div class="intro-head">Tout à portée de pouce</div>
-            <div class="intro-sub">Un appui long sur la carte, on glisse, on relâche. L'écran reste à la carte.</div>
+            <div class="intro-sub">Un appui long sur la carte, un petit geste à gauche ou à droite, on relâche. Les icônes restent au-dessus du doigt.</div>
         </div>
 
         <!-- ── 20 s — Récompenses ── -->
@@ -216,7 +222,10 @@
 
     <!-- Écran de bienvenue au démarrage : visible 1.5s puis disparaît en fondu -->
     <div id="welcome-screen">
-        <div id="welcome-message">Salut Karim</div>
+        <div id="welcome-message">
+            <div id="welcome-message-name">Salut utilisateur,</div>
+            <div>où allons-nous ?</div>
+        </div>
     </div>
 
     <!-- Confirmation de sortie : déclenchée par le bouton/geste "retour" (voir _armExitGuard) -->
@@ -266,7 +275,7 @@
     <div id="stats-modal-overlay" onclick="if(event.target===this)closeStatsModal()">
         <div id="stats-modal">
             <div id="stats-modal-header">
-                <h2>📊 Statistiques</h2>
+                <h2>• Statistiques</h2>
                 <button id="stats-modal-close" onclick="closeStatsModal()">✕</button>
             </div>
             <div class="stats-period-toggle">
@@ -396,6 +405,19 @@
         </div>
     </div>
 
+    <!-- Modale du classement en ligne. Le corps (#classement-body) est construit par
+         clRender() : formulaire de connexion OU tableau, selon la session. -->
+    <div id="classement-overlay" onclick="if(event.target===this)closeClassementModal()">
+        <div id="classement-modal">
+            <div id="classement-header">
+                <span>🏆 CLASSEMENT DE LA SEMAINE</span>
+                <button onclick="closeClassementModal()">✕</button>
+            </div>
+            <div id="classement-status" class="cl-status"></div>
+            <div id="classement-body"></div>
+        </div>
+    </div>
+
     <!-- Bannière "Je suis à 10 min" -->
     <div id="tenmin-banner">
         <div id="tenmin-banner-header">
@@ -429,6 +451,20 @@
         </div>
         <div id="zfe-banner-msg"></div>
         <a id="zfe-banner-link" href="#" target="_blank" rel="noopener" style="display:none;">Voir les règles officielles ↗</a>
+    </div>
+
+    <!-- Proposition d'itinéraire plus rapide (détectée par le rafraîchissement d'ETA) -->
+    <div id="reroute-banner">
+        <div id="reroute-banner-header">
+            <div id="reroute-banner-title">🔀 Itinéraire plus rapide</div>
+            <div id="reroute-banner-gain">−12 min</div>
+        </div>
+        <div id="reroute-banner-msg"></div>
+        <div id="reroute-banner-actions">
+            <button id="reroute-banner-no" onclick="dismissRerouteProposal('refus')">Rester</button>
+            <button id="reroute-banner-yes" onclick="acceptRerouteProposal()">Suivre</button>
+        </div>
+        <div id="reroute-banner-countdown"></div>
     </div>
 
     <!-- Modale Coffre de Récompense -->
@@ -600,7 +636,15 @@
         <div>Gardez les yeux sur la route. Le guidage vocal vous accompagne.</div>
     </div>
 
-    <!-- Widget Info Trajet -->
+    <!-- Widget Info Trajet
+         ⚠ CE BADGE NE FAIT QU'OUVRIR SON PANNEAU (distance, temps, points, Terminer).
+         Il a porté quelques heures, le 21/08/2026, un second rôle : passer au centre de
+         l'écran en « 🏁 Je suis arrivé » dès 500 m de la destination, pour terminer le
+         trajet. Retiré — un trajet ne se termine que lorsqu'on est ARRIVÉ à l'adresse, et
+         un bouton proposant de couper le guidage à 400 m de l'arrivée induit le conducteur
+         en erreur. Ne pas le rétablir : voir la note des seuils dans js/00-noyau-calculs.js
+         et celle du badge dans js/08. La fin anticipée passe désormais uniquement par la
+         bulle 🏁 de la hotbox, un geste délibéré que rien n'affiche spontanément. -->
     <div id="info-widget" onclick="event.stopPropagation();">
         <div id="info-badge" onclick="toggleInfoWidget()">
             <div id="info-badge-icon">ℹ️</div>
@@ -614,8 +658,39 @@
         </div>
     </div>
 
+    <!-- === FENÊTRE D'ARRIVÉE ===
+         Ouverte à la fin d'un trajet ARRIVÉ dont la conduite n'a pas été parfaite. Une
+         conduite parfaite ouvre le coffre à butin comme avant — les deux ne s'affichent
+         jamais ensemble, voir `showArrivalSummary()` (js/12).
+         Volontairement dépouillée : le nombre de points gagnés, rien d'autre. Distance
+         restante, temps restant et bouton « Terminer Trajet » n'ont plus aucun sens une
+         fois arrivé, et les afficher ici rejouerait le panneau de navigation devant
+         quelqu'un dont le trajet est fini. -->
+    <div id="arrival-modal-overlay" onclick="if(event.target===this)closeArrivalSummary()">
+        <div id="arrival-modal">
+            <div id="arrival-modal-icon">🏁</div>
+            <div id="arrival-modal-title">Arrivée à destination</div>
+            <div id="arrival-modal-points"></div>
+            <div id="arrival-modal-sub"></div>
+            <button id="arrival-modal-close" onclick="closeArrivalSummary()">Terminé</button>
+        </div>
+    </div>
+
     <!-- Panneau principal (Itinéraire + Profil) -->
-    <div id="ui-panel" class="itin-panel" onclick="event.stopPropagation();">
+    <!-- ⚠ `panel-hidden` EST POSÉE DÈS LE HTML (18/08/2026) — ne pas la retirer.
+         L'écran d'accueil de l'app est la CARTE. Jusqu'ici ce défaut n'existait que dans
+         le JS : le panneau était peint ouvert, puis escamoté par `setPanelSnap('hidden')`,
+         DERNIÈRE instruction du handler `DOMContentLoaded` de js/14 — lui-même en fin d'un
+         fichier de 1 500 lignes. Toute exception levée avant, dans ce handler ou au
+         top-level du fichier (qui empêcherait jusqu'à l'enregistrement du handler),
+         laissait l'app démarrer sur le formulaire, sans le moindre indice de la cause.
+         Un écran d'accueil ne doit dépendre d'aucune instruction : il est maintenant dans
+         le balisage, donc juste même si tout le JS échoue, et sans l'éclair de panneau
+         ouvert que l'on voyait le temps du chargement de Mapbox et des 20 scripts.
+         ⚠ `panelSnapState` (js/08) est initialisée à 'hidden' EN MIROIR : les deux doivent
+         rester d'accord, sinon le premier appui sur l'onglet Itinéraire tenterait de
+         refermer un panneau déjà fermé et demanderait deux appuis pour l'ouvrir. -->
+    <div id="ui-panel" class="itin-panel panel-hidden" onclick="event.stopPropagation();">
         <button class="toggle-panel-btn" onclick="togglePanel(event)" id="toggle-icon"></button>
 
         <!-- ═══ ONGLET TRAJET ═══ -->
@@ -712,6 +787,82 @@
             </div>
         </div>
 
+        <!-- ═══ LIEUX FIXES (« Go home » / « Go work ») ═══
+             Les BOUTONS sont la fonctionnalité ; le champ d'adresse ne se montre que sur
+             demande (crayon) ou de lui-même au premier appui, quand rien n'est encore
+             enregistré. Un champ affiché en permanence encombrerait le parcours principal
+             pour une saisie qui n'a lieu qu'une fois.
+             ⚠ Volontairement HORS de « Adresses enregistrées » : ces lieux ne sont pas deux
+             contacts de plus dans la liste déroulante. Les y ranger leur coûterait les deux
+             appuis (dérouler, choisir) que ces raccourcis existent précisément pour éviter.
+             ⚠ UN SEUL formulaire pour les deux lieux, plus bas : on n'en édite jamais deux
+             à la fois, et deux jeux de champs auraient signifié deux listes de suggestions
+             et deux appels à setupAddressAutocomplete() à tenir synchronisés. -->
+        <div class="itin-section" id="itin-places-section">
+            <div class="itin-places-row">
+                <div class="itin-place-cell">
+                    <button class="itin-free-btn itin-place-btn" id="btn-go-home" onclick="goPlace('home')">
+                        <span class="itin-free-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+                        </span>
+                        <span class="itin-free-text">
+                            <span class="itin-free-title" id="home-btn-title">Go home</span>
+                            <span class="itin-free-sub" id="home-btn-sub">Touchez pour enregistrer votre adresse</span>
+                        </span>
+                    </button>
+                    <button class="itin-icon-btn" id="btn-edit-home" onclick="openPlaceForm('home')" title="Modifier mon domicile">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                </div>
+                <div class="itin-place-cell">
+                    <button class="itin-free-btn itin-place-btn" id="btn-go-work" onclick="goPlace('work')">
+                        <span class="itin-free-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M2 13h20"/></svg>
+                        </span>
+                        <span class="itin-free-text">
+                            <span class="itin-free-title" id="work-btn-title">Go work</span>
+                            <span class="itin-free-sub" id="work-btn-sub">Touchez pour enregistrer votre adresse</span>
+                        </span>
+                    </button>
+                    <button class="itin-icon-btn" id="btn-edit-work" onclick="openPlaceForm('work')" title="Modifier mon lieu de travail">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulaire PARTAGÉ : son titre, son placeholder et sa cible dépendent de
+                 `_placeEditing`, posé par openPlaceForm('home'|'work'). -->
+            <div id="place-edit-form" style="display:none;">
+                <div class="contact-form-title" id="place-form-title" style="font-size:12px;font-weight:700;color:#58a6ff;margin:10px 0 6px;letter-spacing:0.3px;">🏠 Mon domicile</div>
+                <!-- `contact-addr-wrap` porte le position:relative qui cale la liste de
+                     suggestions sous CE champ précis. Classe réutilisée telle quelle : le
+                     besoin est identique à celui du champ Adresse du formulaire contact. -->
+                <div class="contact-addr-wrap">
+                    <div class="itin-input-row">
+                        <span class="itin-icon-leading">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                        </span>
+                        <input type="text" id="place-addr" placeholder="Adresse" autocomplete="off" oninput="_placeDraftCoords=null;">
+                        <!-- Micro et ping carte : mêmes gestes que la cellule Destination.
+                             Enregistrer son domicile est le premier geste d'un nouvel
+                             utilisateur — le limiter à la frappe le privait des deux entrées
+                             qui existent partout ailleurs dans l'app. -->
+                        <button class="itin-icon-btn itin-mic-btn" id="mic-place-addr" onclick="startVoiceInput('place-addr')" title="Dicter l'adresse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg></button>
+                        <button class="itin-icon-btn itin-pin-btn" id="btn-pick-place-addr" onclick="togglePlaceMapPick()" title="Choisir sur la carte">
+                            <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.4" fill="#1b1d22"/></svg>
+                        </button>
+                    </div>
+                    <div class="addr-suggestions" id="place-addr-suggestions"></div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="itin-save-fav" onclick="savePlaceAddress()" style="flex:1;margin-top:0;background:rgba(0,150,255,0.08);color:#58a6ff;border-color:rgba(0,150,255,0.25);">💾 Enregistrer</button>
+                    <button class="itin-save-fav" id="btn-delete-place" onclick="deletePlaceAddress()" style="flex:0 0 auto;margin-top:0;width:auto;padding:10px 14px;color:#ff6b6b;display:none;" title="Supprimer ce lieu">🗑</button>
+                    <button class="itin-save-fav" onclick="closePlaceForm()" style="flex:0 0 auto;margin-top:0;width:auto;padding:10px 14px;">✕</button>
+                </div>
+                <div id="place-form-status" class="trip-option-hint" style="margin-top:6px;display:none;"></div>
+            </div>
+        </div>
+
         <div class="itin-mode-toggle">
             <span class="itin-mode-label active" id="mode-label-real">📍 Réel</span>
             <label class="itin-switch">
@@ -757,26 +908,72 @@
         <div class="panel-tab-content" id="panel-tab-profil">
         <h2 class="itin-title" id="profil-itin-title">Profil</h2>
 
-            <!-- === PROFIL SÉLECTIONNÉ (en haut) === -->
+            <!-- === MA CATÉGORIE, EN TÊTE DE PAGE (22/08/2026, demande utilisateur) ===
+                 Le titre disait « Mon profil » et ne coiffait que ce qui suivait la ligne
+                 de sélection ; la page s'ouvre désormais sur la catégorie et sa médaille,
+                 le sélecteur de profil passant en dessous.
+                 ⚠ L'id `profil-section-title-monprofil` NE CHANGE PAS malgré le nouveau
+                 libellé : il est cité dans `_PROFIL_MASK_IDS` (js/13), qui efface tout
+                 sauf la ligne de sélection pendant la saisie d'un prénom. Le renommer
+                 obligerait à toucher cette liste pour un gain nul. -->
+            <div class="profil-section-title" id="profil-section-title-monprofil">Ma catégorie</div>
+
+            <div id="badge-category-card">
+                <!-- Le titre interne « 🏅 MA CATÉGORIE » a été retiré : le titre de
+                     section juste au-dessus dit déjà la même chose depuis que le cadre
+                     est passé en tête d'onglet. Ses règles CSS (#badge-category-title)
+                     sont conservées, aucune autre vue ne s'en sert. -->
+                <div id="badge-category-main">
+                    <div id="badge-category-icon">🥉</div>
+                    <div id="badge-category-info">
+                        <div id="badge-category-name" style="color:#cd7f32;">Bronze</div>
+                        <div id="badge-category-sub">0 badge obtenu</div>
+                    </div>
+                    <!-- Prénom du profil actif — rempli par renderBadgeCategoryCard()
+                         (js/12), masqué tant qu'aucun profil n'est sélectionné. -->
+                    <div id="badge-category-profile" style="display:none;"></div>
+                </div>
+                <div id="badge-count-row">
+                    <div id="badge-count-icons"></div>
+                </div>
+                <div id="badge-progress-bar-wrap">
+                    <div id="badge-progress-bar-fill" style="width:0%;background:#cd7f32;"></div>
+                </div>
+                <div id="badge-progress-label">0 / 3 badges pour Argent</div>
+            </div>
+
+            <!-- === PROFIL SÉLECTIONNÉ === -->
             <div class="itin-section" style="margin-bottom:12px;">
                 <label>Profil sélectionné</label>
-                <div class="itin-select-row">
+                <div class="itin-select-row" id="profile-select-row" style="position:relative;">
                     <span class="itin-icon-leading">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
                     </span>
-                    <select id="profile-dropdown" onchange="selectProfile(this.value)">
+                    <!-- `<select>` NATIF CONSERVÉ MAIS MASQUÉ : renderProfilesDropdown()
+                         (js/13) continue d'y écrire ses <option>, et selectProfile()
+                         continue de lire/écrire sa `.value` sans un seul changement
+                         ailleurs dans le code — il reste la source de vérité. Un <option>
+                         natif est du texte pur, aucun bouton n'y tient : d'où le
+                         déclencheur personnalisé ci-dessous, seul moyen d'offrir une
+                         suppression PAR LIGNE quand la liste est déroulée. -->
+                    <select id="profile-dropdown" onchange="selectProfile(this.value)" style="display:none;">
                         <option value="">👤 Aucun profil créé</option>
                     </select>
-                    <span class="itin-select-chevron">
+                    <button type="button" id="profile-dropdown-trigger" class="itin-select-fake" onclick="toggleProfileDropdownMenu()">
+                        <span id="profile-dropdown-trigger-label">👤 Aucun profil créé</span>
+                    </button>
+                    <span class="itin-select-chevron" id="profile-dropdown-chevron">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </span>
                     <button class="itin-icon-btn itin-add-btn" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     </button>
-                    <span class="itin-icon-sep" id="btn-create-profile-sep"></span>
-                    <button class="itin-icon-btn" onclick="deleteSelectedProfile()" title="Supprimer ce profil">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                    </button>
+                    <!-- Le trash externe qui vivait ici a été retiré (22/08/2026, demande
+                         utilisateur) : chaque ligne du menu déroulant porte désormais sa
+                         propre suppression, un doublon à côté du sélecteur n'avait plus sa
+                         place. `deleteProfileById()` (js/13) reste la seule fonction de
+                         suppression, appelée uniquement depuis l'icône par ligne. -->
+                    <div class="addr-suggestions" id="profile-dropdown-menu"></div>
                 </div>
                 <!-- Formulaire inline création profil (caché par défaut) -->
                 <div id="create-profile-inline" style="display:none;margin-top:8px;">
@@ -797,25 +994,18 @@
                 <div id="profile-summary" style="display:none;"></div>
             </div>
 
-            <div class="profil-section-title" id="profil-section-title-monprofil">Mon profil</div>
+            <!-- Le cadre « Ma catégorie » a été remonté en tête de l'onglet, au-dessus du
+                 sélecteur de profil — voir le bloc en haut de #panel-tab-profil. -->
 
-            <!-- === MA CATÉGORIE === -->
-            <div id="badge-category-card">
-                <div id="badge-category-title">🏅 MA CATÉGORIE</div>
-                <div id="badge-category-main">
-                    <div id="badge-category-icon">🥉</div>
-                    <div id="badge-category-info">
-                        <div id="badge-category-name" style="color:#cd7f32;">Bronze</div>
-                        <div id="badge-category-sub">0 badge obtenu</div>
-                    </div>
-                </div>
-                <div id="badge-count-row">
-                    <div id="badge-count-icons"></div>
-                </div>
-                <div id="badge-progress-bar-wrap">
-                    <div id="badge-progress-bar-fill" style="width:0%;background:#cd7f32;"></div>
-                </div>
-                <div id="badge-progress-label">0 / 3 badges pour Argent</div>
+            <!-- === CLASSEMENT EN LIGNE ===
+                 Seule entrée vers js/21-classement.js. Sa modale est autonome (comme
+                 openStatsModal), elle ne passe pas par openProfilSheet : son contenu
+                 vient du réseau et n'existe pas dans le panneau. -->
+            <div class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openClassementModal()">
+                    <span class="profil-row-label">🏆 Classement de la semaine</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
             </div>
 
             <!-- === MES STATISTIQUES ===
@@ -825,18 +1015,37 @@
                  construit à la volée par renderStatsModal(). -->
             <div class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openStatsModal()">
-                    <span class="profil-row-label">📊 Mes statistiques</span>
+                    <span class="profil-row-label">Mes statistiques</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
+            </div>
+
+            <!-- === HISTORIQUE DES TRAJETS ===
+                 Contrairement à « Mes statistiques » juste au-dessus, cette section passe
+                 par openProfilSheet : son corps existe DANS le panneau (ci-dessous) et y
+                 est déplacé/remis par le mécanisme de page pleine. Les deux sont voisines
+                 parce qu'elles lisent la même source (gps_trip_history) : la synthèse
+                 chiffrée d'un côté, le relevé trajet par trajet de l'autre.
+                 #trip-history-body est masqué ici et révélé par .in-profil-sheet — même
+                 règle que #trophy-gallery-body, voir le CSS. -->
+            <div id="trip-history-section" class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openProfilSheet('trips')">
+                    <!-- Le compteur de trajets qui vivait ici a été retiré (22/08/2026) :
+                         il n'apprenait rien qu'on ne lise en ouvrant la page. -->
+                    <span class="profil-row-label">Historique des trajets</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
+                <div id="trip-history-body">
+                    <div id="trip-history-list"></div>
+                </div>
             </div>
 
             <!-- === GALERIE DES TROPHÉES === -->
             <div id="trophy-gallery-section" class="profil-row">
                 <button id="trophy-gallery-toggle" class="profil-row-btn" onclick="openProfilSheet('trophy')">
-                    <span class="tg-left" style="color:#8892b0;">
-                        Galerie des trophées
-                        <span class="tg-count" id="trophy-gallery-count">0 / 8</span>
-                    </span>
+                    <!-- Compteur « x / 8 » retiré le 22/08/2026, comme celui de
+                         l'historique juste au-dessus. -->
+                    <span class="tg-left" style="color:#8892b0;">Galerie des trophées</span>
                     <span class="tg-arrow">›</span>
                 </button>
                 <div id="trophy-gallery-body">
@@ -848,22 +1057,20 @@
             </div>
 
             <!-- === MON VÉHICULE === -->
-            <div id="vehicle-panel-section" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:8px;border-radius:16px;border:1px solid rgba(0,140,255,0.2);flex-shrink:0;align-self:stretch;">
-                <button type="button" onclick="openProfilSheet('vehicle')" id="vehicle-panel-toggle" style="
-                    width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
-                    padding:13px 15px;cursor:pointer;
-                    background:linear-gradient(170deg,#0f1825,#0a0e17);
-                    border:none;border-radius:16px;
-                    color:#8892b0;font-size:11px;font-weight:700;
-                    letter-spacing:2px;text-align:left;text-transform:uppercase;
-                ">
-                    <span>Mon véhicule</span>
-                    <span id="vehicle-panel-chevron" style="font-size:14px;color:#4a5568;">›</span>
+            <!-- Format partagé `.profil-row` / `.profil-row-btn` (défini dans styles.css,
+                 § LIGNES DE LA PAGE PROFIL). Ces styles étaient recopiés ici en INLINE, à
+                 l'identique — une troisième copie du même gabarit, qui échappait de fait à
+                 toute règle de feuille (un style inline l'emporte sur la cascade). Le rendu
+                 est inchangé : les classes portent exactement les mêmes valeurs. -->
+            <div id="vehicle-panel-section" class="profil-row">
+                <button type="button" onclick="openProfilSheet('vehicle')" id="vehicle-panel-toggle" class="profil-row-btn">
+                    <span class="profil-row-label">Mon véhicule</span>
+                    <span id="vehicle-panel-chevron" class="profil-row-arrow">›</span>
                 </button>
                 <div id="vehicle-panel-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#0a0e17,#080b12);border-top:1px solid rgba(0,140,255,0.08);">
                     <!-- Points du permis -->
                     <div style="margin-bottom:clamp(12px,3vw,16px);padding-bottom:clamp(12px,3vw,14px);border-bottom:1px solid rgba(0,140,255,0.10);">
-                        <label class="vcell-label">📋 Votre nombre de points sur le permis</label>
+                        <label class="vcell-label"><span class="ui-dot sm"></span>Votre nombre de points sur le permis</label>
                         <div style="display:flex;align-items:center;gap:clamp(8px,2vw,12px);">
                             <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig()" value="12" min="0" max="12" class="vcell-input" style="width:clamp(50px,15vw,70px);font-size:clamp(13px,3.8vw,14px);padding:clamp(8px,2vw,10px);border:1px solid rgba(0,140,255,0.15);border-radius:8px;background:rgba(10,14,23,0.7);color:#c9d1d9;text-align:center;">
                             <span style="font-size:clamp(12px,3vw,13px);color:#4a5568;min-width:30px;text-align:center;font-weight:700;"id="points-display">/12</span>
@@ -957,6 +1164,16 @@
                     </div>
                     <div class="ac-row">
                         <div class="ac-row-info">
+                            <div class="ac-row-label">Voix moins bavarde</div>
+                            <div class="ac-row-hint">Une seule annonce par virage, et plus de messages de confort (pauses, raccourcis, waypoints)</div>
+                        </div>
+                        <label class="ac-toggle-switch">
+                            <input type="checkbox" id="voice-quiet-toggle" onchange="onVoiceQuietChange()">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="ac-row">
+                        <div class="ac-row-info">
                             <div class="ac-row-label">Menu rapide (appui long)</div>
                             <div class="ac-row-hint">Masque les boutons flottants : appui long sur la carte pour les rappeler en cercle</div>
                         </div>
@@ -1003,47 +1220,13 @@
                 </div>
             </div>
 
-            <!-- Score éco-conduite live (visible pendant la navigation) -->
-            <div id="eco-score-bar">
-                <div>
-                    <div class="eco-label">Score éco-conduite</div>
-                    <div class="eco-sub">Freinages et accélérations brusques</div>
-                </div>
-                <div style="margin-left:auto;text-align:center;">
-                    <span id="eco-score-live">100</span><span style="font-size:11px;color:#4a5568;">/100</span>
-                </div>
-            </div>
-
-            <div class="drivers-section" id="drivers-container"></div>
-
-            <div class="itin-section" id="profil-options-trajet" style="margin-top:12px;">
-                <label>Options du trajet</label>
-                <label class="trip-option-row" style="margin:0;">
-                    <input type="checkbox" id="test-pause-toggle" onchange="onTestPauseModeChange()">
-                    🧪 Tester la pause aire (mode Simu)
-                </label>
-                <div class="trip-option-hint">En Simu Salif : arrêt auto sur la 1ère aire, pause réduite à 20 sec</div>
-                <label class="trip-option-row" style="margin-top:10px;">
-                    <input type="checkbox" id="buildings-3d-toggle" checked onchange="toggleBuildings3D()">
-                    🏢 Bâtiments 3D
-                </label>
-                <div class="trip-option-hint">Désactiver pour une meilleure visibilité en ville</div>
-            </div>
-
             <!-- === SAUVEGARDE PROFIL === -->
-            <div id="backup-section" style="width:100%;box-sizing:border-box;margin-top:8px;margin-bottom:8px;border-radius:16px;border:1px solid rgba(0,140,255,0.2);flex-shrink:0;align-self:stretch;">
-                <button type="button" onclick="toggleBackupSection()" style="
-                    width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;
-                    padding:13px 15px;cursor:pointer;
-                    background:linear-gradient(170deg,#0f1825,#0a0e17);
-                    border:none;border-radius:16px;
-                    color:#8892b0;font-size:11px;font-weight:700;
-                    letter-spacing:2px;text-transform:uppercase;
-                    -webkit-tap-highlight-color:transparent;
-                    transition:background 0.2s;text-align:left;
-                ">
-                    <span>Sauvegarde profil</span>
-                    <span id="backup-chevron" style="font-size:12px;color:#4a5568;transition:transform 0.3s ease;">▼</span>
+            <!-- Même format partagé que « Mon véhicule » ci-dessus. Le chevron garde son
+                 `transition` inline : toggleBackupSection() lui pose un `transform`. -->
+            <div id="backup-section" class="profil-row">
+                <button type="button" onclick="toggleBackupSection()" class="profil-row-btn">
+                    <span class="profil-row-label">Sauvegarde profil</span>
+                    <span id="backup-chevron" class="profil-row-arrow" style="transition:transform 0.3s ease;">▼</span>
                 </button>
                 <div id="backup-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#0a0e17,#080b12);border-top:1px solid rgba(0,140,255,0.08);border-radius:0 0 16px 16px;">
                     <div style="font-size:11px;color:#4a5568;line-height:1.5;margin-bottom:12px;">
@@ -1080,6 +1263,34 @@
                 </div>
             </div>
 
+            <!-- Score éco-conduite live (visible pendant la navigation) -->
+            <div id="eco-score-bar">
+                <div>
+                    <div class="eco-label">Score éco-conduite</div>
+                    <div class="eco-sub">Freinages et accélérations brusques</div>
+                </div>
+                <div style="margin-left:auto;text-align:center;">
+                    <span id="eco-score-live">100</span><span style="font-size:11px;color:#4a5568;">/100</span>
+                </div>
+            </div>
+
+            <div class="drivers-section" id="drivers-container"></div>
+
+            <div class="itin-section" id="profil-options-trajet" style="margin-top:12px;">
+                <label>Options du trajet</label>
+                <label class="trip-option-row" style="margin:0;">
+                    <input type="checkbox" id="test-pause-toggle" onchange="onTestPauseModeChange()">
+                    🧪 Tester la pause aire (mode Simu)
+                </label>
+                <div class="trip-option-hint">En Simu Salif : arrêt auto sur la 1ère zone de repos du plan, pause réduite à 20 sec réelles</div>
+                <label class="trip-option-row" style="margin-top:10px;">
+                    <input type="checkbox" id="buildings-3d-toggle" checked onchange="toggleBuildings3D()">
+                    🏢 Bâtiments 3D
+                </label>
+                <div class="trip-option-hint">Désactiver pour une meilleure visibilité en ville</div>
+            </div>
+
+
 
         </div><!-- fin panel-tab-profil -->
 
@@ -1089,7 +1300,10 @@
 
             <div class="profil-section-title">Objectifs de la semaine</div>
 
-            <div id="weekly-goals-timer-panel" style="font-size:11px;color:#4a5568;margin-bottom:14px;font-weight:700;letter-spacing:0.5px;"></div>
+            <!-- Styles sortis en CSS (`#weekly-goals-timer-panel` et `.wg-timer-*`) : posés
+                 en inline ici, ils l'emportaient sur la feuille de style et figeaient la
+                 marge en px, hors du système responsive en clamp() du projet. -->
+            <div id="weekly-goals-timer-panel"></div>
 
             <div id="weekly-goals-list-panel"></div>
 
@@ -1200,7 +1414,12 @@
         </svg>
     </div>
 
-    <!-- Hotbox radiale : ouverte par appui long sur la carte, entrées injectées par buildHotbox() -->
+    <!-- Hotbox : ouverte par appui long sur la carte, entrées injectées par openHotbox().
+         #hotbox-core n'apparaît QU'EN MODE POINTAGE (#hotbox-ring.neutral, menus sans
+         entrée `pivot` — « Go ici / Ne pas go ») : il y occupe la place neutre entre les
+         bulles, celle où l'on revient pour ne rien choisir. Il ne joue plus le rôle qu'il
+         avait dans le menu radial, où il servait à montrer en grand, hors de portée du
+         doigt, l'entrée que celui-ci masquait — le carrousel n'a pas ce problème. -->
     <div id="hotbox" aria-hidden="true">
         <div id="hotbox-veil"></div>
         <div id="hotbox-ring">
@@ -1210,11 +1429,46 @@
         </div>
     </div>
 
+    <!-- Invite hotbox — UNE SEULE ÉTAPE, ouvrir ET fermer (18/08/2026).
+         Le tutoriel se jouait auparavant en deux temps, le second (#hotbox-close-hint)
+         n'arrivant qu'après une première fermeture. Deux invites successives pour deux
+         moitiés du même geste : celui qui refermait la hotbox « au hasard » avant d'avoir
+         vu l'étape 2 ne la voyait jamais expliquée, et celui qui la voyait la recevait
+         une fois le besoin passé. Les deux lignes tiennent dans la même bulle. -->
     <div id="hotbox-hint">
         <div id="hotbox-hint-target">👆</div>
         <div id="hotbox-hint-bubble">
-            <span>Appui long au centre de la carte pour ouvrir le menu rapide.</span>
+            <div class="hb-hint-text">
+                <div class="hb-hint-title">Apprenez à utiliser la hotbox</div>
+                <span><strong>Ouvrir</strong> — appui long au centre de la carte.</span>
+                <span><strong>Fermer</strong> — glissez le doigt vers le bas jusqu'à ce que les bulles deviennent grises, puis relâchez.</span>
+            </div>
             <button onclick="dismissHotboxHint()" title="Masquer">✕</button>
+        </div>
+    </div>
+
+    <!-- Tutoriel recherche d'adresse (première utilisation) : trois messages plein
+         écran indépendants, chacun sa propre clé "vue une fois" (voir js/14).
+         Fond flouté (backdrop-filter) sur tout le reste pour concentrer l'attention
+         sur le texte ; tap n'importe où (ou le bouton) referme. -->
+    <div id="dest-hint" class="tuto-focus" onclick="dismissDestHint()">
+        <div class="tuto-focus-card">
+            <div>Taper votre adresse dans la cellule destination.</div>
+            <button class="tuto-focus-close" onclick="dismissDestHint()">Compris</button>
+        </div>
+    </div>
+
+    <div id="dest-mic-hint" class="tuto-focus" onclick="dismissDestMicHint()">
+        <div class="tuto-focus-card">
+            <div>Essayez : « Je veux aller… » — c'est la formulation qui donne les meilleurs résultats.</div>
+            <button class="tuto-focus-close" onclick="dismissDestMicHint()">Compris</button>
+        </div>
+    </div>
+
+    <div id="dest-pin-hint" class="tuto-focus" onclick="dismissDestPinHint()">
+        <div class="tuto-focus-card">
+            <div>Vous pouvez aussi choisir directement l'endroit sur la carte.</div>
+            <button class="tuto-focus-close" onclick="dismissDestPinHint()">Compris</button>
         </div>
     </div>
 
@@ -1266,7 +1520,12 @@
 
             <!-- Étapes intermédiaires (multi-arrêts) -->
             <div id="modal-waypoints-container"></div>
-            <button id="btn-add-waypoint" onclick="addModalWaypoint()">
+            <!-- addModalWaypointFromButton() et non addModalWaypoint() : seul le geste
+                 de l'utilisateur déclenche le mode « saisie d'étape » (feuille réduite
+                 au seul champ). rebuildWaypointRows() rappelle addModalWaypoint() en
+                 boucle pour reconstruire les lignes existantes — il ne doit surtout pas
+                 y entrer. -->
+            <button id="btn-add-waypoint" onclick="addModalWaypointFromButton()">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Ajouter une étape
             </button>
@@ -1330,6 +1589,7 @@
                 </div>
                 <div id="trip-info-details" class="trip-info-details">
                     <div class="trip-preview-item"><span>• Temps estimé</span><span id="preview-time">--</span></div>
+                    <div class="trip-preview-item"><span>• Heure d'arrivée</span><span id="preview-arrival">--</span></div>
                     <div class="trip-preview-item"><span>• Distance</span><span id="preview-distance">--</span></div>
                     <div class="trip-preview-item"><span>• Points max (sans excès)</span><span id="preview-points">--</span></div>
                     <div class="trip-info-separator"></div>
@@ -1406,6 +1666,20 @@
     <script src="js/17-stations-sources.js"></script>
     <script src="js/18-stations-marqueurs.js"></script>
     <script src="js/19-bornes-elec-et-vitesse.js"></script>
+    <!-- Lieux fixes (« Go home » / « Go work »). EN DERNIER, et pas par hasard : ce module
+         appelle js/09, js/11, js/14 et js/15 (applyNavSearchSelection, handleStartClick,
+         _kmBetween). Ces appels partent tous de handlers, donc au runtime — mais le remonter
+         dans la liste ne lui apporterait rien et l'exposerait au piege de l'ordre de
+         chargement. -->
+    <script src="js/20-domicile-travail.js"></script>
+    <!-- Classement en ligne. EN DERNIER : c'est le seul module qui dépend d'un SDK
+         externe, et le seul dont la panne (CDN bloqué, hors ligne) doit rester sans
+         conséquence pour le reste de l'app. Il ne s'exécute qu'au runtime, sauf un
+         setTimeout(0) final qui restaure la session.
+         ⚠ Build UMD explicite (dist/umd/) : la racine du paquet sert de l'ESM, qui ne
+         définirait aucun global et resterait silencieusement inutilisable ici. -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="js/21-classement.js"></script>
 
 </body>
 </html>

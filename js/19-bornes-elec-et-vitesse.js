@@ -12,6 +12,47 @@
         let _allEVStations = [];
         let evStationMarkers = [];
 
+        /* ═══ LIEUX DU TRAJET EN COURS, POUR L'HISTORIQUE (21/08/2026) ═══
+           `saveTripToHistory()` n'archivait que des chiffres — ni départ ni arrivée —
+           d'où un historique où aucun trajet n'était reconnaissable. Le départ ne peut
+           se lire QU'AU DÉPART : à l'arrivée, `#modal-start-addr` a pu être réutilisé,
+           et `lastRealCoords` désigne alors le point d'arrivée. On le mémorise donc ici,
+           au lancement, et `stopCourse()` le relit.
+           ⚠ Déclaré dans ce fichier et non dans `00-helpers-partages.js` parce qu'il
+           n'est lu QUE par js/19 (startCourse, startFreeCourse, stopCourse) — la règle
+           du helper partagé ne vise que les `let` traversant plusieurs fichiers.
+           ⚠ Ne PAS y mémoriser aussi la destination : elle peut changer en cours de
+           route (recherche pendant la navigation, proposition d'itinéraire acceptée,
+           arrêt ajouté). C'est la destination FINALE qui a un sens dans l'historique,
+           donc `stopCourse()` la lit dans l'état courant, pas ici. */
+        let _tripPlacesMeta = null;
+
+        /* `originCoords` est le point de départ RÉEL de l'itinéraire calculé
+           (`precomputedRoute.startCoords`), passé par l'appelant. Il prime sur tout repli,
+           et c'est important : quand l'utilisateur saisit un départ autre que sa position
+           — le modal Confirmer le trajet le permet —, `exactStartCoords` continue de
+           désigner le fix GPS, donc le mauvais point. On archiverait alors une adresse de
+           départ qui ne correspond pas aux coordonnées enregistrées à côté d'elle, et le
+           bouton « Y aller » de l'historique emmènerait ailleurs que ce qui est écrit. */
+        function _beginTripPlaces(freeTrip, originCoords) {
+            _tripPlacesMeta = tenterSansBruit(() => {
+                const saisi = document.getElementById('modal-start-addr')?.value.trim();
+                /* `startAddrText` est le géocodage inverse de la position GPS, rempli par
+                   js/07 ; il vaut son message d'attente tant qu'aucun fix n'est arrivé.
+                   Ce repli-là ne doit pas devenir un libellé de trajet : mieux vaut aucun
+                   départ affiché qu'un « Recherche de votre position... » archivé pour
+                   toujours. D'où le filtre sur la présence d'un vrai point GPS. */
+                const auto = exactStartCoords ? startAddrText : null;
+                return {
+                    from: saisi || auto || null,
+                    fromCoords: normalizeLngLat(originCoords)
+                             || normalizeLngLat(exactStartCoords)
+                             || normalizeLngLat(lastRealCoords) || null,
+                    free: !!freeTrip,
+                };
+            }, 'historique/beginTripPlaces') || { from: null, fromCoords: null, free: !!freeTrip };
+        }
+
         /* Cache de session, calqué sur celui des stations carburant (fetchStationsFR) :
            même TTL, même forme de clé (bbox arrondie au ~km + empreinte de tracé, pour
            résister aux micro-variations du tracé Mapbox entre deux appels). Il manquait
@@ -157,6 +198,12 @@
             return new Promise((resolve, reject) => {
                 const ctrls = [];
                 let lances = 0, echecs = 0, gagne = false;
+                /* Causes retenues pour l'agrégat final. Sans elles, l'échec se résumait à
+                   « tous les miroirs Overpass ont échoué » — vrai, mais muet sur la seule
+                   question qui compte : `Failed to fetch` (CORS depuis `file://`, ou réseau)
+                   ou `→ 504` (miroir surchargé). Deux pannes sans rapport, deux remèdes
+                   opposés, et le journal ne permettait pas de les distinguer. */
+                const causes = [];
 
                 const lancer = () => {
                     if (gagne || lances >= EV_MIRRORS.length) return;
@@ -187,7 +234,10 @@
                         .catch(e => {
                             if (gagne) return;               // abandon provoqué par le gagnant
                             console.warn(`[EV/Overpass] ${nom} :`, e.message);
-                            if (++echecs >= EV_MIRRORS.length) reject(new Error('tous les miroirs Overpass ont échoué'));
+                            causes.push(`${nom}: ${e.name === 'AbortError' ? 'timeout' : e.message}`);
+                            if (++echecs >= EV_MIRRORS.length) {
+                                reject(new Error('tous les miroirs Overpass ont échoué — ' + causes.join(' | ')));
+                            }
                             else lancer();
                         })
                         .finally(() => clearTimeout(minuteur));
@@ -361,27 +411,45 @@
             const filtered = connType
                 ? _allEVStations.filter(s => s.connectors?.[connType])
                 : _allEVStations;
-            // Dédoublonnage par cluster 300m sur le résultat filtré
-            const CLUSTER_KM_F = 0.3;
-            const dedupedF = [];
-            const seenF = [];
-            for (const s of filtered) {
-                const pt = turf.point([s.lng, s.lat]);
-                const tooClose = seenF.some(c =>
-                    turf.distance(pt, turf.point([c.lng, c.lat]), { units: 'kilometers' }) < CLUSTER_KM_F
-                );
-                if (!tooClose) { dedupedF.push(s); seenF.push(s); }
-            }
-            renderEVCards(dedupedF.slice(0, 5));
+            renderEVCards(dedupeEVByCluster(filtered).slice(0, 5));
         }
 
-        function renderEVCards(stations) {
+        /* Dédoublonnage par zone : une seule borne représentante par cluster de 300 m,
+           sinon les cinq premières cartes sont souvent les cinq bornes du même parking.
+           ⚠ UN SEUL EXEMPLAIRE, appelé par les TROIS chemins qui affichent des bornes
+           (liste initiale, filtre connecteur, appendice ⚡ du mode hybride) : la boucle
+           était recopiée entre les deux premiers, et le rayon avait déjà commencé à
+           exister en deux constantes distinctes. */
+        const EV_CLUSTER_KM = 0.3;
+        function dedupeEVByCluster(stations) {
+            const gardees = [];
+            for (const s of (stations || [])) {
+                const pt = turf.point([s.lng, s.lat]);
+                const tropPres = gardees.some(c =>
+                    turf.distance(pt, turf.point([c.lng, c.lat]), { units: 'kilometers' }) < EV_CLUSTER_KM
+                );
+                if (!tropPres) gardees.push(s);
+            }
+            return gardees;
+        }
+
+        /* `opts.append` : rendu en APPENDICE, sous des cartes déjà posées (mode hybride
+           « Tous », où les pompes occupent le haut de la liste). Deux conséquences, et
+           c'est tout : on ne vide pas la liste, et les id des cartes prennent un préfixe
+           propre — `gas-card-0` désignerait sinon à la fois la première pompe et la
+           première borne, et la boucle de détour des bornes écrirait ses minutes sur la
+           carte d'une station-service. */
+        function renderEVCards(stations, opts) {
+            const enAppendice = !!(opts && opts.append);
+            const pfx  = enAppendice ? 'ev' : 'gas';
             const list = document.getElementById('gas-stations-list');
-            list.innerHTML = '';
+            if (!enAppendice) list.innerHTML = '';
             clearEVStationMarkers();
 
             if (!stations || stations.length === 0) {
-                list.innerHTML = `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Aucune borne compatible sur le trajet.</div>`;
+                if (!enAppendice) {
+                    list.innerHTML = `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Aucune borne compatible sur le trajet.</div>`;
+                }
                 return;
             }
 
@@ -389,7 +457,8 @@
                 s._idx = i;
                 const card = document.createElement('div');
                 card.className = 'gas-station-card';
-                card.id = `gas-card-${i}`;
+                card.id = `${pfx}-card-${i}`;
+                s._cardId = card.id;   // voir selectGasStation() : le préfixe varie
 
                 // Puissance
                 const powerStr = s.power ? `${s.power} kW` : 'kW ?';
@@ -415,7 +484,7 @@
                     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
                         <span class="gas-price-pill" style="background:rgba(77,163,255,0.12);color:#4da3ff;border:1px solid rgba(77,163,255,0.35);font-size:11px;padding:3px 7px;border-radius:8px;font-weight:700;">${powerStr}</span>
                         <span style="font-size:10px;color:#6b7785;">${pdcStr}</span>
-                        <div class="gas-card-dist" id="gas-detour-${i}" style="color:#8892b0;font-size:11px;">+… min</div>
+                        <div class="gas-card-dist" id="${pfx}-detour-${i}" style="color:#8892b0;font-size:11px;">+… min</div>
                     </div>`;
 
                 if (selectedGasStation && selectedGasStation.lng === s.lng && selectedGasStation.lat === s.lat)
@@ -442,7 +511,7 @@
                             if (data.routes?.[0]) {
                                 const detourSec = data.routes[0].duration - baseDurationSec;
                                 s._deltaMin = detourSec / 60;
-                                const el = document.getElementById(`gas-detour-${i}`);
+                                const el = document.getElementById(`${pfx}-detour-${i}`);
                                 if (el) el.textContent = detourSec > 0 ? `+${Math.round(detourSec / 60)} min` : 'Sur le trajet';
                             }
                         } catch (e) { if (DEBUG) console.warn("[renderEVCards] exception ignorée :", e); }
@@ -469,21 +538,7 @@
             _allEVStations.sort((a, b) =>
                 (a.distAlongRoute - b.distAlongRoute) || (a.distToRoute - b.distToRoute)
             );
-            // Dédoublonnage par zone : une seule borne représentante par cluster de 300m
-            // (évite d'afficher 5 bornes du même parking en premier)
-            const CLUSTER_KM = 0.3;
-            const dedupedStations = [];
-            const clusterSeen = [];
-            for (const s of _allEVStations) {
-                const pt = turf.point([s.lng, s.lat]);
-                const tooClose = clusterSeen.some(c =>
-                    turf.distance(pt, turf.point([c.lng, c.lat]), { units: 'kilometers' }) < CLUSTER_KM
-                );
-                if (!tooClose) {
-                    dedupedStations.push(s);
-                    clusterSeen.push(s);
-                }
-            }
+            const dedupedStations = dedupeEVByCluster(_allEVStations);
             buildEVConnectorSelector(_allEVStations);
             renderEVCards(dedupedStations.slice(0, 5));
         }
@@ -544,7 +599,7 @@
                 console.log(`[NavWP] Étape atteinte : ${next.label}. Restantes : ${navWaypoints.length}`);
 
                 // Annoncer vocalement (fichier optionnel — ne pas casser si absent)
-                try { if (typeof playAudioSequence === 'function') playAudioSequence(['reached_waypoint.ogg']); } catch (e) { if (DEBUG) console.warn("[checkNavWaypointArrival] exception ignorée :", e); }
+                try { if (typeof playAudioSequence === 'function') playAudioSequence(['reached_waypoint.ogg'], 0, 'bavard'); } catch (e) { if (DEBUG) console.warn("[checkNavWaypointArrival] exception ignorée :", e); }
 
                 // Recalculer vers la prochaine étape / destination
                 // (en trajet libre sans exactEndCoords, recalculateRoute gère le cas navWaypoints restants)
@@ -598,7 +653,67 @@
             startCourse(modalMode, { osrmData, startCoords, endCoords, avoidTolls });
         }
 
-        async function recalculateRoute(lng, lat) {
+        /* ADOPTION D'UN NOUVEL ITINÉRAIRE — corps extrait de `recalculateRoute()` le 18/08/2026,
+           à l'identique, pour que l'acceptation d'une proposition d'itinéraire plus rapide
+           (voir `acceptRerouteProposal()` plus bas) passe EXACTEMENT par le même chemin qu'un
+           recalcul de déviation. Les deux font la même chose — remplacer le trajet suivi — et
+           deux copies de cette séquence auraient divergé au premier ajout d'état à réinitialiser.
+
+           ⚠ Ne pas confondre avec `refreshEtaFromTraffic()`, qui n'écrit QUE deux nombres :
+           tout ce qui suit ici (steps reconstruits, seuils vocaux remis à zéro, `d.dist` remis
+           à 0 en simulation) est destructeur et n'a sa place que sur un vrai changement de
+           trajet, jamais sur une lecture d'horaire. */
+        function applyRouteResponse(osrmData, statusText) {
+            const geojsonRoute = osrmData.routes[0].geometry;
+            setRouteLine(geojsonRoute.coordinates);
+            currentTurfLine = turf.lineString(geojsonRoute.coordinates);
+            fullRouteLine = turf.lineString(geojsonRoute.coordinates);
+            const r0 = osrmData.routes[0];
+            routeTotalDistKm = r0.legs && r0.legs.length > 1
+                ? r0.legs.reduce((s, l) => s + l.distance, 0) / 1000
+                : r0.distance / 1000;
+            routeTotalDurationHours = r0.legs && r0.legs.length > 1
+                ? r0.legs.reduce((s, l) => s + l.duration, 0) / 3600
+                : r0.duration / 3600;
+            buildRouteSteps(osrmData);
+            buildMaxspeedAnnotations(osrmData);
+            updateGL3DRoute();
+            // Ralentissements du NOUVEAU tracé : ceux de l'ancien ne veulent plus rien dire.
+            setRouteCongestion(r0, osrmData.traffic === true);
+            /* Le scan de stations ne suit PAS `currentTurfLine` : il lit l'instantané pris
+               dans le modal avant le départ, que rien ne réécrivait ici. Sa fenêtre glissante
+               courait donc le long de l'ancien tracé après tout changement d'itinéraire.
+               Voir notifyRouteChangedForGasScan() (js/18) pour le détail — et pour la raison
+               pour laquelle un simple resetGasLiveScan() n'aurait rien réglé. */
+            tenterSansBruit(() => notifyRouteChangedForGasScan(osrmData), 'applyRouteResponse/stations');
+            // Réinitialiser toutes les annonces vocales pour le nouvel itinéraire
+            // sans quoi les seuils déjà "annoncés" de l'ancien trajet bloquent la nouvelle guidance
+            announcedThresholds = {};
+            currentStepIndex = 0;
+
+            // ── EN SIMULATION : reconstruire l'état mutable et repartir du début de la nouvelle ligne ──
+            if (isSimulationMode && simState) {
+                const newLine = turf.lineString(geojsonRoute.coordinates);
+                const newDistanceKm = routeTotalDistKm;
+                const newDurationHours = routeTotalDurationHours;
+                simState.line = newLine;
+                simState.distanceKm = newDistanceKm;
+                simState.totalDurationHours = newDurationHours;
+                // Recalculer timeScale : durée sim fixe (~24 unités) mais adaptée à la nouvelle durée
+                const newDurationSec = newDurationHours * 3600;
+                simState.timeScale = newDurationSec / 24;
+                // La nouvelle route part de la position actuelle du véhicule → d.dist repart de 0
+                drivers.forEach(d => { if (!d.finished) d.dist = 0; });
+            }
+
+            if (statusText) document.getElementById('status').innerText = statusText;
+        }
+
+        /* `auto: true` = recalcul déclenché par la détection de déviation, donc réémis à CHAQUE
+           frame GPS tant qu'on est hors itinéraire. Seuls ceux-là subissent l'intervalle minimum
+           entre tentatives : un recalcul demandé par l'utilisateur (étape ajoutée, destination
+           dictée, station choisie) est un geste unique et doit partir tout de suite. */
+        async function recalculateRoute(lng, lat, { auto = false } = {}) {
             // En trajet libre, exactEndCoords est null.
             // Si des étapes sont en attente, la "destination effective" est la première étape.
             // Sinon, si toujours pas de destination, rien à recalculer.
@@ -609,7 +724,31 @@
                 console.log('[Offline] Recalcul ignoré — hors ligne, dead reckoning actif');
                 return;
             }
+            // Le verrou pouvant désormais être relâché par le watchdog avant la fin d'une
+            // requête, c'est cet intervalle qui empêche la frame GPS suivante de repartir
+            // aussitôt — sans lui, on martèlerait l'API à chaque fix tant qu'on est dévié.
+            const _nowRecalc = Date.now();
+            if (auto && _nowRecalc - _lastRecalcAttemptMs < RECALC_MIN_INTERVAL_MS) return;
+            _lastRecalcAttemptMs = _nowRecalc;
+            /* Une proposition encore affichée décrit un embranchement calculé depuis l'ancien
+               tracé, que ce recalcul est en train de remplacer : elle est déjà périmée. On la
+               retire AVANT la requête plutôt que de laisser le conducteur accepter un trajet
+               dont le point de départ n'existe plus. */
+            if (_reroutePending) dismissRerouteProposal('recalcul');
             isRecalculating = true;
+            const _myGen = ++_recalcGeneration;
+            /* Un aller-retour Mapbox peut durer ~29 s dans le pire cas (deux tentatives, chacune
+               relancée une fois). Passé ce délai on rend la main : la requête en vol n'est pas
+               annulée, elle est simplement déclassée par le jeton de génération. Mieux vaut une
+               réponse tardive jetée qu'un conducteur qui suit un tracé faux pendant une minute. */
+            if (_recalcWatchdog) clearTimeout(_recalcWatchdog);
+            _recalcWatchdog = setTimeout(() => {
+                if (_recalcGeneration === _myGen && isRecalculating) {
+                    isRecalculating = false;
+                    logAppError('recalcul/trop lent', new Error(
+                        'aucune réponse Mapbox en ' + RECALC_HARD_DEADLINE_MS + ' ms — verrou relâché'));
+                }
+            }, RECALC_HARD_DEADLINE_MS);
             document.getElementById('status').innerText = "🔄 Recalcul..."; document.getElementById('status').style.color = "#f39c12";
             try {
                 // Étapes restantes : si exactEndCoords existe, tous les navWaypoints sont des étapes intermédiaires.
@@ -625,43 +764,16 @@
                     destination = navWaypoints[0].coords;
                 }
                 const osrmData = await fetchRouteMapbox([lng, lat], destination, currentAvoidTolls, true, remainingWpCoords);
-                if (osrmData.code === "Ok") {
-                    const geojsonRoute = osrmData.routes[0].geometry;
-                    setRouteLine(geojsonRoute.coordinates);
-                    currentTurfLine = turf.lineString(geojsonRoute.coordinates);
-                    fullRouteLine = turf.lineString(geojsonRoute.coordinates);
-                    const r0 = osrmData.routes[0];
-                    routeTotalDistKm = r0.legs && r0.legs.length > 1
-                        ? r0.legs.reduce((s, l) => s + l.distance, 0) / 1000
-                        : r0.distance / 1000;
-                    routeTotalDurationHours = r0.legs && r0.legs.length > 1
-                        ? r0.legs.reduce((s, l) => s + l.duration, 0) / 3600
-                        : r0.duration / 3600;
-                    buildRouteSteps(osrmData);
-                    buildMaxspeedAnnotations(osrmData);
-                    updateGL3DRoute();
-                    // Réinitialiser toutes les annonces vocales pour le nouvel itinéraire
-                    // sans quoi les seuils déjà "annoncés" de l'ancien trajet bloquent la nouvelle guidance
-                    announcedThresholds = {};
-                    currentStepIndex = 0;
-
-                    // ── EN SIMULATION : reconstruire l'état mutable et repartir du début de la nouvelle ligne ──
-                    if (isSimulationMode && simState) {
-                        const newLine = turf.lineString(geojsonRoute.coordinates);
-                        const newDistanceKm = routeTotalDistKm;
-                        const newDurationHours = routeTotalDurationHours;
-                        simState.line = newLine;
-                        simState.distanceKm = newDistanceKm;
-                        simState.totalDurationHours = newDurationHours;
-                        // Recalculer timeScale : durée sim fixe (~24 unités) mais adaptée à la nouvelle durée
-                        const newDurationSec = newDurationHours * 3600;
-                        simState.timeScale = newDurationSec / 24;
-                        // La nouvelle route part de la position actuelle du véhicule → d.dist repart de 0
-                        drivers.forEach(d => { if (!d.finished) d.dist = 0; });
-                    }
-
-                    document.getElementById('status').innerText = "✅ Itinéraire mis à jour !";
+                /* Réponse déclassée : un recalcul plus récent a démarré pendant l'attente, et il
+                   part d'une position plus juste que celle-ci. Écraser `currentTurfLine` avec ce
+                   tracé périmé rendrait la ligne affichée dépendante de l'ORDRE D'ARRIVÉE des
+                   réponses réseau — exactement le genre de course dont on ne voit jamais la
+                   trace après coup. */
+                if (_myGen !== _recalcGeneration) {
+                    if (DEBUG) console.log('[Recalcul] réponse périmée ignorée (gén.', _myGen, ')');
+                    return;
                 }
+                if (osrmData.code === "Ok") applyRouteResponse(osrmData, "✅ Itinéraire mis à jour !");
             } catch (e) {
                 console.error("Erreur de recalcul :", e);
                 // On garde l'itinéraire précédent affiché : pas d'interruption de la navigation en cours.
@@ -670,13 +782,461 @@
             }
             // Délai raccourci (juste le temps d'afficher le message de statut) : on ne veut pas bloquer
             // un éventuel nouveau recalcul plus longtemps que nécessaire si on est encore hors itinéraire.
-            setTimeout(() => { 
-                isRecalculating = false; 
+            // ⚠ Le relâchement est conditionné à la génération : ce recalcul-ci a pu être déclassé
+            // par le watchdog, auquel cas le verrou appartient à une tentative plus récente et
+            // n'est pas à nous. Le rendre ici la couperait en plein vol.
+            // ⚠ `_recalcWatchdog` est une variable UNIQUE, réécrite à chaque tentative : si nous
+            // sommes déclassés, le minuteur qu'elle contient est celui de la tentative en cours,
+            // pas le nôtre. L'annuler la priverait de son garde-fou. On sort donc AVANT.
+            if (_myGen !== _recalcGeneration) return;
+            if (_recalcWatchdog) { clearTimeout(_recalcWatchdog); _recalcWatchdog = null; }
+            setTimeout(() => {
+                if (_myGen !== _recalcGeneration) return;
+                isRecalculating = false;
                 if(isCourseStarted) {
                     document.getElementById('status').innerText = isSimulationMode ? "Simulation Salif en cours 🚗" : "Course réelle démarrée ! Déplacez-vous 🚗"; 
                     document.getElementById('status').style.color = isSimulationMode ? "#8e44ad" : "#f39c12";
                 }
             }, 1200);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           RAFRAÎCHISSEMENT PÉRIODIQUE DE L'ETA EN ROULANT (18/08/2026)
+           ═══════════════════════════════════════════════════════════════════
+           Le temps restant était FIGÉ au départ. La boucle d'affichage n'en fait qu'une
+           proportion — `routeTotalDurationHours × (distance restante / distance totale)` —
+           et ces deux totaux ne bougeaient qu'au prix d'un recalcul complet, lui-même
+           déclenché seulement par une déviation, un ajout d'étape ou une arrivée à une
+           étape. Jamais par une minuterie. Un bouchon apparu APRÈS le départ n'allongeait
+           donc jamais l'estimation, ce qui est précisément le cas où elle compte le plus.
+
+           ⚠ POURQUOI CE N'EST PAS UN APPEL À `recalculateRoute()`. C'eût été trois lignes,
+           et c'eût été faux : cette fonction-là remplace le tracé affiché, reconstruit les
+           steps, remet `announcedThresholds` et `currentStepIndex` à zéro — donc réémet des
+           instructions vocales déjà données —, écrit « ✅ Itinéraire mis à jour ! » sur la
+           ligne de statut, et en simulation remet `d.dist` à 0, ce qui effacerait la
+           distance déjà parcourue du score et de l'historique. Ce sont les effets VOULUS
+           d'un vrai recalcul ; aucun n'a sa place dans une simple lecture d'horaire.
+           Celle-ci n'écrit donc que deux nombres, et rien d'autre.
+
+           Le couple (distance, durée) est remplacé ENSEMBLE, jamais l'un sans l'autre :
+           l'affichage les divise l'un par l'autre. Au moment du rafraîchissement les deux
+           décrivent le trajet restant depuis la position courante, le rapport vaut donc 1 et
+           l'ETA affichée devient exactement la durée fraîche — puis redécroît normalement à
+           mesure qu'on avance. C'est le même ré-ancrage que produit déjà un vrai recalcul. */
+        const ETA_REFRESH_MS      = 5 * 60 * 1000;  // une lecture toutes les 5 minutes
+        const ETA_REFRESH_MIN_KM  = 1;              // sous 1 km à vol d'oiseau, plus rien à annoncer
+        /* Écart de DISTANCE au-delà duquel on considère que Mapbox propose un AUTRE
+           itinéraire, et non le nôtre vu sous un trafic différent. Le trafic change les
+           durées, pas les longueurs : un écart de distance signe un changement de route.
+           Or on continue d'afficher et de suivre l'ancienne — prendre la durée de la
+           nouvelle donnerait une ETA qui décrit un trajet que le conducteur ne fait pas.
+           Dans ce cas on ne met rien à jour : mieux vaut une estimation vieille de cinq
+           minutes mais qui parle du bon trajet.
+           ⚠ Ce seuil sert désormais DEUX FOIS, et dans les deux sens : il identifie notre
+           itinéraire dans la réponse (`_estNotreItineraire()`), et ce qu'il écarte devient
+           le candidat que l'on peut PROPOSER au conducteur — voir le bloc « proposition
+           d'itinéraire plus rapide » plus bas. Le refus d'appliquer en silence n'a pas
+           changé d'un pouce : rien n'est adopté sans un appui. */
+        const ETA_REFRESH_MAX_ECART = 0.25;
+        let _etaRefreshAt = 0;
+        let _etaRefreshInFlight = false;
+
+        async function refreshEtaFromTraffic(lng, lat) {
+            /* Simulation exclue : son ETA vient de `simState`, sur une horloge fictive que le
+               trafic réel ne décrit pas. Elle est de toute façon hors de portée ici,
+               handleRealMovement ne tournant que sur des fix GPS — la garde reste pour que
+               la fonction soit sûre quel que soit l'appelant futur. */
+            if (!isCourseStarted || isSimulationMode) return;
+            if (!navigator.onLine) return;
+            /* ⚠ On ne pose PAS `isRecalculating`, et on s'efface devant lui. Un vrai recalcul
+               répond à une déviation : il est urgent et doit toujours pouvoir partir. Ce
+               rafraîchissement-ci peut attendre cinq minutes de plus, il ne doit jamais
+               occuper le verrou de quelqu'un de plus pressé. */
+            if (_etaRefreshInFlight || isRecalculating) return;
+
+            const destination = exactEndCoords
+                || (navWaypoints.length > 0 ? navWaypoints[0].coords : null);
+            if (!destination) return;
+
+            const now = Date.now();
+            if (now - _etaRefreshAt < ETA_REFRESH_MS) return;
+
+            // Distance restante le long du tracé RÉELLEMENT suivi : `currentTurfLine` est
+            // rognée au fur et à mesure, sa longueur est donc ce qu'il reste à parcourir.
+            let restantKm = 0;
+            try {
+                if (currentTurfLine) restantKm = turf.length(currentTurfLine, { units: 'kilometers' });
+                const volOiseauKm = turf.distance(turf.point([lng, lat]), turf.point(destination),
+                                                  { units: 'kilometers' });
+                if (volOiseauKm < ETA_REFRESH_MIN_KM) return;
+            } catch (e) { return; }
+
+            _etaRefreshAt = now;
+            _etaRefreshInFlight = true;
+            /* Jeton d'ordre partagé avec `recalculateRoute()` : si un vrai recalcul démarre
+               pendant notre attente réseau, c'est LUI qui fait autorité sur le trajet, et
+               notre réponse décrit un itinéraire qu'il vient de remplacer. */
+            const _gen = _recalcGeneration;
+            try {
+                const wp = exactEndCoords
+                    ? navWaypoints.map(w => w.coords)
+                    : navWaypoints.slice(1).map(w => w.coords);
+                /* `fastTimeout: false` (15 s) et non le délai court des recalculs. Rien
+                   n'attend cette réponse — ni le conducteur, ni la frame GPS — alors qu'un
+                   délai de 6 s tomberait souvent sur le repli sans trafic, que l'on refuse
+                   juste en dessous : on aurait payé la requête pour ne rien pouvoir en
+                   faire. Le seul coût d'une attente longue est une requête en vol, et
+                   `_etaRefreshInFlight` interdit déjà qu'elles s'empilent. */
+                const data = await fetchRouteMapbox([lng, lat], destination, currentAvoidTolls, false, wp);
+                if (_gen !== _recalcGeneration || !isCourseStarted) return;
+                /* Repli sans trafic : sa durée est en circulation libre. L'accepter
+                   remplacerait une estimation avec trafic par une estimation à vide —
+                   un rafraîchissement qui DÉGRADE l'information. On garde l'ancienne. */
+                if (data.traffic !== true) return;
+
+                /* ⚠ LA RÉPONSE CONTIENT SOUVENT PLUSIEURS ITINÉRAIRES, et `routes[0]` n'est
+                   PAS forcément le nôtre : `fetchRouteMapbox()` demande `alternatives=true`
+                   dès qu'il n'y a pas d'étape, et le premier rendu est celui que Mapbox
+                   préfère MAINTENANT. Ne regarder que lui faisait jeter toute la réponse dès
+                   que le trafic lui faisait changer d'avis — c'est-à-dire exactement quand
+                   on avait le plus besoin de rafraîchir. On cherche donc le nôtre dans le
+                   lot, et on traite les autres comme des candidats à proposer. */
+                const candidats = (data.routes || [])
+                    .map(_routeTotaux)
+                    .filter(c => c && c.distKm > 0 && c.durH > 0);
+                if (!candidats.length) return;
+
+                const notre = restantKm > 0
+                    ? candidats.find(c => _estNotreItineraire(c, restantKm))
+                    : candidats[0];
+
+                if (notre) {
+                    routeTotalDistKm        = notre.distKm;
+                    routeTotalDurationHours = notre.durH;
+                    /* Les ralentissements profitent du même aller-retour réseau : cette
+                       réponse décrit le trajet RESTANT depuis la position courante, sa
+                       géométrie se colore donc telle quelle. C'est ce qui donne au tracé
+                       une couleur fraîche toutes les 5 minutes sans une requête de plus. */
+                    setRouteCongestion(notre.route, true);
+                    if (DEBUG) console.log('[ETA] rafraîchie :', (notre.durH * 60).toFixed(0), 'min pour',
+                                           notre.distKm.toFixed(1), 'km');
+                } else if (DEBUG) {
+                    console.log('[ETA] notre itinéraire absent de la réponse — ETA conservée');
+                }
+
+                /* Durée de référence pour juger une proposition. Fraîche si Mapbox nous a
+                   rendu notre propre itinéraire dans le lot ; sinon la proportion affichée,
+                   vieille d'au plus 5 minutes. Ce repli est BIAISÉ DU BON CÔTÉ : si un
+                   bouchon vient d'apparaître sur notre route, la valeur ancienne est trop
+                   OPTIMISTE, le gain de l'alternative paraît donc plus faible qu'il n'est —
+                   on propose moins souvent, jamais à tort. */
+                const referenceH = notre ? notre.durH
+                    : (routeTotalDistKm > 0 && routeTotalDurationHours > 0 && restantKm > 0
+                        ? routeTotalDurationHours * (restantKm / routeTotalDistKm) : 0);
+                const autres = candidats.filter(c => c !== notre);
+                if (referenceH > 0 && autres.length) {
+                    const meilleur = autres.reduce((a, b) => (b.durH < a.durH ? b : a));
+                    evaluerPropositionItineraire(meilleur, referenceH, restantKm, lng, lat);
+                }
+            } catch (e) {
+                // Échec réseau : l'ancienne estimation reste affichée, on retentera dans 5 min.
+                // Silencieux et non journalisé — c'est une lecture d'agrément, pas une panne.
+                if (DEBUG) console.warn('[ETA] rafraîchissement impossible :', e);
+            } finally {
+                _etaRefreshInFlight = false;
+            }
+        }
+
+        /* Totaux d'un itinéraire Mapbox. Multi-legs : on SOMME les tronçons, comme partout
+           ailleurs dans le fichier — `route.distance` ne couvre pas les étapes intermédiaires. */
+        function _routeTotaux(r) {
+            const co = r && r.geometry && r.geometry.coordinates;
+            if (!co || co.length < 2) return null;
+            const multi = r.legs && r.legs.length > 1;
+            return {
+                route:  r,
+                coords: co,
+                distKm: multi ? r.legs.reduce((s, l) => s + l.distance, 0) / 1000 : r.distance / 1000,
+                durH:   multi ? r.legs.reduce((s, l) => s + l.duration, 0) / 3600 : r.duration / 3600
+            };
+        }
+
+        /* « Est-ce le trajet que l'on suit, vu sous un trafic différent ? »
+           DEUX critères, et il faut les deux :
+           1. la LONGUEUR, à `ETA_REFRESH_MAX_ECART` près — le trafic change les durées, pas
+              les distances ;
+           2. la GÉOMÉTRIE — un itinéraire parallèle de longueur voisine (autoroute et
+              nationale suivent souvent la même vallée à quelques centaines de mètres) passe
+              le premier critère sans être le nôtre. On échantillonne le tracé candidat et on
+              exige que chaque point échantillonné soit à moins de `ROUTE_MATCH_MAX_KM` de la
+              ligne suivie. C'est ce second critère qui empêche d'adopter la durée d'une route
+              voisine en croyant rafraîchir la nôtre. */
+        const ROUTE_MATCH_MAX_KM = 0.2;
+        function _estNotreItineraire(c, restantKm) {
+            if (Math.abs(c.distKm - restantKm) / restantKm > ETA_REFRESH_MAX_ECART) return false;
+            if (!currentTurfLine) return true;   // pas de tracé de référence : la longueur fait foi
+            try {
+                const pas = Math.max(1, Math.floor(c.coords.length / 24));
+                for (let i = 0; i < c.coords.length; i += pas) {
+                    const d = turf.pointToLineDistance(turf.point(c.coords[i]), currentTurfLine,
+                                                       { units: 'kilometers' });
+                    if (d > ROUTE_MATCH_MAX_KM) return false;
+                }
+                return true;
+            } catch (e) { return false; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           PROPOSITION D'ITINÉRAIRE PLUS RAPIDE (18/08/2026)
+           ═══════════════════════════════════════════════════════════════════
+           Suite directe du rafraîchissement d'ETA ci-dessus, et sa limite assumée jusqu'ici :
+           quand Mapbox rendait un AUTRE itinéraire, on le jetait — y compris lorsqu'il était
+           franchement meilleur. On ne pouvait pas faire autrement sans mentir : afficher sa
+           durée sous l'ancien tracé aurait donné l'heure d'arrivée d'un trajet que le
+           conducteur ne fait pas. Il manquait la seule chose qui lève l'ambiguïté : le lui
+           DEMANDER. C'est tout l'objet de ce bloc.
+
+           ⚠ RIEN N'EST APPLIQUÉ SANS UN APPUI. Le tracé proposé est dessiné en pointillés
+           verts par-dessus l'itinéraire suivi (couche `reroute-preview`, js/03), les deux
+           durées sont affichées, et l'app continue de guider sur l'ANCIEN tant que « Suivre »
+           n'a pas été pressé. Un changement d'itinéraire silencieux au volant est la pire
+           réponse possible : le conducteur regarde la route, pas l'écran.
+
+           TROIS SEUILS, et chacun écarte un cas de proposition nuisible :
+           1. GAIN ABSOLU (8 min) — en dessous, le gain est dans le bruit de l'estimation
+              elle-même (le trafic bouge, les durées Mapbox aussi) et ne paie pas le coût
+              d'une décision à prendre en roulant.
+           2. GAIN RELATIF (15 %) — 8 minutes sur un trajet de 6 heures ne justifient pas de
+              changer d'itinéraire ; sur 45 minutes, si.
+           3. EMBRANCHEMENT À ≥ 1,5 km — c'est le seuil de FAISABILITÉ, et le plus important
+              des trois. Proposer une sortie 300 m avant qu'elle se présente, c'est proposer
+              soit une manœuvre dangereuse, soit rien du tout. 1,5 km laisse le temps de lire,
+              de décider et de se rabattre.
+
+           Une seule proposition à la fois, 60 s à l'écran, puis mise en veille 10 minutes en
+           cas de refus : sans cette veille, le même bouchon rouvrirait la même carte à chaque
+           rafraîchissement, toutes les 5 minutes, jusqu'à l'arrivée. */
+        const REROUTE_GAIN_MIN_MINUTES    = 8;
+        const REROUTE_GAIN_MIN_RATIO      = 0.15;
+        const REROUTE_FORK_MIN_KM         = 1.5;
+        const REROUTE_FORK_ECART_KM       = 0.12;  // au-delà, les deux tracés sont sur des routes distinctes
+        const REROUTE_PROMPT_MS           = 60000;
+        const REROUTE_SNOOZE_MS           = 10 * 60 * 1000;
+        /* Écart maximal toléré ENTRE L'AFFICHAGE ET L'APPUI. Le tracé proposé part de la
+           position qu'on avait au moment de la requête ; à 130 km/h, une minute de réflexion
+           représente 2 km. Si l'embranchement a été dépassé pendant ce temps, l'adopter
+           ferait faire demi-tour. Ce contrôle est refait AU MOMENT DE L'APPUI, pas seulement
+           à l'affichage — c'est entre les deux que le monde a bougé. */
+        const REROUTE_ACCEPT_MAX_ECART_KM = 0.25;
+        let _reroutePending     = null;
+        let _rerouteTimer       = null;
+        let _rerouteTick        = null;
+        let _rerouteSnoozeUntil = 0;
+
+        /* Distance jusqu'à l'embranchement : premier point du tracé proposé qui s'écarte
+           franchement de celui qu'on suit. Balayage GROSSIER puis FIN — `pointToLineDistance`
+           parcourt toute la ligne de référence à chaque appel, et `currentTurfLine` compte
+           volontiers plusieurs milliers de points : un balayage point par point coûterait des
+           dizaines de millions de comparaisons dans une frame GPS. */
+        function _distanceEmbranchementKm(coords, lng, lat) {
+            if (!currentTurfLine) return null;
+            try {
+                const fin  = Math.min(coords.length, 400);
+                const pas  = Math.max(1, Math.floor(fin / 60));
+                const loin = i => turf.pointToLineDistance(turf.point(coords[i]), currentTurfLine,
+                                                           { units: 'kilometers' }) > REROUTE_FORK_ECART_KM;
+                let grossier = -1;
+                for (let i = 0; i < fin; i += pas) { if (loin(i)) { grossier = i; break; } }
+                if (grossier < 0) return null;   // les deux tracés ne se séparent pas dans la fenêtre
+                let precis = grossier;
+                for (let i = Math.max(0, grossier - pas + 1); i <= grossier; i++) {
+                    if (loin(i)) { precis = i; break; }
+                }
+                const fourche = coords[Math.max(0, precis - 1)];
+                return turf.distance(turf.point([lng, lat]), turf.point(fourche), { units: 'kilometers' });
+            } catch (e) { return null; }
+        }
+
+        function evaluerPropositionItineraire(candidat, referenceH, restantKm, lng, lat) {
+            if (_reroutePending) return;                       // une seule carte à la fois
+            if (Date.now() < _rerouteSnoozeUntil) return;      // refus récent : on se tait
+            const gainMin = (referenceH - candidat.durH) * 60;
+            if (gainMin < REROUTE_GAIN_MIN_MINUTES) return;
+            if (gainMin / (referenceH * 60) < REROUTE_GAIN_MIN_RATIO) return;
+
+            const forkKm = _distanceEmbranchementKm(candidat.coords, lng, lat);
+            if (forkKm === null || forkKm < REROUTE_FORK_MIN_KM) {
+                if (DEBUG) console.log('[Reroute] écarté : embranchement à', forkKm, 'km');
+                return;
+            }
+            afficherPropositionItineraire({
+                route:   candidat.route,
+                coords:  candidat.coords,
+                distKm:  candidat.distKm,
+                durH:    candidat.durH,
+                gainMin,
+                forkKm,
+                notreDistKm: restantKm,
+                notreDurH:   referenceH,
+                expireAt:    Date.now() + REROUTE_PROMPT_MS
+            });
+        }
+
+        function afficherPropositionItineraire(p) {
+            const banner = document.getElementById('reroute-banner');
+            if (!banner) return;
+            _reroutePending = p;
+
+            document.getElementById('reroute-banner-gain').textContent = `−${Math.round(p.gainMin)} min`;
+            document.getElementById('reroute-banner-msg').textContent =
+                `${formatTime(p.durH)} au lieu de ${formatTime(p.notreDurH)} · `
+                + `${p.distKm.toFixed(0)} km au lieu de ${p.notreDistKm.toFixed(0)} km. `
+                + `Bifurcation dans ${p.forkKm.toFixed(1)} km.`;
+            banner.classList.add('visible');
+
+            // Le tracé proposé, en pointillés verts par-dessus l'itinéraire suivi.
+            tenterSansBruit(() => {
+                const src = map.getSource && map.getSource('reroute-preview');
+                if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: p.coords }, properties: {} });
+            }, 'reroute/apercu');
+
+            // Proposition de raccourci : confort, pas sécurité. La bannière et son compte
+            // à rebours restent visibles en mode moins bavard.
+            try { if (typeof playAudioSequence === 'function') playAudioSequence(['attention.ogg'], 0, 'bavard'); }
+            catch (e) { logAppError('reroute/alerteSonore', e); }
+
+            clearTimeout(_rerouteTimer);
+            clearInterval(_rerouteTick);
+            _rerouteTimer = setTimeout(() => dismissRerouteProposal('expiration'), REROUTE_PROMPT_MS);
+            const majCompte = () => {
+                const el = document.getElementById('reroute-banner-countdown');
+                if (!el || !_reroutePending) return;
+                const s = Math.max(0, Math.round((_reroutePending.expireAt - Date.now()) / 1000));
+                el.textContent = `Sans réponse, la proposition disparaît dans ${s} s`;
+            };
+            majCompte();
+            _rerouteTick = setInterval(majCompte, 1000);
+            if (DEBUG) console.log('[Reroute] proposée : gain', p.gainMin.toFixed(0), 'min, embranchement à',
+                                   p.forkKm.toFixed(1), 'km');
+        }
+
+        /* Redessine le tracé de la proposition après un changement de style de carte, qui
+           détruit toutes les sources personnalisées. Appelée par `restoreRouteOverlays()`
+           (js/03) ; sans elle, basculer Trafic ou Jour/Nuit pendant qu'une proposition est
+           affichée laissait la bannière annoncer une bifurcation que plus rien ne montrait.
+           Muette s'il n'y a pas de proposition en cours — c'est le cas le plus fréquent. */
+        function redrawReroutePreview() {
+            if (!_reroutePending) return;
+            const src = map.getSource && map.getSource('reroute-preview');
+            if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: _reroutePending.coords }, properties: {} });
+        }
+
+        function acceptRerouteProposal() {
+            const p = _reroutePending;
+            if (!p) return;
+            /* Contrôle de fraîcheur AU MOMENT DE L'APPUI — voir REROUTE_ACCEPT_MAX_ECART_KM.
+               Avant l'embranchement les deux tracés se superposent : notre position reste donc
+               à quelques mètres du tracé proposé. Une fois la sortie dépassée, elle s'en éloigne
+               d'autant qu'on a roulé — c'est exactement ce que cette mesure attrape. */
+            let ecartKm = 0;
+            try {
+                if (lastRealCoords) {
+                    ecartKm = turf.pointToLineDistance(turf.point(lastRealCoords),
+                                                       turf.lineString(p.coords), { units: 'kilometers' });
+                }
+            } catch (e) { ecartKm = 0; }
+            if (ecartKm > REROUTE_ACCEPT_MAX_ECART_KM) {
+                const st = document.getElementById('status');
+                if (st) { st.innerText = "⚠️ Embranchement dépassé — itinéraire conservé."; st.style.color = "#ff6b6b"; }
+                if (DEBUG) console.log('[Reroute] refusée à l\'appui : écart', ecartKm.toFixed(2), 'km');
+                dismissRerouteProposal('trop tard');
+                return;
+            }
+
+            /* Adoption par le MÊME chemin qu'un recalcul de déviation (steps reconstruits,
+               annonces vocales réarmées, tracé remplacé) : c'est bien un changement de trajet,
+               pas une lecture d'horaire. `traffic: true` est acquis — la proposition n'a pu
+               naître que d'une réponse `driving-traffic`, le repli étant refusé plus haut. */
+            applyRouteResponse({ code: "Ok", routes: [p.route], traffic: true }, "✅ Nouvel itinéraire adopté !");
+            document.getElementById('status').style.color = "#2ed573";
+            /* L'ETA vient d'être ré-ancrée sur une durée fraîche : la prochaine lecture peut
+               attendre la fenêtre complète. */
+            _etaRefreshAt = Date.now();
+            // Confirmation d'une action que l'utilisateur vient de faire, et la bannière
+            // change à l'écran : 'bavard'.
+            try { if (typeof playAudioSequence === 'function') playAudioSequence(['route_calculate.ogg'], 0, 'bavard'); }
+            catch (e) { logAppError('reroute/confirmationSonore', e); }
+            dismissRerouteProposal('accepte');
+        }
+
+        function dismissRerouteProposal(raison) {
+            clearTimeout(_rerouteTimer);  _rerouteTimer = null;
+            clearInterval(_rerouteTick);  _rerouteTick  = null;
+            document.getElementById('reroute-banner')?.classList.remove('visible');
+            tenterSansBruit(() => {
+                const src = map.getSource && map.getSource('reroute-preview');
+                if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} });
+            }, 'reroute/effacementApercu');
+            /* Mise en veille sur REFUS et sur EXPIRATION, jamais après une adoption : un
+               bouchon qui dure rouvrirait sinon la même carte toutes les 5 minutes. Ne pas
+               répondre vaut refus — c'est le cas le plus fréquent au volant, et le silence de
+               quelqu'un qui conduit ne doit pas être pris pour une invitation à réessayer. */
+            if (raison !== 'accepte') _rerouteSnoozeUntil = Date.now() + REROUTE_SNOOZE_MS;
+            if (DEBUG && _reroutePending) console.log('[Reroute] fermée :', raison);
+            _reroutePending = null;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════
+           ARRIVÉE DÉCLARÉE PAR LE CONDUCTEUR                        (21/08/2026)
+           ═══════════════════════════════════════════════════════════════════════
+
+           « Terminer le trajet » et « je suis arrivé » n'ont jamais été la même chose,
+           mais l'app ne savait dire que la première. On partait au n° 20, on trouve une
+           place au n° 14 ou au coin de la rue : au-delà des 50 m de `ARRIVAL_AUTO_M`, le
+           GPS ne constate rien, et le trajet finissait archivé comme un ABANDON.
+
+           ⚠ CE N'EST PAS UN RACCOURCI POUR GAGNER DES POINTS, et il ne faut pas le
+           « sécuriser » comme si c'en était un. Le score s'accumule au mètre parcouru
+           (`POINTS_PER_METER`) et `isPerfectRun` ne regarde que `hasSpeeded` et la
+           distance — déclarer son arrivée ne crédite donc pas un point de plus, et ne pas
+           la déclarer n'en retire aucun. Ce qui change est la NATURE du trajet
+           (`genuinelyArrived`), donc le son joué et ce que retient l'historique.
+
+           La borne des 500 m (`ARRIVAL_ASSERT_M`) n'est pas là contre la triche : elle
+           empêche une affirmation FAUSSE — déclarer être arrivé depuis l'autre bout de la
+           ville archiverait un mensonge sans rien rapporter à personne. */
+        function canConfirmArrival() {
+            if (!isCourseStarted || drivers.length === 0) return false;
+            const d = drivers[0];
+            // Arrivée déjà constatée par le GPS : il n'y a plus rien à vérifier, et
+            // `exactEndCoords` a justement été mis à null au moment du constat.
+            if (d.finished) return true;
+            // Trajet libre : aucune destination, donc aucune arrivée à déclarer.
+            if (!exactEndCoords) return false;
+            /* La position du marqueur prime sur `lastRealCoords` : en simulation, c'est
+               elle qui dit où l'on se trouve (même règle que `goToCoords`, js/20).
+               `_kmBetween` rend Infinity si un point est invalide — un GPS non fixé ne
+               peut donc jamais faire passer ce test par accident. */
+            const ici = d.marker
+                ? [d.marker.getLngLat().lng, d.marker.getLngLat().lat]
+                : normalizeLngLat(lastRealCoords);
+            if (!ici) return false;
+            return _kmBetween(ici, exactEndCoords) * 1000 <= ARRIVAL_ASSERT_M;
+        }
+
+        /* Point d'entrée UNIQUE de la validation d'arrivée — le bouton central (js/08) et
+           la bulle 🏁 de la hotbox (js/10) appellent tous les deux celui-ci. Deux chemins
+           vers le geste, une seule implémentation : c'est ce qui garantit qu'ils ne
+           pourront pas se mettre à diverger. */
+        function confirmArrival() {
+            if (!canConfirmArrival()) return false;
+            /* Poser `finished` AVANT `stopCourse()` est tout le mécanisme : c'est
+               exactement ce que lit `genuinelyArrived` (première ligne de stopCourse) pour
+               distinguer une arrivée d'un abandon. Rien d'autre n'est à inventer. */
+            drivers[0].finished = true;
+            stopCourse();
+            return true;
         }
 
         function stopCourse() {
@@ -704,6 +1264,15 @@
             _speedLimitSource = null; _overpassSource = null; _speedLimitDebug = null; hideSpeedLimitDebug();
             resetMaxspeedProbe();
             routeTotalDistKm = 0; routeTotalDurationHours = 0;
+            // Le prochain trajet doit pouvoir rafraîchir son ETA sans hériter du compteur
+            // de celui-ci : sans cette remise à zéro, deux trajets courts enchaînés se
+            // partageraient la même fenêtre de 5 minutes.
+            _etaRefreshAt = 0;
+            /* Même raison pour la proposition d'itinéraire : une carte encore à l'écran
+               porterait sur un trajet terminé, et sa mise en veille punirait le trajet
+               suivant d'un refus qui ne le concerne pas. */
+            dismissRerouteProposal('fin de course');
+            _rerouteSnoozeUntil = 0;
             stopDeadReckoning();
             if (animationFrame) cancelAnimationFrame(animationFrame);
             updateScreenGlow(false, false);
@@ -715,10 +1284,11 @@
             const altBtn = document.getElementById('nav-google-altroute');
             if (altBtn) { altBtn.classList.remove('active'); altBtn.title = "Itinéraire alternatif (éviter les péages)"; }
             updateGoogleEtaBar(0, 0);
-            restAreas = []; nextRestThresholdHours = REST_STOP_INTERVAL_HOURS;
+            restAreas = []; _restAreasRouteSig = null; nextRestThresholdHours = REST_STOP_INTERVAL_HOURS;
             restStopTracking = { active: false, areaName: null, enteredAt: null, validated: false };
             simFrozenAtRestArea = false; simTestAreaDistKm = null;
-            document.getElementById('rest-stop-banner').classList.remove('visible');
+            clearRestStopPlan();
+            dismissRestStopBanner();
             // Réinitialiser l'état station essence
             gasStopWaypoint = null; gasStationAlertFired = false;
             document.getElementById('gas-station-banner')?.classList.remove('visible');
@@ -731,14 +1301,72 @@
             if (_wpBadge) _wpBadge.classList.remove('visible');
             document.getElementById('nav-eta-box').classList.remove('visible');
 
+            /* ═══ LE BROUILLON DE DESTINATION MEURT AVEC LE TRAJET (18/08/2026) ═══
+               `gps_dest_draft` protège une SAISIE EN COURS d'un rechargement (rotation
+               Android, veille, retour depuis une autre app). Un trajet terminé n'est plus
+               une saisie en cours : la destination a été consommée, elle ne doit plus rien
+               rouvrir. Rien ne l'effaçait ici — seuls l'expiration à 6 h, le ✕ du champ
+               (`clearDestination`) et l'annulation de la confirmation (`closeTripModal(true)`)
+               le faisaient, c'est-à-dire tous les chemins SAUF le plus courant : aller au
+               bout de son trajet.
+               ⚠ Conséquence, et c'est le symptôme signalé : au lancement suivant dans les
+               6 h, `restoreDestinationDraft()` remplissait `#end-addr`, et le garde-fou de
+               démarrage (`if (!draftInput.value.trim())`, js/14) sautait alors
+               `setPanelSnap('hidden')` — l'app s'ouvrait sur le panneau Itinéraire au lieu
+               de la carte. Le panneau n'avait pas « changé tout seul » : il obéissait à une
+               exception prévue, déclenchée par un brouillon qui n'aurait pas dû survivre.
+               ⚠ NE PAS déplacer cet effacement dans `validateAndLaunchTrip()` : un
+               rechargement PENDANT le trajet perdrait alors l'adresse, et il n'existe
+               aucune autre reprise de course — c'est ce brouillon qui la rattrape. Ici, le
+               trajet est fini, il n'y a plus rien à rattraper. */
+            clearDestinationDraft();
+
             document.getElementById('ui-panel').classList.remove('panel-hidden');
-            document.getElementById('ui-panel').style.display = 'flex'; 
+            document.getElementById('ui-panel').style.display = 'flex';
             document.getElementById('info-widget').style.display = 'none';
 
             const finalScore = drivers.length > 0 ? drivers[0].score : 0;
             const finalDist = drivers.length > 0 ? drivers[0].dist : 0;
             const finalDurationHours = drivers.length > 0 ? drivers[0].timeHours : 0;
             const isPerfectRun = drivers.length > 0 && !drivers[0].hasSpeeded && drivers[0].dist > 0.1;
+
+            /* Lieux du trajet — voir `_tripPlacesMeta` en tête de fichier. Le départ
+               vient de l'instantané pris au lancement, la destination de l'état COURANT :
+               elle a pu changer en route. Lu ici et pas plus bas : `exactEndCoords` est
+               remis à null quelques lignes plus loin (ligne ~1334) et `#end-addr` peut
+               être vidé par le retour au panneau Itinéraire.
+               ⚠ Nommée `_tripPlaces` et non `_places` : ce dernier est une variable
+               GLOBALE de js/20 (les lieux fixes domicile/travail), qu'une locale homonyme
+               masquerait ici avec un tout autre sens. */
+            const _tripPlaces = tenterSansBruit(() => {
+                const meta = _tripPlacesMeta || {};
+                const destSaisie = document.getElementById('end-addr')?.value.trim();
+                /* ⚠ REPLI DU POINT D'ARRIVÉE SUR LA POSITION FINALE — pour le trajet libre,
+                   qui n'a par définition aucune destination : sans lui, un trajet libre
+                   n'aurait JAMAIS de point d'arrivée dans l'historique, donc rien à
+                   relancer, alors que « ramène-moi d'où je viens » est précisément l'usage.
+                   Il n'y a pas d'adresse à archiver ici — un géocodage inverse serait
+                   asynchrone, et `stopCourse()` ne peut pas attendre —, seulement un point.
+                   La liste affiche alors « Position enregistrée », et le bouton fonctionne.
+                   Le marqueur du conducteur prime sur `lastRealCoords` : en simulation,
+                   c'est lui qui dit où l'on se trouve (même règle que `goToCoords`). */
+                const arriveeReelle = (drivers[0] && drivers[0].marker)
+                    ? [drivers[0].marker.getLngLat().lng, drivers[0].marker.getLngLat().lat]
+                    : lastRealCoords;
+                return {
+                    from: meta.from || null,
+                    fromCoords: meta.fromCoords || null,
+                    to: destSaisie || null,
+                    /* La destination saisie prime : un trajet guidé interrompu en chemin
+                       doit garder en mémoire OÙ IL ALLAIT, pas où on s'est arrêté. */
+                    toCoords: normalizeLngLat(exactEndCoords)
+                           || normalizeLngLat(arriveeReelle) || null,
+                    /* Un trajet lancé en mode libre reste libre même si une destination a
+                       été saisie en route — dans ce cas elle a bien un `to`, et `free` ne
+                       sert plus qu'au cas où il n'y en a aucune. */
+                    free: !!meta.free && !destSaisie,
+                };
+            }, 'historique/placesAtStop') || {};
 
             // Sauvegarder le trajet dans l'historique statistiques
             saveTripToHistory({
@@ -750,7 +1378,9 @@
                 ecoScore:     drivers.length > 0 ? Math.round(drivers[0].ecoScore) : 100,
                 hardBrakings: drivers.length > 0 ? drivers[0].hardBrakings : 0,
                 hardAccels:   drivers.length > 0 ? drivers[0].hardAccels : 0,
+                ..._tripPlaces,
             });
+            _tripPlacesMeta = null;
             stopEcoMotionTracking();
             _routeMaxspeedAnnotations = []; // reset pour éviter données périmées au prochain trajet
             document.getElementById('eco-score-bar').classList.remove('visible');
@@ -763,10 +1393,16 @@
                 document.getElementById('nav-btn-pin-stop')?.classList.remove('active-pin');
             }
 
+            /* Le score du trajet est plafonné à 0 : un trajet raté ne rapporte rien, mais
+               n'entame jamais le capital déjà acquis.
+               ⚠ Sorti des deux branches parce que la fenêtre de fin l'affiche dans les DEUX
+               cas. Il n'est CRÉDITÉ que dans la branche non parfaite : sur une conduite
+               parfaite, c'est `onChestClick()` qui crédite, après le multiplicateur de
+               butin — le créditer aussi ici paierait le trajet deux fois. */
+            const earnedBase = clampTripScore(finalScore);
+
             if (!isPerfectRun) {
-                // Le score du trajet est plafonné à 0 : un trajet raté ne rapporte rien,
-                // mais n'entame jamais le capital déjà acquis.
-                const earned = clampTripScore(finalScore);
+                const earned = earnedBase;
                 addPointsToActiveProfile(earned);
                 const profile = profiles.find(p => p.id === activeProfileId);
                 const statusEl = document.getElementById('status');
@@ -805,16 +1441,37 @@
             const pinStopBtn  = document.getElementById('nav-btn-pin-stop');
             if (pinStopBtn)   pinStopBtn.style.display    = 'none';
 
+            /* ═══ FENÊTRE DE FIN DE TRAJET — UN SEUL ENDROIT QUI DÉCIDE ═══
+               Trois cas, et un seul point de décision pour qu'ils ne puissent pas se
+               chevaucher :
+                 • arrivé → la fenêtre de points s'ouvre TOUJOURS. Si la conduite a été
+                   parfaite, le coffre est passé en `chest` et attend derrière : il ne
+                   s'ouvrira qu'à la fermeture de cette fenêtre (`closeArrivalSummary`).
+                 • abandonné + conduite parfaite → le coffre seul, comme avant. Célébrer
+                   une arrivée à quelqu'un qui vient de renoncer serait à contresens, mais
+                   la conduite, elle, a bien été parfaite.
+                 • abandonné sans conduite parfaite → rien, le retour `#status` suffit.
+
+               ⚠ Le chiffre passé est `earnedBase` dans les deux cas — c'est le score de
+               BASE. Sur une conduite parfaite, les points ne sont pas encore crédités : ils
+               le sont par `onChestClick()`, après le multiplicateur de butin. */
             if(drivers.length > 0) {
                 drivers[0].finished = true;
-                if (isPerfectRun) {
+                if (genuinelyArrived) {
+                    tenterSansBruit(() => showArrivalSummary(earnedBase, {
+                        chest: isPerfectRun ? { score: finalScore, arrived: true } : null
+                    }), 'arrivee/summary');
+                } else if (isPerfectRun) {
                     openLootChestModal(finalScore, genuinelyArrived);
                 }
             }
             releaseWakeLock();
 
-            // Mise à jour des objectifs hebdomadaires — APRÈS openLootChestModal pour que
-            // showBadgeEarnedToast détecte correctement le coffre ouvert et pose _pendingBadgeModal=true
+            /* ⚠ APRÈS l'ouverture de la fenêtre de fin, jamais avant. `showBadgeEarnedToast`
+               regarde si une fenêtre de fin (coffre OU arrivée) est ouverte : si elle l'est,
+               le badge attend son tour ; sinon il s'affiche sur-le-champ — par-dessus la
+               fenêtre qu'on vient d'ouvrir. Déplacer cette ligne plus haut ramènerait
+               exactement la superposition que ce découpage supprime. */
             updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun);
 
             map.easeTo({ bearing: 0, duration: 500 });
@@ -928,7 +1585,28 @@
                 // - 15m : déviation franche → recalcul immédiat
                 // - 8m + bearingMismatch : virage clairement manqué même si pas encore loin
                 // - progression qui recule : virage dépassé, quelle que soit la distance
-                const shouldRecalculate = distToRoute > 15 || (distToRoute > 8 && bearingMismatch) || progressionPerdue;
+                let shouldRecalculate = distToRoute > 15 || (distToRoute > 8 && bearingMismatch) || progressionPerdue;
+
+                /* ── FENÊTRE DE GRÂCE APRÈS UN RETOUR DE SIGNAL ──
+                   Les premières secondes qui suivent une sortie de tunnel sont les moins
+                   fiables du trajet : la puce reconverge, et la position atterrit couramment
+                   sur la chaussée d'à côté — relevé en conduite avenue Charles-de-Gaulle,
+                   voie parallèle. Recalculer là-dessus, c'est demander un itinéraire DEPUIS
+                   une position fausse : Mapbox répond alors par un trajet qui repart en
+                   arrière, et la ligne blanche reste dans le dos du conducteur jusqu'à ce que
+                   la situation se démêle d'elle-même.
+                   On laisse donc la position se rasseoir avant de conclure quoi que ce soit.
+                   Aucun risque de manquer une vraie déviation : si elle est réelle, elle sera
+                   toujours là dans six secondes, et les trois signaux la verront alors sur des
+                   coordonnées propres. */
+                if (shouldRecalculate && _gpsRecoveredAt &&
+                    (Date.now() - _gpsRecoveredAt) < GPS_RECOVERY_GRACE_MS) {
+                    if (DEBUG) console.log('[Recalcul] différé : position encore en reconvergence');
+                    shouldRecalculate = false;
+                    // La progression de référence est repartie de zéro avec la ligne rognée du
+                    // dead reckoning : on la laisse se reconstruire sur des fix propres.
+                    _maxDistAlongM = null;
+                }
 
                 if (shouldRecalculate) {
                     // Ne faire ceci qu'une fois par épisode de déviation : sinon, tant que le
@@ -948,11 +1626,21 @@
                             }
                         });
                     }
-                    recalculateRoute(lng, lat);
+                    recalculateRoute(lng, lat, { auto: true });
                 } else {
                     _routeDeviationHandled = false;
                 }
             }
+
+            /* Lecture d'horaire périodique — voir refreshEtaFromTraffic(). Appelée sans
+               condition : toutes les gardes (course en cours, en ligne, destination,
+               intervalle de 5 min, recalcul déjà en vol) sont DANS la fonction, un seul
+               endroit où lire la règle plutôt que deux qui divergeront. `await` volontairement
+               absent : la frame GPS ne doit pas attendre le réseau. */
+            refreshEtaFromTraffic(lng, lat);
+            /* Rognage des ralentissements déjà dépassés. Ici et non dans la boucle rAF :
+               un filtre de calque suffit, et il est throttlé à 2 s dans la fonction. */
+            updateRouteCongestionProgress(lng, lat);
 
             const from = turf.point(lastRealCoords);
             const distanceMovedKm = turf.distance(from, to, {units: 'kilometers'});
@@ -961,6 +1649,21 @@
                 // On n'a pas bougé d'au moins 1m → on est à l'arrêt (feu rouge, embouteillage, stationnement).
                 // On met la vitesse à 0 et on met à jour l'affichage AVANT de quitter, sinon la dernière
                 // vitesse non-nulle (ex: 30 km/h juste avant le feu) resterait figée à l'écran.
+                /* ⚠ L'HORLOGE DOIT AVANCER MÊME IMMOBILE (17/08/2026). Ce `return` sortait sans
+                   toucher à `lastRealTimestamp`, laissé à la dernière frame en MOUVEMENT. Au
+                   redémarrage, le `dt` couvrait donc tout l'arrêt, et le clamp physique plus bas
+                   — dont toute l'utilité est de refuser un saut de position — devenait inopérant
+                   au moment précis où il servait. Le cas type est le tunnel : la position s'y fige
+                   sans que la précision s'effondre (repli réseau), l'app passe donc ici à chaque
+                   fix pendant toute la traversée, puis reçoit d'un coup un saut de 25 m à la
+                   sortie. Rapporté à un `dt` de 40 s, c'est anodin ; rapporté au vrai `dt` d'une
+                   seconde, c'est 90 km/h — la valeur relevée à l'écran en conduite.
+                   Le temps d'arrêt est reporté dans `timeHours` ici même : il fait partie de la
+                   durée du trajet, et la branche normale ne le comptera plus. */
+                if (lastRealTimestamp) {
+                    if (!d.finished) d.timeHours += (Date.now() - lastRealTimestamp) / 3600000;
+                    lastRealTimestamp = Date.now();
+                }
                 d.actualSpeed = 0;
                 d.speedSmoothed = 0;
                 d.isSpeeding = false;
@@ -970,7 +1673,10 @@
                     document.getElementById('nav-speed-display').classList.remove('over-limit');
                     const _lb = document.getElementById('speed-limit-badge');
                     if (_lb) _lb.classList.remove('visible');
-                    updateSpeedometer(0, 50, false);
+                    // Limite réelle et non 50 en dur : cette branche RÉAFFICHE la pastille que
+                    // les lignes juste au-dessus viennent de masquer, et l'affichait donc à 50
+                    // à chaque arrêt, quelle que soit la limite du tronçon.
+                    updateSpeedometer(0, currentSpeedLimitKmh || 50, false);
                     updateScreenGlow(false, true, 0);
                 }
                 return; 
@@ -995,6 +1701,39 @@
                 if (!systemSpeed && lastRealTimestamp) {
                     const timeDiffHours = gapSeconds / 3600;
                     if (timeDiffHours > 0) speedKmh = distanceMovedKm / timeDiffHours;
+                }
+            }
+
+            /* ── CLAMP PHYSIQUE : UNE VOITURE NE SAUTE PAS ──
+               Dernier filet avant l'affichage, et le seul qui ne suppose rien sur l'origine de
+               la mesure. Tout ce qui précède fait confiance à la source : `systemSpeed` vient
+               de la puce (Doppler), le repli vient de distance/temps. Or les deux mentent au
+               même moment — à la reconvergence après un tunnel, la puce publie une vitesse
+               aberrante, et la position corrige son erreur d'un bond, ce qui donne une vitesse
+               calculée tout aussi fausse. Un bond de 25 m en une seconde, c'est 90 km/h affichés
+               alors que la voiture roule à 50.
+               On raisonne donc en ACCÉLÉRATION, seule grandeur bornée par la physique du
+               véhicule : au-delà, la mesure décrit le capteur et non la route, et on refuse de
+               la suivre plus vite que ce qu'une voiture peut faire.
+               Les deux bornes sont volontairement dissymétriques : une décélération d'urgence
+               (~8 m/s²) est bien plus brutale que la meilleure accélération. Elles restent
+               larges — 15 km/h/s dépasse le 0-100 en 7 s — pour ne jamais brider une conduite
+               réelle : ce filtre n'est pas là pour lisser, il est là pour dire non à l'absurde.
+               ⚠ Le clamp se règle sur le `dt` réel : à l'arrêt prolongé puis redémarrage, `dt`
+               est grand et la borne s'ouvre d'autant. C'est ce qui impose la correction de
+               `lastRealTimestamp` dans la branche « immobile » plus haut — sans elle, `dt`
+               valait la durée du tunnel entier et la borne ne bornait plus rien. */
+            const MAX_ACCEL_KMH_PER_S = 15;   // ~4,2 m/s²
+            const MAX_DECEL_KMH_PER_S = 35;   // ~9,7 m/s², freinage d'urgence
+            if (typeof d.speedSmoothed === 'number' && !isGpsGapRecovery) {
+                const dtSec = Math.max(gapSeconds, 0.2);
+                const plafond = d.speedSmoothed + MAX_ACCEL_KMH_PER_S * dtSec;
+                const plancher = Math.max(0, d.speedSmoothed - MAX_DECEL_KMH_PER_S * dtSec);
+                if (speedKmh > plafond) {
+                    if (DEBUG) console.warn(`[Vitesse] saut refusé : ${speedKmh.toFixed(0)} → ${plafond.toFixed(0)} km/h en ${dtSec.toFixed(1)}s`);
+                    speedKmh = plafond;
+                } else if (speedKmh < plancher) {
+                    speedKmh = plancher;
                 }
             }
 
@@ -1054,7 +1793,14 @@
             // (et sa provenance avec, sinon une valeur Mapbox mise en cache serait plus tard
             // réattribuée à Overpass et jugée incertaine à tort).
             if (mapboxLimit) { currentSpeedLimitKmh = mapboxLimit; _overpassSource = 'mapbox'; }
-            document.getElementById(`limit-${d.id}`).innerText = Math.round(limitKmh) + " km/h";
+            /* ⚠ `limit-<id>` N'EXISTE PLUS depuis le retrait de la ligne « Limite / points »
+               de la carte conducteur (22/08/2026, js/14). Ce `.innerText` était le SEUL des
+               quatre sites d'écriture à ne pas tester l'existence de l'élément : laissé tel
+               quel, il levait une TypeError à chaque point GPS, en plein milieu de
+               `handleRealMovement()` — donc toute la navigation réelle figée. `setText()`
+               rend false et ne touche à rien quand l'id est absent. La limite reste affichée
+               par `updateSpeedLimitBadge()` juste en dessous, qui est le vrai rendu. */
+            setText(`limit-${d.id}`, Math.round(limitKmh) + " km/h");
             if (d.id === drivers[0].id) {
                 updateSpeedLimitBadge(limitKmh);
             }
@@ -1081,7 +1827,20 @@
                 triggerPenaltyAnimation(d.id);
             } else {
                 d.isSpeeding = false;
-                d.score += (distanceMovedMeters * POINTS_PER_METER * currentMultiplier);
+                /* ⚠ AUCUN BONUS SUR UNE COUPURE GPS RECONSTITUÉE — faille corrigée le 18/08/2026.
+                   `isGpsGapRecovery` force déjà `aboveHard`/`aboveSoft` à faux : bénéfice du doute,
+                   on ne peut pas savoir si la distance franchie pendant la coupure était une survitesse.
+                   Mais ce `else` était alors le SEUL chemin restant, et il accordait le bonus complet
+                   sur la distance — bénéfice du doute détourné en source de points gratuits. Un trajet
+                   laissé démarré pendant que le téléphone se met en veille (train, avion, GPS coupé
+                   volontairement) reprend au réveil avec `lastRealCoords` resté sur la position
+                   d'avant la coupure : le bond est traité comme une coupure GPS ordinaire et
+                   créditait la distance entière au tarif plein — 600 km Paris→sud ≈ 610 pts observés,
+                   sans un mètre de conduite. La distance parcourue reste comptabilisée (d.dist, stats,
+                   ETA) : c'est le POINT gratuit qu'on retire, pas le trajet lui-même. */
+                if (!isGpsGapRecovery) {
+                    d.score += (distanceMovedMeters * POINTS_PER_METER * currentMultiplier);
+                }
                 document.getElementById(`driver-card-${d.id}`).classList.remove('speeding');
             }
             // Orange : dans la marge des 5% (avertissement) OU grâce active après baisse de panneau
@@ -1124,7 +1883,13 @@
             if (effectiveDest) {
                 const dest = turf.point(effectiveDest);
                 const distToDestination = turf.distance(to, dest, {units: 'kilometers'}) * 1000;
-                if (distToDestination <= 50) {
+                /* ⚠ RIEN NE S'AFFICHE À L'APPROCHE, et c'est délibéré. Un bouton central
+                   « Je suis arrivé » a été piloté ici quelques heures le 21/08/2026, dès
+                   500 m de la destination : il proposait de couper le guidage à quelqu'un
+                   qui roule encore et en a toujours besoin. Un trajet ne se termine que
+                   lorsqu'on est ARRIVÉ à l'adresse — c'est-à-dire au bloc ci-dessous, ou
+                   par le geste délibéré de la bulle 🏁 de la hotbox. */
+                if (distToDestination <= ARRIVAL_AUTO_M) {
                     setText(`dist-left-${d.id}`, "0.00 km");
                     setText(`eta-${d.id}`, "Arrivé");
                     // Si c'est un navWaypoint (trajet libre), checkNavWaypointArrival s'en charge
@@ -1135,8 +1900,25 @@
                         clearRouteLine();
                         currentTurfLine = null; exactEndCoords = null; d.finished = true;
                         if (animationFrame) { cancelAnimationFrame(animationFrame); animationFrame = null; }
-                        triggerArrivedGlow();
                         hideNextTurnPanel();
+                        /* ═══ LA FENÊTRE D'ARRIVÉE S'OUVRE D'ELLE-MÊME (21/08/2026) ═══
+                           Le bouton central restait à attendre un appui alors que tout était
+                           déjà joué : le tracé est effacé, l'animation arrêtée, `finished`
+                           posé — le trajet EST fini à cet instant, le score n'évolue plus.
+                           Faire réclamer un appui pour l'annoncer n'ajoutait qu'une étape.
+                           Le bouton central garde tout son rôle en amont, dans la zone de
+                           déclaration (« Je suis arrivé », jusqu'à 500 m) : c'est là qu'un
+                           appui décide vraiment de quelque chose.
+
+                           ⚠ DIFFÉRÉ, ET NON APPELÉ TEL QUEL. `confirmArrival()` enchaîne sur
+                           `stopCourse()`, qui retire les marqueurs des conducteurs
+                           (`d.marker = null`) — or on est ICI au milieu de
+                           `handleRealMovement()`, qui continue de lire `d` après ce bloc.
+                           L'appeler en direct détruirait l'objet sous les pieds de la
+                           fonction qui l'utilise encore. Le délai laisse en prime voir une
+                           demi-seconde la carte à l'arrivée avant que la fenêtre ne la
+                           couvre. */
+                        setTimeout(() => tenterSansBruit(confirmArrival, 'arrivee/auto'), 600);
                     }
                     // Si trajet libre avec arrêt : checkNavWaypointArrival gère la suite (shift + recalc)
                 }
@@ -1201,7 +1983,6 @@
             document.getElementById('ui-panel').style.display = 'none';
             document.getElementById('info-widget').style.display = 'block';
             document.getElementById('info-widget').classList.remove('open');
-            document.getElementById('info-badge').classList.remove('arrived-pulse');
 
             clearRouteLine();
             if (animationFrame) cancelAnimationFrame(animationFrame);
@@ -1210,6 +1991,9 @@
             hideNextTurnPanel();
 
             currentTurfLine = null; exactEndCoords = null; currentVisualBearing = 0;
+            // Trajet libre : le départ est la position courante, il n'y a pas d'itinéraire
+            // calculé d'où tirer un point d'origine.
+            _beginTripPlaces(true, lastRealCoords);
             drivers.forEach(d => {
                 if (d.marker) d.marker.remove();
                 d.dist = 0; d.score = 0; d.timeHours = 0; d.actualSpeed = 0; d.speedSmoothed = 0;
@@ -1287,7 +2071,6 @@
             document.getElementById('ui-panel').style.display = 'none';
             document.getElementById('info-widget').style.display = 'block';
             document.getElementById('info-widget').classList.remove('open');
-            document.getElementById('info-badge').classList.remove('arrived-pulse');
 
             statusBox.style.color = "#ff6b6b"; statusBox.innerText = "Préparation de l'itinéraire...";
 
@@ -1310,6 +2093,7 @@
                 const endCoords = precomputedRoute.endCoords;
                 const osrmData = precomputedRoute.osrmData;
                 exactEndCoords = endCoords;
+                _beginTripPlaces(false, startCoords);
 
                 const geojsonRoute = osrmData.routes[0].geometry;
                 // Sommer les legs pour distance et durée (route avec waypoint station = 2 legs)
@@ -1327,15 +2111,30 @@
                 setRouteLine(geojsonRoute.coordinates);
                 currentTurfLine = turf.lineString(geojsonRoute.coordinates);
                 fullRouteLine = turf.lineString(geojsonRoute.coordinates);
+                // Ralentissements dès le départ. Muet sur une reprise du cache hors ligne
+                // (pas de champ `traffic`) : la couleur reviendra au premier rafraîchissement.
+                setRouteCongestion(route0, osrmData.traffic === true);
                 buildRouteSteps(osrmData);
                 buildMaxspeedAnnotations(osrmData);
                 updateGL3DRoute();
 
-                restAreas = []; nextRestThresholdHours = REST_STOP_INTERVAL_HOURS;
+                nextRestThresholdHours = REST_STOP_INTERVAL_HOURS;
                 restStopTracking = { active: false, areaName: null, enteredAt: null, validated: false };
                 simFrozenAtRestArea = false; simTestAreaDistKm = null;
-                document.getElementById('rest-stop-banner').classList.remove('visible');
-                if (totalDurationHours > REST_STOP_INTERVAL_HOURS) fetchRestAreasAlongRoute();
+                restStopProposed = false;
+                dismissRestStopBanner();
+                /* ⚠ NE PAS vider `restAreas` ici. L'aperçu vient de les relever pour ce même
+                   tracé (js/16) ; les jeter forcerait un second appel Overpass — 4 à 10 s et
+                   des pictos qui disparaissent puis reviennent sous les yeux au moment du
+                   départ. La signature de tracé (js/09) décide : tracé identique ⇒ on
+                   réutilise, tracé différent ⇒ elle refait le relevé elle-même.
+                   Le `else` reste nécessaire : sous le seuil, aucun appel n'a lieu et des
+                   aires relevées pour un trajet précédent survivraient à la course suivante. */
+                if (totalDurationHours > REST_STOP_INTERVAL_HOURS) {
+                    fetchRestAreasAlongRoute(totalDurationHours);
+                } else {
+                    restAreas = []; _restAreasRouteSig = null; clearRestStopPlan();
+                }
 
                 if (!isUserPanning) {
                     map.resize();
@@ -1457,11 +2256,19 @@
                         if (d.actualSpeed === 0) d.actualSpeed = targetSpeed;
                         d.actualSpeed += (targetSpeed - d.actualSpeed) * 0.1;
 
-                        if (d.id === drivers[0].id && testPauseSimEnabled && simTestAreaDistKm === null && restAreas.length > 0 && fullRouteLine) {
-                            try {
-                                const snapped = turf.nearestPointOnLine(fullRouteLine, turf.point([restAreas[0].lng, restAreas[0].lat]), { units: 'kilometers' });
-                                simTestAreaDistKm = snapped.properties.location;
-                            } catch (e) { simTestAreaDistKm = -1; }
+                        /* Cible du gel de test : la PREMIÈRE ZONE DU PLAN quand il y en a un,
+                           et non plus la première aire trouvée sur le trajet. Les deux
+                           divergent presque toujours — `restAreas[0]` peut se situer à vingt
+                           minutes du départ, bien avant le seuil des 1h50 : la simu s'y
+                           arrêtait donc avant même que la bannière n'ait eu lieu d'être. */
+                        if (d.id === drivers[0].id && testPauseSimEnabled && simTestAreaDistKm === null && fullRouteLine) {
+                            const cible = restStopPlan.length > 0 ? restStopPlan[0] : restAreas[0];
+                            if (cible) {
+                                try {
+                                    const snapped = turf.nearestPointOnLine(fullRouteLine, turf.point([cible.lng, cible.lat]), { units: 'kilometers' });
+                                    simTestAreaDistKm = snapped.properties.location;
+                                } catch (e) { simTestAreaDistKm = -1; }
+                            }
                         }
 
                         if (d.dist < simState.distanceKm) d.dist += d.actualSpeed * dtHours;
@@ -1486,8 +2293,15 @@
                             d.finished = true;
                             if (animationFrame) { cancelAnimationFrame(animationFrame); animationFrame = null; }
                             if (d.id === drivers[0].id) {
-                                triggerArrivedGlow();
                                 hideNextTurnPanel();
+                                /* Même ouverture automatique qu'en GPS réel — voir le
+                                   commentaire détaillé dans `handleRealMovement()`. Les deux
+                                   détections d'arrivée doivent se comporter pareil, sans
+                                   quoi la simulation cesserait de valider ce que fait
+                                   l'appareil. Différé pour la même raison : `stopCourse()`
+                                   retire les marqueurs, et on est ici dans la boucle qui
+                                   les utilise. */
+                                setTimeout(() => tenterSansBruit(confirmArrival, 'arrivee/autoSim'), 600);
                             }
                         }
 

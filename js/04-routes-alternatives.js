@@ -69,7 +69,14 @@
             const distKm = route.distance / 1000;
             const durationH = route.duration / 3600;
             const maxPts = route.distance * POINTS_PER_METER;
+            // Les zones de pause portent sur le tracé RETENU : changer d'alternative les
+            // déplace. La signature de tracé (js/09) évite l'appel Overpass quand le
+            // nouveau tracé partage les aires déjà relevées.
+            tenterSansBruit(() => fetchRestAreasAlongRoute(durationH, currentTurfLine),
+                            'selectAlternativeRoute/airesDeRepos');
+
             document.getElementById('preview-time').innerText = formatTime(durationH);
+            document.getElementById('preview-arrival').innerText = formatArrivalTime(durationH);
             document.getElementById('preview-distance').innerText = distKm.toFixed(1) + " km";
             document.getElementById('preview-points').innerText = maxPts.toFixed(2) + " pts";
 
@@ -79,13 +86,16 @@
             const tollCost = avoidTolls ? 0 : estimateTollCost(selectedOsrmData);
             const totalCost = fuelCost + tollCost;
             document.getElementById('preview-fuel-cost').innerText = fuelCost.toFixed(2) + " €";
-            document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : (tollCost > 0 ? "~" + tollCost.toFixed(2) + " €" : "Aucun");
+            document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : formatTollEstimate(tollCost);
             document.getElementById('preview-total-cost').innerText = "~" + totalCost.toFixed(2) + " €";
             updateFuelCostLabel();
 
-            // Mettre à jour modalPendingRoute pour pointer sur la route choisie
+            // Mettre à jour modalPendingRoute pour pointer sur la route choisie.
+            // ⚠ `traffic` est REPORTÉ : les alternatives viennent de la même réponse, donc
+            // du même profil. Le perdre ici ferait partir le trajet sans ses ralentissements
+            // colorés (js/03), qui ne se dessinent que sur une réponse `driving-traffic`.
             if (modalPendingRoute) {
-                modalPendingRoute.osrmData = { code: "Ok", routes: [route] };
+                modalPendingRoute.osrmData = { code: "Ok", routes: [route], traffic: modalPendingRoute.osrmData?.traffic };
             }
 
             // Réanalyser les ZFE sur l'itinéraire choisi

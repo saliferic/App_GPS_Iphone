@@ -156,7 +156,8 @@
             touchPitch: false
         });
         map.addControl(new mapboxgl.AttributionControl({ compact: true }));
-        map.addControl(new mapboxgl.NavigationControl({ showCompass: false, showZoom: true }), 'bottom-right');
+        // Boutons +/- de zoom retirés (18/08/2026) : le zoom au pincement suffit, ils
+        // faisaient doublon en bas à droite avec les autres commandes flottantes.
 
         // Le tracé de l'itinéraire est une source/couche GeoJSON (remplace l'ancien L.polyline).
         // routeLineCoords garde les coordonnées courantes en mémoire pour pouvoir ré-appliquer le
@@ -339,6 +340,82 @@
                         }
                     });
                 }
+                /* RALENTISSEMENTS SUR LE TRACÉ SUIVI (18/08/2026). Posé au-dessus de
+                   `route-line` : la couleur doit se lire PAR-DESSUS le chemin lumineux, pas
+                   à côté. Une seule couche sert la 2D et la 3D — `updateGL3DRoute()` est un
+                   talon vide depuis la migration, la vue 3D n'étant qu'un `pitch` sur cette
+                   même carte.
+                   ⚠ Les couleurs sont CELLES DU CALQUE TRAFIC GLOBAL, à l'identique : c'est
+                   la même information, restreinte à l'itinéraire. Deux palettes finiraient
+                   par diverger et le rouge ne voudrait plus dire la même chose selon qu'on
+                   regarde la route ou la carte. `unknown` et `low` ne sont pas dessinés du
+                   tout — même règle et même raison que le filtre du calque global : ne
+                   peindre que ce qui mérite un regard, et laisser le néon partout ailleurs. */
+                /* ⚠ `map.setStyle()` (bascule Trafic ET bascule Jour/Nuit) DÉTRUIT toutes les
+                   sources personnalisées ; `setupMapLayers()` les recrée VIDES. La source
+                   `route` s'en remet seule parce que la boucle rAF la réalimente 60 fois par
+                   seconde — c'est ce qui masque le problème pour tout le reste. Celle-ci
+                   n'est alimentée que par une réponse Mapbox : sans restauration, les
+                   couleurs disparaîtraient jusqu'au rafraîchissement suivant, soit 5 minutes.
+                   Le drapeau ne se lève qu'à une VRAIE recréation : `setupMapLayers()` tourne
+                   à chaque `idle`, on ne réinjecte donc pas la géométrie en boucle. */
+                let _sourcesRecreees = false;
+                if (!map.getSource('route-congestion')) {
+                    map.addSource('route-congestion', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+                    _sourcesRecreees = true;
+                }
+                if (!map.getLayer('route-congestion-glow')) {
+                    map.addLayer({
+                        id: 'route-congestion-glow', type: 'line', source: 'route-congestion', slot: 'top',
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: {
+                            'line-color': ['match', ['get', 'congestion'],
+                                'moderate', '#f2c037', 'heavy', '#ef6c3a', 'severe', '#c62828', 'rgba(0,0,0,0)'],
+                            'line-width': 15, 'line-blur': 7, 'line-opacity': 0.4, 'line-emissive-strength': 1
+                        }
+                    });
+                }
+                if (!map.getLayer('route-congestion-line')) {
+                    map.addLayer({
+                        id: 'route-congestion-line', type: 'line', source: 'route-congestion', slot: 'top',
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: {
+                            'line-color': ['match', ['get', 'congestion'],
+                                'moderate', '#f2c037', 'heavy', '#ef6c3a', 'severe', '#c62828', 'rgba(0,0,0,0)'],
+                            'line-width': 6, 'line-opacity': 0.95, 'line-emissive-strength': 1
+                        }
+                    });
+                }
+
+                /* Tracé de la PROPOSITION d'itinéraire plus rapide (voir refreshEtaFromTraffic()
+                   dans js/19). Ajouté APRÈS `route-*` donc rendu PAR-DESSUS l'itinéraire suivi :
+                   c'est une comparaison, le conducteur doit voir d'un coup d'œil où le nouveau
+                   tracé quitte l'ancien. En pointillés et en vert pour qu'il ne soit jamais
+                   confondu avec la route blanche que l'on suit réellement — tant qu'il n'a pas
+                   dit oui, il ne suit toujours que celle-là. Source vide au repos. */
+                if (!map.getSource('reroute-preview')) {
+                    map.addSource('reroute-preview', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} } });
+                    _sourcesRecreees = true;   // même raison que pour `route-congestion`
+                }
+                if (!map.getLayer('reroute-preview-glow')) {
+                    map.addLayer({
+                        id: 'reroute-preview-glow', type: 'line', source: 'reroute-preview', slot: 'top',
+                        layout: { 'line-cap': 'round', 'line-join': 'round' },
+                        paint: { 'line-color': '#2ed573', 'line-width': 14, 'line-blur': 7, 'line-opacity': 0.35, 'line-emissive-strength': 1 }
+                    });
+                }
+                if (!map.getLayer('reroute-preview-line')) {
+                    map.addLayer({
+                        id: 'reroute-preview-line', type: 'line', source: 'reroute-preview', slot: 'top',
+                        layout: { 'line-cap': 'butt', 'line-join': 'round' },
+                        paint: { 'line-color': '#7bed9f', 'line-width': 5, 'line-opacity': 0.95, 'line-dasharray': [2, 1.4], 'line-emissive-strength': 1 }
+                    });
+                }
+                /* Réalimentation des deux sources qui ne se réparent pas toutes seules — la
+                   proposition d'itinéraire est la plus visible des deux : sa bannière
+                   resterait à l'écran, à annoncer « bifurcation dans 4,2 km », sans le
+                   moindre tracé pour la montrer. */
+                if (_sourcesRecreees) restoreRouteOverlays();
                 applyRouteLineColors();
                 // Bâtiments 3D : les styles "Standard" (comme le mode nuit perso) les incluent nativement,
                 // mais les styles classiques (streets-v12, navigation-day-v1) n'ont pas d'extrusion.
@@ -434,6 +511,171 @@
             routeLineCoords = null;
             const src = map.getSource('route');
             if (src) src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} });
+            clearRouteCongestion();
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           RALENTISSEMENTS SUR LE TRACÉ SUIVI (18/08/2026)
+           ═══════════════════════════════════════════════════════════════════
+           Le calque Trafic global colorait toute la carte ; il ne disait rien de ce qui
+           attend le conducteur SUR SA ROUTE, seule question qui compte en roulant. Ces
+           fonctions peignent la congestion Mapbox sur le tracé lui-même.
+
+           ⚠ AUCUNE REQUÊTE SUPPLÉMENTAIRE. La donnée arrive avec les itinéraires que l'app
+           demande déjà : au départ (`startCourse`), à chaque changement de trajet
+           (`applyRouteResponse`) et surtout au rafraîchissement d'ETA, qui redemande de
+           toute façon un `driving-traffic` frais TOUTES LES 5 MINUTES. La géométrie de ce
+           dernier est déjà celle du trajet restant : elle se colore telle quelle, sans le
+           moindre remappage d'indices.
+
+           ⚠ SEULS `moderate`, `heavy` et `severe` SONT DESSINÉS. `low` et `unknown` ne le
+           sont pas — même règle que le filtre du calque global, et même raison : peindre le
+           fluide en vert couvrirait le chemin lumineux d'une couleur qui n'apprend rien.
+           Sur un trajet dégagé, l'écran reste donc identique à ce qu'il était : la couleur
+           n'apparaît que là où il y a quelque chose à savoir.
+
+           ⚠ `avecTrafic` FAIT FOI, et c'est le même drapeau que l'ETA. Sur le repli
+           `driving`, Mapbox ne renvoie AUCUNE congestion — ce qui ne veut pas dire « pas de
+           bouchon » mais « pas d'information ». Peindre du fluide dans ce cas serait un
+           mensonge par omission, exactement celui que le refus n°1 de
+           `refreshEtaFromTraffic()` écarte déjà côté durée. */
+        const CONGESTION_DESSINEE = ['moderate', 'heavy', 'severe'];
+        const CONGESTION_MAJ_MS   = 2000;
+        let _congestionLine       = null;   // tracé auquel se rapportent les `finKm` ci-dessous
+        let _congestionProgressAt = 0;
+        /* Dernière collection posée, CONSERVÉE en mémoire : c'est elle qu'on réinjecte après
+           un changement de style, qui détruit la source (voir `restoreRouteOverlays()`). */
+        let _congestionData       = { type: 'FeatureCollection', features: [] };
+
+        function clearRouteCongestion() {
+            _congestionLine = null;
+            _congestionData = { type: 'FeatureCollection', features: [] };
+            try {
+                const src = map.getSource && map.getSource('route-congestion');
+                if (src) src.setData(_congestionData);
+            } catch (e) { /* style pas encore chargé : rien à effacer */ }
+        }
+
+        /* Réalimente les sources que `setupMapLayers()` vient de recréer vides après un
+           `setStyle()`. Appelée UNIQUEMENT sur recréation réelle, pas à chaque `idle`.
+           La proposition d'itinéraire appartient à js/19, qui seul sait s'il y en a une en
+           cours : on l'appelle plutôt que d'aller lire sa variable depuis ici. */
+        function restoreRouteOverlays() {
+            try {
+                const src = map.getSource && map.getSource('route-congestion');
+                if (src) src.setData(_congestionData);
+                _congestionProgressAt = 0;   // le prochain fix GPS repose le filtre de rognage
+            } catch (e) { if (DEBUG) console.warn('[Congestion] restauration impossible :', e); }
+            try { if (typeof redrawReroutePreview === 'function') redrawReroutePreview(); }
+            catch (e) { if (DEBUG) console.warn('[Reroute] restauration impossible :', e); }
+        }
+
+        function setRouteCongestion(route, avecTrafic) {
+            try {
+                /* ⚠ CE REFUS DOIT SE VOIR. Il a été muet une journée, et c'est ce silence
+                   qui a coûté le diagnostic du 18/08/2026 : « aucune couleur » avait l'air
+                   d'un bug de rendu, alors que la cause était un `traffic` perdu deux
+                   fichiers plus tôt en reconstruisant `osrmData`. Un refus légitime doit
+                   quand même dire son nom. */
+                if (!avecTrafic || !route) {
+                    if (DEBUG) console.log('[Congestion] rien peint —',
+                        !route ? 'aucune route fournie'
+                               : 'traffic ≠ true (profil de repli, OU drapeau perdu par une reconstruction de osrmData)');
+                    clearRouteCongestion();
+                    return;
+                }
+                const coords = route.geometry && route.geometry.coordinates;
+                const legs   = route.legs || [];
+                if (!coords || coords.length < 2 || !legs.length) { clearRouteCongestion(); return; }
+
+                /* Les annotations sont PAR LEG, et deux legs consécutifs PARTAGENT leur
+                   coordonnée de jonction : le leg k couvre les segments [c, c+len[, le
+                   suivant repart de c+len. La somme des longueurs vaut donc exactement
+                   `coords.length - 1`. Concaténer sans tenir ce compte décale toutes les
+                   couleurs d'un cran par étape — invisible sur un trajet direct, faux dès
+                   le premier arrêt intermédiaire. */
+                const classes = [];
+                const metres  = [];
+                for (const l of legs) {
+                    const a = l.annotation || {};
+                    const c = a.congestion || [];
+                    const d = a.distance   || [];
+                    for (let i = 0; i < c.length; i++) { classes.push(c[i]); metres.push(d[i] || 0); }
+                }
+                /* Un décalage donnerait des couleurs FAUSSES. On préfère alors ne rien
+                   peindre : un tracé sans couleur se lit « pas d'information », un tracé
+                   mal coloré annonce un bouchon là où il n'y en a pas. */
+                if (classes.length !== coords.length - 1) {
+                    if (DEBUG) console.warn('[Congestion] annotations désalignées :',
+                                            classes.length, 'pour', coords.length - 1, 'segments');
+                    clearRouteCongestion();
+                    return;
+                }
+
+                /* Un tronçon par SUITE de segments de même classe : sans ce regroupement on
+                   poserait un objet par segment, soit plusieurs milliers de features sur un
+                   long trajet, pour dessiner exactement la même chose. */
+                const features = [];
+                let cumulKm = 0, i = 0;
+                while (i < classes.length) {
+                    const cls = classes[i];
+                    const departKm = cumulKm;
+                    let j = i, longueurKm = 0;
+                    while (j < classes.length && classes[j] === cls) { longueurKm += (metres[j] || 0) / 1000; j++; }
+                    if (CONGESTION_DESSINEE.indexOf(cls) !== -1) {
+                        features.push({
+                            type: 'Feature',
+                            geometry: { type: 'LineString', coordinates: coords.slice(i, j + 1) },
+                            properties: { congestion: cls, finKm: departKm + longueurKm }
+                        });
+                    }
+                    cumulKm += longueurKm;
+                    i = j;
+                }
+
+                _congestionData = { type: 'FeatureCollection', features };
+                const src = map.getSource && map.getSource('route-congestion');
+                if (src) src.setData(_congestionData);
+                /* ⚠ Le filtre de rognage porte sur les `finKm` de l'ANCIENNE géométrie. Le
+                   laisser en place masquerait presque tout le nouveau tracé : celui du
+                   rafraîchissement d'ETA repart de la position du véhicule, donc de 0 km,
+                   alors que le filtre en retient encore 40. On le lève ici, et le prochain
+                   fix GPS le repose sur les bonnes valeurs. */
+                if (map.getLayer && map.getLayer('route-congestion-line')) {
+                    map.setFilter('route-congestion-line', null);
+                    map.setFilter('route-congestion-glow', null);
+                }
+                _congestionLine       = features.length ? turf.lineString(coords) : null;
+                _congestionProgressAt = 0;   // le prochain fix GPS rogne sans attendre
+                if (DEBUG) console.log('[Congestion]', features.length, 'tronçon(s) ralenti(s) sur le tracé');
+            } catch (e) {
+                if (DEBUG) console.warn('[Congestion] construction impossible :', e);
+                clearRouteCongestion();
+            }
+        }
+
+        /* Rognage de ce qui est DÉJÀ PASSÉ. Volontairement par FILTRE et non en redécoupant
+           la géométrie : `setRouteLine()` tourne dans la boucle rAF à 60 images/seconde, et
+           reconstruire une collection de tronçons à cette cadence coûterait bien plus cher
+           que tout le reste du rendu. Ici on ne touche qu'à un filtre, et seulement toutes
+           les 2 secondes — appelé depuis la frame GPS, pas depuis la boucle d'animation.
+           Contrepartie assumée : le tronçon en cours reste peint jusqu'à ce qu'on en sorte,
+           donc un peu de couleur subsiste derrière le véhicule. Sur une portion ralentie,
+           c'est même l'information juste : on est encore dedans. */
+        function updateRouteCongestionProgress(lng, lat) {
+            if (!_congestionLine) return;
+            const now = Date.now();
+            if (now - _congestionProgressAt < CONGESTION_MAJ_MS) return;
+            _congestionProgressAt = now;
+            try {
+                if (!map.getLayer || !map.getLayer('route-congestion-line')) return;
+                const km = turf.nearestPointOnLine(_congestionLine, turf.point([lng, lat]),
+                                                   { units: 'kilometers' }).properties.location;
+                if (!Number.isFinite(km)) return;
+                const filtre = ['>', ['get', 'finKm'], km];
+                map.setFilter('route-congestion-line', filtre);
+                map.setFilter('route-congestion-glow', filtre);
+            } catch (e) { /* silencieux : un tronçon de trop à l'écran n'est pas une panne */ }
         }
         function getRouteBounds() {
             if (!routeLineCoords || routeLineCoords.length < 2) return null;

@@ -159,6 +159,352 @@
             return history.filter(t => now - t.date <= ms);
         }
 
+        /* ═══════════════════════════════════════════════════════════════
+           === HISTORIQUE DES TRAJETS — LISTE DÉTAILLÉE (21/08/2026) ===
+           ═══════════════════════════════════════════════════════════════
+
+           `gps_trip_history` existait et se remplissait depuis longtemps, mais AUCUN
+           écran ne montrait les trajets un par un : « Mes statistiques » n'en fait que
+           des agrégats (KPI + courbes), où l'on ne peut désigner aucun trajet précis.
+           Cette page comble ce manque et ne duplique rien — même source de données,
+           lecture différente : la synthèse d'un côté, le relevé de l'autre.
+
+           ⚠ CONSTRUCTION PAR NŒUDS, PAS PAR `innerHTML` — contrairement au reste du
+           modal statistiques, et c'est délibéré : les seules chaînes affichées ici qui
+           ne sont pas des nombres sont des ADRESSES, c'est-à-dire du texte tapé par
+           l'utilisateur ou renvoyé par un géocodeur. Une adresse contenant `&` ou `<`
+           casserait l'affichage en `innerHTML`. Les nombres du modal statistiques
+           n'ont jamais posé ce problème, d'où la différence de traitement.
+
+           La mise en forme (date, durée, distance, libellé de lieux) est dans
+           `js/00-noyau-calculs.js` et couverte par `node tests/noyau.test.js` — ici il
+           ne reste que du DOM. */
+
+        /* ═══ REGROUPEMENT ANNÉE → MOIS → JOUR (21/08/2026) ═══
+
+           La liste à plat devenait interminable : l'historique retient jusqu'à 365 trajets,
+           et une pagination « afficher 40 de plus » ne faisait que repousser le problème
+           sans jamais permettre d'atteindre un mois précis. Le repli par sections y répond
+           mieux, et remplace donc la pagination plutôt que de s'y ajouter.
+
+           ⚠ CONSTRUCTION PARESSEUSE : le contenu d'un mois n'est bâti qu'à sa PREMIÈRE
+           ouverture (`_thBuilt`). C'est ce qui remplace la pagination — poser d'emblée les
+           365 lignes, même masquées par un `display:none`, coûterait exactement ce que
+           l'ancien découpage en paquets cherchait à éviter.
+
+           Le découpage lui-même est dans `groupTripsByDate()` (js/00, testé) ; ici il ne
+           reste que du DOM. */
+        const _thOpen  = new Set();   // clés de sections dépliées ('y:2026', 'm:2026-7')
+        const _thBuilt = new Set();   // clés de sections déjà construites
+
+        function renderTripHistory() {
+            const host = document.getElementById('trip-history-list');
+            if (!host) return;
+            host.textContent = '';
+            _thBuilt.clear();
+
+            const groupes = groupTripsByDate(getTripHistory());
+
+            if (!groupes.length) {
+                const vide = document.createElement('div');
+                vide.className = 'stats-empty';
+                vide.textContent = 'Aucun trajet enregistré pour le moment.';
+                host.appendChild(vide);
+                const aide = document.createElement('div');
+                aide.className = 'trip-history-hint';
+                aide.textContent = 'Chaque trajet terminé viendra s\'ajouter ici automatiquement.';
+                host.appendChild(aide);
+                return;
+            }
+
+            /* Ouverture par défaut : l'année la plus récente et son mois le plus récent —
+               c'est-à-dire les trajets d'à peine hier, ceux qu'on vient chercher neuf fois
+               sur dix. Tout replier obligerait à deux appuis avant de voir quoi que ce
+               soit, et donnerait un écran vide à l'ouverture. Posé une seule fois : après
+               quoi c'est le choix de l'utilisateur qui fait foi, y compris s'il replie tout. */
+            if (!_thOpen.size) {
+                _thOpen.add('y:' + groupes[0].year);
+                if (groupes[0].months.length) {
+                    _thOpen.add(`m:${groupes[0].year}-${groupes[0].months[0].month}`);
+                }
+            }
+
+            groupes.forEach(an => host.appendChild(_buildYearSection(an)));
+        }
+
+        /* Une section repliable = un en-tête + un corps. Le `remplir` n'est appelé qu'à la
+           première ouverture, jamais à chaque bascule : replier puis rouvrir doit être
+           instantané et ne rien reconstruire. */
+        function _buildCollapsible(cle, classe, titre, compte, remplir) {
+            const bloc = document.createElement('div');
+            bloc.className = classe;
+
+            const head = document.createElement('button');
+            head.type = 'button';
+            head.className = classe + '-head';
+
+            const lbl = document.createElement('span');
+            lbl.className = classe + '-label';
+            lbl.textContent = titre;
+            const cpt = document.createElement('span');
+            cpt.className = 'th-count-pill';
+            cpt.textContent = String(compte);
+            const chev = document.createElement('span');
+            chev.className = 'th-chevron';
+            chev.textContent = '›';
+            head.appendChild(lbl); head.appendChild(cpt); head.appendChild(chev);
+
+            const body = document.createElement('div');
+            body.className = classe + '-body';
+
+            const ouvrir = (ouvert) => {
+                bloc.classList.toggle('open', ouvert);
+                head.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+                if (ouvert && !_thBuilt.has(cle)) { _thBuilt.add(cle); remplir(body); }
+            };
+            head.addEventListener('click', () => {
+                const ouvert = !_thOpen.has(cle);
+                if (ouvert) _thOpen.add(cle); else _thOpen.delete(cle);
+                ouvrir(ouvert);
+            });
+
+            bloc.appendChild(head);
+            bloc.appendChild(body);
+            ouvrir(_thOpen.has(cle));
+            return bloc;
+        }
+
+        function _buildYearSection(an) {
+            return _buildCollapsible('y:' + an.year, 'th-year', String(an.year), an.count, body => {
+                an.months.forEach(mois => body.appendChild(_buildMonthSection(an.year, mois)));
+            });
+        }
+
+        function _buildMonthSection(annee, mois) {
+            return _buildCollapsible(`m:${annee}-${mois.month}`, 'th-month', mois.label, mois.count, body => {
+                mois.days.forEach(jour => {
+                    /* Le jour n'est PAS repliable : à ce niveau il ne contient qu'un ou deux
+                       trajets, et un troisième cran de repli coûterait un appui de plus pour
+                       ne rien raccourcir. C'est un simple intertitre. */
+                    const titre = document.createElement('div');
+                    titre.className = 'th-day';
+                    titre.textContent = jour.label;
+                    body.appendChild(titre);
+                    jour.trips.forEach(t => body.appendChild(_buildTripRow(t)));
+                });
+            });
+        }
+
+        /* Une ligne = un en-tête toujours visible + un détail replié. Le détail n'est PAS
+           construit à la demande : le replier/déplier doit être instantané, et une ligne
+           de détail ne coûte que quelques nœuds. */
+        function _buildTripRow(t) {
+            const row = document.createElement('div');
+            row.className = 'trip-row';
+
+            const head = document.createElement('button');
+            head.type = 'button';
+            head.className = 'trip-row-head';
+            head.setAttribute('aria-expanded', 'false');
+
+            const gauche = document.createElement('div');
+            gauche.className = 'trip-row-main';
+
+            /* L'HEURE seule : la date est portée par l'intertitre du jour, juste au-dessus.
+               La répéter sur chaque ligne remplirait la largeur utile d'une information
+               déjà donnée, au détriment de l'adresse qui, elle, doit tenir. */
+            const dateEl = document.createElement('div');
+            dateEl.className = 'trip-row-date';
+            dateEl.textContent = formatTripTime(t.date);
+            gauche.appendChild(dateEl);
+
+            /* `libelle` vaut null pour les entrées archivées AVANT que les lieux ne soient
+               enregistrés (voir `tripPlacesLabel`). On n'affiche alors aucune ligne de
+               lieu — plutôt que « undefined → undefined » ou une ligne vide qui laisserait
+               croire à un bug. Le manque se comble de lui-même au fil des trajets. */
+            const places = tripPlacesLabel(t);
+            if (places.libelle) {
+                const lieuEl = document.createElement('div');
+                lieuEl.className = 'trip-row-places';
+                lieuEl.textContent = places.libelle;
+                gauche.appendChild(lieuEl);
+            }
+
+            const resume = document.createElement('div');
+            resume.className = 'trip-row-summary';
+            resume.textContent = `${formatTripDistance(t.distKm)} · ${formatTripDuration(t.durationMin)}`;
+            gauche.appendChild(resume);
+
+            const droite = document.createElement('div');
+            droite.className = 'trip-row-score';
+            const pts = document.createElement('div');
+            pts.className = 'trip-row-pts';
+            pts.textContent = `${Math.round(Number(t.score) || 0)}`;
+            const ptsU = document.createElement('span');
+            ptsU.className = 'trip-row-pts-unit';
+            ptsU.textContent = 'pts';
+            pts.appendChild(ptsU);
+            droite.appendChild(pts);
+
+            /* Le drapeau de conduite parfaite est ce que l'utilisateur cherche en premier
+               dans la liste — d'où sa place dans l'en-tête et non dans le détail. */
+            const flag = document.createElement('div');
+            flag.className = 'trip-row-flag ' + (t.hasSpeeded ? 'bad' : 'ok');
+            flag.textContent = t.hasSpeeded ? 'Excès' : 'Parfait';
+            droite.appendChild(flag);
+
+            const chev = document.createElement('span');
+            chev.className = 'trip-row-chevron';
+            chev.textContent = '›';
+            droite.appendChild(chev);
+
+            head.appendChild(gauche);
+            head.appendChild(droite);
+
+            const detail = document.createElement('div');
+            detail.className = 'trip-row-detail';
+            _fillTripDetail(detail, t);
+
+            head.addEventListener('click', () => {
+                const ouvert = row.classList.toggle('open');
+                head.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+            });
+
+            row.appendChild(head);
+            row.appendChild(detail);
+            return row;
+        }
+
+        /* ═══ RELANCER UN TRAJET DEPUIS L'HISTORIQUE (21/08/2026) ═══
+
+           Le départ comme l'arrivée d'un trajet passé sont des destinations valables : on
+           refait la même course, ou on rentre par où l'on est venu. Le geste NE
+           réimplémente rien — il appelle `goToCoords()` (js/20), le parcours partagé avec
+           « Go home » / « Go work », qui gère à lui seul les trois cas : à l'arrêt (aperçu
+           de trajet), en roulant (changement de destination immédiat) et « vous y êtes
+           déjà ». Voir l'avertissement en tête de js/20 : ce parcours ne se recopie pas.
+
+           ⚠ IL FAUT QUITTER L'HISTORIQUE AVANT DE LANCER, sinon le geste paraît sans effet :
+           l'aperçu de trajet s'ouvrirait DERRIÈRE la page pleine, qui couvre tout l'écran.
+           Et on ne referme pas en retirant la classe de l'overlay — `closeProfilSheet()`
+           seule sait rendre au panneau Profil le morceau de DOM qu'elle lui a emprunté. */
+        function goToTripPlace(coords, label) {
+            const ok = tenterSansBruit(() => {
+                _leaveTripHistoryUI();
+                /* `dejaLa` est formulé pour ce contexte : « Vous êtes déjà à votre
+                   domicile » n'aurait aucun sens pour l'étape d'un trajet passé. */
+                return goToCoords(coords, label, { dejaLa: 'Vous êtes déjà à cet endroit.' });
+            }, 'historique/goToTripPlace');
+            return ok === true;
+        }
+
+        /* En roulant, on ne rejoue PAS `switchMainTab('trajet')` : hors `nav-active` — le
+           cas du trajet libre — il rouvrirait le panneau Itinéraire par-dessus la carte au
+           milieu d'une course. On se contente alors de refermer ce qui est ouvert, et
+           `goToCoords()` prend la suite par la branche « changement de destination ». */
+        function _leaveTripHistoryUI() {
+            tenterSansBruit(closeProfilSheet, 'historique/closeSheet');
+            if (isCourseStarted) {
+                tenterSansBruit(closeNavPanelOverlay, 'historique/closeNavOverlay');
+                return;
+            }
+            tenterSansBruit(() => switchMainTab('trajet'), 'historique/switchTab');
+        }
+
+        /* Une extrémité du trajet : l'adresse COMPLÈTE (non tronquée, contrairement au
+           libellé compact de l'en-tête) et, si le point est exploitable, le bouton qui y
+           relance un trajet. Sans coordonnées — entrée d'avant leur archivage, ou départ
+           saisi sans fix GPS — l'adresse reste affichée mais n'est pas actionnable : un
+           bouton qui échouerait à l'appui vaut moins que pas de bouton. */
+        function _buildTripEndpoint(host, role, label, coords) {
+            if (!label && !coords) return;
+            const ligne = document.createElement('div');
+            ligne.className = 'trip-endpoint';
+
+            const txt = document.createElement('div');
+            txt.className = 'trip-endpoint-text';
+            const r = document.createElement('div');
+            r.className = 'trip-endpoint-role';
+            r.textContent = role;
+            const a = document.createElement('div');
+            a.className = 'trip-endpoint-addr';
+            a.textContent = label || 'Position enregistrée';
+            txt.appendChild(r); txt.appendChild(a);
+            ligne.appendChild(txt);
+
+            if (coords) {
+                const go = document.createElement('button');
+                go.type = 'button';
+                go.className = 'trip-endpoint-go';
+                go.textContent = 'Y aller';
+                go.title = `Lancer un trajet vers ${label || 'ce point'}`;
+                go.addEventListener('click', ev => {
+                    /* Le détail est le FRÈRE de l'en-tête dépliable, pas son enfant — un
+                       bouton dans un bouton serait du HTML invalide —, donc rien ne
+                       replierait la ligne ici aujourd'hui. `stopPropagation` protège le
+                       jour où la ligne deviendrait cliquable dans son ensemble : le geste
+                       « Y aller » ne doit jamais se doubler d'un repli. */
+                    ev.stopPropagation();
+                    goToTripPlace(coords, label || '');
+                });
+                ligne.appendChild(go);
+            }
+            host.appendChild(ligne);
+        }
+
+        function _fillTripDetail(host, t) {
+            /* Les deux extrémités occupent toute la largeur, AVANT la grille de chiffres :
+               ce sont elles qui portent l'action, et une adresse coupée en colonne d'une
+               grille à deux colonnes serait illisible. */
+            const bloc = document.createElement('div');
+            bloc.className = 'trip-endpoints';
+            _buildTripEndpoint(bloc, 'Départ', t.from || null, normalizeLngLat(t.fromCoords));
+            _buildTripEndpoint(bloc, 'Arrivée', t.to || null, normalizeLngLat(t.toCoords));
+            if (bloc.childNodes.length) host.appendChild(bloc);
+
+            const cell = (label, valeur, couleur) => {
+                const c = document.createElement('div');
+                c.className = 'trip-detail-cell';
+                const l = document.createElement('div');
+                l.className = 'trip-detail-label';
+                l.textContent = label;
+                const v = document.createElement('div');
+                v.className = 'trip-detail-value';
+                v.textContent = valeur;
+                if (couleur) v.style.color = couleur;
+                c.appendChild(l); c.appendChild(v);
+                host.appendChild(c);
+            };
+
+            const eco = Number(t.ecoScore);
+            /* Les entrées d'avant l'éco-conduite n'ont pas ce champ : « — » plutôt qu'un
+               0/100 qui accuserait à tort une conduite désastreuse. */
+            const ecoTexte = Number.isFinite(eco) ? `${Math.round(eco)}/100` : '—';
+            const ecoCouleur = Number.isFinite(eco)
+                ? (eco >= 80 ? '#28a745' : eco >= 50 ? '#f39c12' : '#e74c3c')
+                : null;
+
+            cell('Durée', formatTripDuration(t.durationMin));
+            cell('Vitesse moy.', Number.isFinite(Number(t.avgSpeedKmh)) ? `${Math.round(t.avgSpeedKmh)} km/h` : '—');
+            cell('Score éco', ecoTexte, ecoCouleur);
+            const brusques = (Number(t.hardBrakings) || 0) + (Number(t.hardAccels) || 0);
+            cell('Freinages / accél.', `${Number(t.hardBrakings) || 0} / ${Number(t.hardAccels) || 0}`,
+                 brusques > 0 ? '#f39c12' : '#28a745');
+        }
+
+        /* `_thOpen` n'est PAS réinitialisé ici : les sections dépliées la fois précédente le
+           restent. Quelqu'un qui consulte souvent un mois donné le retrouve ouvert, et le
+           coût est nul puisque la construction reste paresseuse. Seul le tout premier rendu
+           choisit une ouverture par défaut (voir `renderTripHistory`). */
+        function openTripHistory() {
+            renderTripHistory();
+        }
+
+        /* `updateTripHistoryCount()` a disparu avec le compteur de la ligne « Historique
+           des trajets » (22/08/2026), ainsi que ses trois appels — au chargement, à
+           l'enregistrement d'un trajet, et au rendu de la page. Elle n'écrivait qu'un
+           nombre que l'ouverture de la page donne déjà. */
+
         /* ═══ PAGES PLEINES DES SECTIONS DU PROFIL ═══
 
            Galerie des trophées, Mon véhicule et Aide à la conduite s'ouvraient en accordéon,
@@ -178,15 +524,17 @@
            La place d'origine est mémorisée par parent + frère suivant, et non par un index :
            un index deviendrait faux si un autre bloc était ajouté ou retiré entre-temps. */
         const PROFIL_SHEETS = {
-            /* `dot: true` remplace le pictogramme emoji par la puce blanche `.ui-dot`
-               (voir openProfilSheet). Une entrée sans ce drapeau garde son emoji dans
-               `title` : les deux formes coexistent volontairement, la bascule se fait
-               section par section. */
+            /* `dot: true` pose la puce blanche `.ui-dot` devant le titre (voir
+               openProfilSheet), à la place du pictogramme emoji d'origine. Les quatre
+               sections y sont passées ; le drapeau reste optionnel pour une entrée
+               future qui voudrait garder un emoji dans `title`. */
             trophy:  { bodyId: 'trophy-gallery-body', title: 'Galerie des trophées', dot: true,
                        onOpen: () => { try { renderTrophyGallery(); } catch (e) { logAppError('profilSheet/renderTrophyGallery', e); } } },
             vehicle: { bodyId: 'vehicle-panel-body',  title: 'Mon véhicule', dot: true,
                        onOpen: () => { try { initVehicleConfigUI(); } catch (e) { logAppError('profilSheet/initVehicleConfigUI', e); } } },
-            aide:    { bodyId: 'aide-conduite-body',  title: '🛟 Aide à la conduite' }
+            trips:   { bodyId: 'trip-history-body',   title: 'Historique des trajets', dot: true,
+                       onOpen: () => { try { openTripHistory(); } catch (e) { logAppError('profilSheet/openTripHistory', e); } } },
+            aide:    { bodyId: 'aide-conduite-body',  title: 'Aide à la conduite', dot: true }
         };
 
         let _profilSheetOpen = null;   // { bodyEl, parent, next }
@@ -603,8 +951,30 @@
             if (_positionIsEstimated || gpsSignalLost || msSinceLastGps > 3000) {
                 const accelLong = Math.abs(hy) > 0.2 ? hy : 0;
                 const deltaKmh = accelLong * dt * 3.6;
-                const maxLimit = (currentSpeedLimitKmh || 50) + 25;
-                lastKnownSpeedKmh = Math.max(0, Math.min(maxLimit, lastKnownSpeedKmh + deltaKmh));
+                /* ⚠ UNE INTÉGRATION NE SE CORRIGE JAMAIS TOUTE SEULE (17/08/2026).
+                   On cumule ici une accélération mesurée par un capteur qui a un biais, un
+                   bruit, et une orientation supposée. Chaque erreur, même minuscule, est
+                   ajoutée pour de bon : sur une traversée d'une minute, la vitesse estimée
+                   part en pente douce et ne redescend pas. Le seul plafond était la limite du
+                   tronçon + 25, soit 95 km/h dans un tunnel à 70 — l'ordre de grandeur relevé
+                   à l'écran en sortie de traversée.
+                   La borne utile n'est pas la limite légale mais LA VITESSE QU'ON AVAIT EN
+                   ENTRANT : sous un tunnel on ne fait ni demi-tour ni arrêt-buffet, on garde
+                   son allure à peu de chose près. On autorise donc une dérive de ±25 % autour
+                   d'elle — assez pour suivre une vraie décélération de bouchon ou une reprise,
+                   trop peu pour inventer 40 km/h de plus.
+                   ⚠ LA BORNE EST DISSYMÉTRIQUE, ET C'EST VOULU : plancher à 0, pas à −25 %.
+                   Les deux erreurs n'ont pas le même prix. Sous-estimer fait avancer le point
+                   estimé moins vite que la voiture — il reste en arrière, on le rattrape à la
+                   sortie. Surestimer le fait courir DEVANT : les annonces de manœuvre tombent
+                   trop tôt et la position sort du tunnel avant le conducteur. Et un bouchon
+                   dans un tunnel n'a rien d'exceptionnel : lui interdire de ralentir jusqu'à
+                   l'arrêt serait refuser le cas le plus banal pour se protéger d'un biais.
+                   `_drSpeedAtLoss` vaut 0 hors perte déclarée (simple absence de fix > 3 s) :
+                   on retombe alors sur l'ancien plafond, faute de référence fiable. */
+                const ref = _drSpeedAtLoss;
+                const plafond = ref > 0 ? ref * 1.25 : (currentSpeedLimitKmh || 50) + 25;
+                lastKnownSpeedKmh = Math.max(0, Math.min(plafond, lastKnownSpeedKmh + deltaKmh));
             }
 
             // Historique de vitesse GPS sur ~2 s (sert de confirmation)
@@ -696,6 +1066,16 @@
             const lastActive = localStorage.getItem('gps_active_profile_id');
             if (lastActive && profiles.some(p => p.id === lastActive)) activeProfileId = lastActive;
             renderProfilesDropdown(); updateProfileSummary();
+            updateWelcomeMessage();
+        }
+        // Nom affiché sur l'écran de bienvenue (1,5 s au démarrage) : celui du profil
+        // actif, pour que plusieurs profils sur le même appareil se reconnaissent
+        // chacun au lancement. Pas de profil actif -> repli générique.
+        function updateWelcomeMessage() {
+            const el = document.getElementById('welcome-message-name');
+            if (!el) return;
+            const profile = profiles.find(p => p.id === activeProfileId);
+            el.textContent = profile ? `Salut ${profile.name},` : 'Salut utilisateur,';
         }
         function saveProfilesToStorage() { localStorage.setItem('gps_profiles', JSON.stringify(profiles)); }
         function renderProfilesDropdown() {
@@ -706,6 +1086,87 @@
                 opt.value = p.id; opt.textContent = `${p.name} (${p.totalPoints.toFixed(2)} pts)`; dropdown.appendChild(opt);
             });
             dropdown.value = activeProfileId || "";
+            _syncProfileDropdownLabel();
+            _renderProfileDropdownMenu();
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           MENU DÉROULANT PERSONNALISÉ DU PROFIL — suppression PAR LIGNE (22/08/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           Le `<select>` natif fait TOUJOURS foi (`#profile-dropdown` reste dans le DOM,
+           masqué) : ce bloc n'ajoute qu'une présentation, il ne duplique aucun état. Un
+           <option> natif est du texte pur — impossible d'y poser un bouton — d'où ce
+           calque. ⚠ Le trash externe qui vivait à côté du sélecteur a été retiré le jour
+           même : un doublon de `deleteProfileById()` juste à côté de ce menu n'avait plus
+           sa place, chaque ligne portant désormais sa propre suppression. */
+        function _syncProfileDropdownLabel() {
+            const select = document.getElementById('profile-dropdown');
+            const label  = document.getElementById('profile-dropdown-trigger-label');
+            if (!select || !label) return;
+            const opt = select.options[select.selectedIndex];
+            label.textContent = opt ? opt.textContent : '👤 Aucun profil créé';
+        }
+
+        function _renderProfileDropdownMenu() {
+            const menu = document.getElementById('profile-dropdown-menu');
+            if (!menu) return;
+            menu.innerHTML = '';
+            if (profiles.length === 0) {
+                const vide = document.createElement('div');
+                vide.className = 'addr-suggestion';
+                vide.style.cursor = 'default';
+                vide.textContent = 'Aucun profil créé';
+                menu.appendChild(vide);
+                return;
+            }
+            profiles.forEach(p => {
+                const row = document.createElement('div');
+                row.className = 'profile-menu-row' + (p.id === activeProfileId ? ' active' : '');
+
+                const name = document.createElement('span');
+                name.className = 'profile-menu-name';
+                name.textContent = `${p.name} (${p.totalPoints.toFixed(2)} pts)`;
+                name.onclick = () => { selectProfile(p.id); closeProfileDropdownMenu(); };
+
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'profile-menu-delete';
+                del.title = `Supprimer « ${p.name} »`;
+                del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+                // stopPropagation : sinon ce clic remonterait jusqu'à l'écouteur « clic
+                // extérieur » et refermerait le menu juste avant que confirm() s'ouvre.
+                del.onclick = (e) => { e.stopPropagation(); deleteProfileById(p.id); };
+
+                row.appendChild(name);
+                row.appendChild(del);
+                menu.appendChild(row);
+            });
+        }
+
+        function toggleProfileDropdownMenu() {
+            const menu = document.getElementById('profile-dropdown-menu');
+            if (!menu) return;
+            if (menu.style.display === 'block') { closeProfileDropdownMenu(); return; }
+            _renderProfileDropdownMenu();
+            menu.style.display = 'block';
+            const chevron = document.getElementById('profile-dropdown-chevron');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            /* Écouteur posé à l'OUVERTURE et retiré à la fermeture, plutôt qu'un unique
+               `{ once: true }` : ce dernier se serait consommé sur le clic qui ouvre le
+               menu lui-même (il bulle jusqu'à `document` dans le même événement) et le
+               premier vrai clic extérieur suivant n'aurait plus rien à fermer. */
+            document.addEventListener('click', _onProfileDropdownOutsideClick);
+        }
+        function closeProfileDropdownMenu() {
+            const menu = document.getElementById('profile-dropdown-menu');
+            if (menu) menu.style.display = 'none';
+            const chevron = document.getElementById('profile-dropdown-chevron');
+            if (chevron) chevron.style.transform = '';
+            document.removeEventListener('click', _onProfileDropdownOutsideClick);
+        }
+        function _onProfileDropdownOutsideClick(e) {
+            const row = document.getElementById('profile-select-row');
+            if (row && !row.contains(e.target)) closeProfileDropdownMenu();
         }
         // Éléments à masquer pendant la saisie du prénom
         const _PROFIL_MASK_IDS = [
@@ -721,6 +1182,10 @@
             'profil-itin-title'
         ];
         function showCreateProfileInline() {
+            // Le bouton "+" est un voisin du menu déroulant DANS la même ligne : un clic
+            // dessus ne déclenche pas l'écouteur « clic extérieur » et laisserait sinon le
+            // menu ouvert derrière le formulaire de création.
+            closeProfileDropdownMenu();
             // Masquer le contenu de la page Profil (sauf la ligne de sélection)
             _PROFIL_MASK_IDS.forEach(id => {
                 const el = document.getElementById(id);
@@ -728,8 +1193,6 @@
             });
             document.getElementById('create-profile-inline').style.display = 'block';
             document.getElementById('btn-show-create-profile').style.display = 'none';
-            const sep = document.getElementById('btn-create-profile-sep');
-            if (sep) sep.style.display = 'none';
             // Libère la hauteur plancher de l'onglet : le panneau se resserre sur le
             // formulaire et remonte au-dessus du clavier (voir #ui-panel.profile-focus).
             const panel = document.getElementById('ui-panel');
@@ -739,8 +1202,6 @@
         function hideCreateProfileInline() {
             document.getElementById('create-profile-inline').style.display = 'none';
             document.getElementById('btn-show-create-profile').style.display = '';
-            const sep = document.getElementById('btn-create-profile-sep');
-            if (sep) sep.style.display = '';
             document.getElementById('new-profile-name').value = '';
             const panel = document.getElementById('ui-panel');
             if (panel) panel.classList.remove('profile-focus');
@@ -793,6 +1254,7 @@
             if (activeProfileId) localStorage.setItem('gps_active_profile_id', activeProfileId);
             else localStorage.removeItem('gps_active_profile_id');
             document.getElementById('profile-dropdown').value = activeProfileId || "";
+            _syncProfileDropdownLabel();
             updateProfileSummary();
             // Recharger badges et objectifs liés au nouveau profil actif
             renderBadgeCategoryCard();
@@ -806,11 +1268,14 @@
             const profile = profiles.find(p => p.id === activeProfileId);
             if (summaryEl) summaryEl.innerText = profile ? `👤 ${profile.name} — ${profile.totalPoints.toFixed(2)} pts cumulés` : "👤 Aucun profil sélectionné";
         }
-        function deleteSelectedProfile() {
-            const dropdown = document.getElementById('profile-dropdown');
-            const id = dropdown.value;
+        /* Seule fonction de suppression, appelée depuis l'icône 🗑 de chaque ligne du
+           menu déroulant (`_renderProfileDropdownMenu()`). Le trash externe qui exigeait
+           une sélection préalable a été retiré (22/08/2026) : celui-ci n'exige rien,
+           c'était tout son intérêt. `renderProfilesDropdown()` referme la boucle en
+           redessinant aussi bien le `<select>` que le menu — la ligne supprimée
+           disparaît donc du menu resté ouvert, sans rechargement complet. */
+        function deleteProfileById(id) {
             const statusBox = document.getElementById('status');
-            if (!id) { statusBox.innerText = "Sélectionnez d'abord un profil dans la liste."; statusBox.style.color = "#ff6b6b"; return; }
             const profile = profiles.find(p => p.id === id);
             if (!profile) return;
             if (!confirm(`Supprimer le profil "${profile.name}" et ses ${profile.totalPoints.toFixed(2)} points cumulés ?`)) return;
@@ -818,7 +1283,7 @@
             saveProfilesToStorage();
             if (activeProfileId === id) selectProfile(null);
             renderProfilesDropdown();
-            statusBox.innerText = `🗑️ Profil supprimé : ${profile.name}`; statusBox.style.color = "#ff6b6b";
+            if (statusBox) { statusBox.innerText = `🗑️ Profil supprimé : ${profile.name}`; statusBox.style.color = "#ff6b6b"; }
         }
         // Plafond bas du score de trajet : un mauvais trajet rapporte 0, jamais moins.
         // Sans ce garde-fou, une erreur de limitation (ex. zone 30 mal détectée) pouvait
@@ -838,6 +1303,15 @@
             if (!profile) return;
             profile.totalPoints += gained;
             saveProfilesToStorage(); renderProfilesDropdown(); updateProfileSummary();
+            /* Report vers le classement en ligne (js/21-classement.js). Ce point de
+               convergence est aussi le bon endroit pour le classement : un branchement
+               unique, plutôt qu'un par chemin d'attribution.
+               `typeof` + `try` parce que le module est chargé APRÈS ce fichier et peut
+               ne pas exister du tout (CDN Supabase bloqué). Le score local, lui, est
+               déjà écrit : rien de ce qui suit ne doit pouvoir le remettre en cause. */
+            if (typeof clAjouter === 'function') {
+                try { clAjouter(gained); } catch (e) { logAppError('classement/ajouter', e); }
+            }
         }
         loadProfilesFromStorage();
         // Initialiser badges et objectifs APRÈS chargement des profils (activeProfileId connu)
@@ -945,4 +1419,13 @@
                 return `${h}h ${m < 10 ? '0' : ''}${m}m`;
             }
             return `${totalMinutes}m ${s < 10 ? '0' : ''}${s}s`;
+        }
+
+        // Heure d'arrivée estimée, calculée depuis l'instant réel de l'appel (pas depuis
+        // le départ du trajet) : rouvrir le modal 5 minutes après avoir consulté un premier
+        // trajet doit décaler l'heure affichée d'autant.
+        function formatArrivalTime(hours) {
+            if (!hours || hours <= 0) return "--";
+            const arrival = new Date(Date.now() + hours * 3600000);
+            return arrival.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         }

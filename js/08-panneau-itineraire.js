@@ -1,5 +1,14 @@
         // === PANNEAU ITINÉRAIRE : SLIDE FLUIDE (mobile portrait) ===
-        let panelSnapState = 'full';
+        /* ⚠ 'hidden' ET NON 'full' (18/08/2026) — MIROIR EXACT de la classe `panel-hidden`
+           posée sur #ui-panel dans index.html. L'écran d'accueil de l'app est la carte : le
+           panneau part donc fermé, dans le balisage comme dans l'état, sans dépendre d'une
+           instruction JS pour le devenir.
+           Les deux doivent être changés ENSEMBLE. Une divergence ne se voit pas au premier
+           coup d'œil mais se paie au premier appui : `switchMainTab()` compare
+           `panelSnapState` à 'hidden' pour décider d'ouvrir ou de refermer — annoncer 'full'
+           devant un panneau fermé lui ferait « refermer » ce qui l'est déjà, et il faudrait
+           deux appuis sur l'onglet Itinéraire pour le déployer. */
+        let panelSnapState = 'hidden';
 
         const PANEL_MIN_VISIBLE = 54;
 
@@ -67,6 +76,40 @@
             return Math.max(SHEET_MIN_H, Math.floor(getViewportH() / 2) - getBottomBarsH());
         }
 
+        /* Hauteur de la zone sûre du HAUT (encoche, barre de statut). Mesurée par une
+           sonde plutôt que devinée : `env()` n'est lisible qu'en CSS, et sa valeur dépend
+           de l'appareil et de `viewport-fit`. Même technique que getViewportH(). */
+        function getSafeTopPx() {
+            try {
+                const el = document.createElement('div');
+                el.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top, 0px);'
+                                 + 'visibility:hidden;pointer-events:none;';
+                document.body.appendChild(el);
+                const h = el.offsetHeight || 0;
+                document.body.removeChild(el);
+                return h;
+            } catch (e) { return 0; }
+        }
+
+        /* Hauteur de l'état 'immersive' (Objectifs / Profil) : la carte n'a AUCUNE valeur
+           informative pendant leur consultation — on n'y sélectionne rien dessus, aucun
+           cadrage n'en dépend — contrairement à Itinéraire où elle reste le repère du
+           trajet en cours de saisie. La règle 50/50 n'a donc de sens que pour ce dernier ;
+           ces deux onglets n'ont droit qu'à deux états, plein écran ou fermé, jamais un
+           entre-deux qui masquerait la moitié de leur contenu pour rien.
+
+           ⚠ PLEIN ÉCRAN VEUT DIRE JUSQU'EN HAUT (16/08/2026). La première version retirait
+           60 px pour recopier le plafond général de `#ui-panel` — un plafond qui garde
+           volontairement une bande de carte visible, ce qui a du sens pour une feuille
+           ancrée en bas mais pas pour un écran qui se veut plein : Objectifs et Profil
+           s'arrêtaient à 60 px du bord. On ne réserve donc plus que la zone sûre du haut
+           (`getSafeTopPx`), sans laquelle le titre du panneau passerait sous l'encoche.
+           `body.panel-immersive-open #ui-panel` lève le plafond général en conséquence :
+           les deux calculs doivent rester d'accord. */
+        function getImmersiveHeightPx() {
+            return Math.max(SHEET_MIN_H, getViewportH() - getBottomBarsH() - getSafeTopPx());
+        }
+
         function syncSheetHeightVar() {
             const h = getSheetHeightPx();
             document.documentElement.style.setProperty('--sheet-h', h + 'px');
@@ -111,15 +154,33 @@
            se fait plus » alors qu'aucune erreur n'était journalisée. */
         const MAP_FOLLOW_MIN_BAND = 150;
 
+        /* En navigation paysage, ce n'est plus #ui-panel qui masque la gauche de la carte
+           mais la colonne d'infos — bannière du prochain virage et compteurs du trajet
+           (voir « PAYSAGE EN TRAJET » dans styles.css). On prend le bord droit le plus à
+           droite parmi les blocs RÉELLEMENT affichés : la bannière de virage disparaît
+           entre deux manœuvres, les compteurs restent. */
+        const NAV_RAIL_IDS = ['next-turn-panel', 'nav-bottom-bar'];
+        function _navRailRightEdge() {
+            let edge = 0;
+            NAV_RAIL_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) edge = Math.max(edge, r.right);
+            });
+            return edge;
+        }
+
         function getMapFollowPadding() {
             const pad = { top: 0, right: 0, bottom: 0, left: 0 };
             const panel = document.getElementById('ui-panel');
             const mapEl = (typeof map !== 'undefined' && map && map.getContainer) ? map.getContainer() : null;
-            if (!panel || !mapEl) return pad;
+            if (!mapEl) return pad;
 
             const m = mapEl.getBoundingClientRect();
-            const r = panel.getBoundingClientRect();
-            if (m.width <= 0 || m.height <= 0 || r.width <= 0 || r.height <= 0) return pad;
+            if (m.width <= 0 || m.height <= 0) return pad;
+            const r = panel ? panel.getBoundingClientRect() : null;
+            const panneauVisible = !!r && r.width > 0 && r.height > 0;
 
             // Bornage : un padding supérieur à la taille du canevas rendrait la caméra folle
             // (panneau déployé plein écran, mesure prise pendant une transition…).
@@ -128,8 +189,14 @@
             const bandeH = Math.min(MAP_FOLLOW_MIN_BAND, m.height * 0.5);
             const bandeW = Math.min(MAP_FOLLOW_MIN_BAND, m.width * 0.5);
             if (isPanelLandscape()) {
-                pad.left = Math.max(0, Math.min(r.right - m.left, m.width - bandeW));
+                let bordDroit = panneauVisible ? r.right : 0;
+                if (document.body.classList.contains('nav-active')) {
+                    bordDroit = Math.max(bordDroit, _navRailRightEdge());
+                }
+                if (bordDroit <= 0) return pad;
+                pad.left = Math.max(0, Math.min(bordDroit - m.left, m.width - bandeW));
             } else {
+                if (!panneauVisible) return pad;
                 pad.bottom = Math.max(0, Math.min(m.bottom - r.top, m.height - bandeH));
             }
             return pad;
@@ -225,16 +292,53 @@
             else _focusDestTimer = setTimeout(() => { _focusDestTimer = null; doFly(); }, 600);
         }
 
+        /* Remise à zéro du défilement du panneau quand il ressort d'un escamotage.
+           Motif : on descend dans Itinéraire jusqu'à perdre de vue la cellule
+           Destination, on referme le panneau (appui sur l'onglet, hotbox, glissement),
+           puis on le rouvre — et il revenait exactement là où on l'avait laissé, sur
+           une vue qui ne montre plus l'information principale. Rouvrir est un geste de
+           reprise : la première cellule doit être là.
+
+           La garde est DANS setPanelSnap plutôt que chez les appelants parce que les
+           trois chemins d'ouverture (switchMainTab, openSearchFromHotbox, glissement au
+           doigt) y convergent tous — et parce que la condition « on SORT d'un état
+           escamoté » ne se lit qu'ici, où l'ancien état est encore connu.
+           refreshPanelForViewport() rejoue setPanelSnap(panelSnapState) au
+           redimensionnement : état identique, donc aucun reset intempestif.
+
+           On remet à zéro TOUS les .panel-tab-content, pas seulement l'actif :
+           switchMainTab() appelle setPanelSnap AVANT de déplacer la classe 'active',
+           lire l'onglet actif ici viserait donc encore le précédent. Le panneau
+           lui-même défile aussi en portrait (#ui-panel { overflow-y: auto }), d'où les
+           deux remises à zéro. */
+        function _resetPanelScroll() {
+            const panel = document.getElementById('ui-panel');
+            if (panel) panel.scrollTop = 0;
+            document.querySelectorAll('.panel-tab-content').forEach(c => { c.scrollTop = 0; });
+        }
+
         function setPanelSnap(state, opts = {}) {
             const panel = document.getElementById('ui-panel');
+            const etaitEscamote = (panelSnapState === 'hidden' || panelSnapState === 'min');
             panel.classList.remove('minimized');
             panelSnapState = state;
+            if (etaitEscamote && state !== 'hidden' && state !== 'min') _resetPanelScroll();
+            /* Classe sur <body>, pas sur #ui-panel : le widget météo (#weather-widget,
+               top:52px/left:14px) n'est pas un enfant du panneau, il flotte au même endroit
+               que son coin supérieur en 'immersive'. setPanelSnap() est le seul chemin par
+               lequel cet état s'installe ou se quitte (chevron, tap d'onglet, geste de
+               glissement, réapplication au redimensionnement) : y poser la classe une seule
+               fois couvre tous les appelants d'un coup, plutôt que de la dupliquer à chacun
+               des points d'entrée comme l'état 'immersive' lui-même a dû l'être. */
+            document.body.classList.toggle('panel-immersive-open', state === 'immersive');
             /* Sens du chevron. 'half' ne pose AUCUNE classe (il ne joue que sur un
                max-height inline) : sans ce drapeau, le CSS n'avait aucun moyen de
                distinguer un panneau déployé d'un panneau à 200 px, et la flèche restait
                tournée vers le bas dans les deux cas. Une classe plutôt qu'un style inline,
-               pour que les règles paysage puissent la surcharger. */
-            panel.classList.toggle('panel-collapsed', state !== 'full');
+               pour que les règles paysage puissent la surcharger.
+               'immersive' compte comme déployé au même titre que 'full' : c'est l'état le
+               plus ouvert d'Objectifs/Profil, pas un état réduit. */
+            panel.classList.toggle('panel-collapsed', state !== 'full' && state !== 'immersive');
             updatePanelBottomOffset();
 
             /* ═══ PAYSAGE : ON NE POSE AUCUNE HAUTEUR EN PIXELS ═══
@@ -328,16 +432,28 @@
                 panel.style.minHeight = '';
                 panel.style.overflow = '';
                 clearTrans(320);
+            } else if (state === 'immersive') {
+                // Objectifs / Profil déployés : voir getImmersiveHeightPx(). Même mécanique
+                // que 'full' ci-dessous, hauteur différente — la carte n'a rien à offrir
+                // derrière ces deux onglets, autant lui rendre le moins d'écran possible.
+                panel.classList.remove('panel-min', 'panel-hidden');
+                panel.style.transition = trans('max-height 0.3s ease, min-height 0.3s ease, bottom 0.3s ease');
+                const immersiveH = getImmersiveHeightPx();
+                panel.style.maxHeight = immersiveH + 'px';
+                panel.style.minHeight = immersiveH + 'px';
+                panel.style.overflow = '';
+                clearTrans(320);
             } else {
                 panel.classList.remove('panel-min', 'panel-hidden');
                 panel.style.transition = trans('max-height 0.3s ease, min-height 0.3s ease, bottom 0.3s ease');
 
-                /* Hauteur IDENTIQUE sur les trois onglets — voir getSheetHeightPx().
-                   Plus de branche `tab-secondary` : Objectifs et Profil recopiaient une
-                   hauteur relevée sur Itinéraire, mesure qui n'existait que si l'on avait
-                   déployé cet onglet au moins une fois, et retombait sinon sur 60 % de
-                   l'écran. D'où trois hauteurs possibles pour trois onglets. La règle
-                   commune rend ce relevé inutile.
+                /* 'full' = règle 50/50, voir getSheetHeightPx(). Ne sert plus qu'à
+                   Itinéraire (16/08/2026) : Objectifs et Profil sont passés à 'immersive'
+                   ci-dessus, la carte n'y ayant aucune valeur informative. Avant cette date,
+                   les trois onglets partageaient cette même branche — plus de branche
+                   `tab-secondary` : Objectifs et Profil recopiaient une hauteur relevée sur
+                   Itinéraire, mesure qui n'existait que si l'on avait déployé cet onglet au
+                   moins une fois, et retombait sinon sur 60 % de l'écran.
 
                    ⚠ min ET max height : la hauteur est FIXE, pas plafonnée. Un onglet au
                    contenu court (Itinéraire) laisse du vide en bas plutôt que de remonter
@@ -366,9 +482,38 @@
            par les deux autres commandes du panneau. Le glissement au doigt s'arrête sur
            'hidden' — « deux états visuellement très proches pour un même geste », dit son
            propre commentaire — et le double-appui sur l'onglet fait de même. Le chevron
-           était le dernier chemin vers un état que le reste de l'interface avait abandonné. */
+           était le dernier chemin vers un état que le reste de l'interface avait abandonné.
+
+           ⚠ Objectifs et Profil n'ONT PAS de position 'half' (16/08/2026) : la carte
+           derrière eux ne sert à rien, un demi-panneau ne ferait que masquer la moitié de
+           leur contenu pour la remplacer par du vide. Le chevron y bascule donc plein
+           écran <-> fermé, sans passer par l'état intermédiaire réservé à Itinéraire. */
         function togglePanel(e) {
             if (e) e.stopPropagation();
+
+            /* ⚠⚠ SORTIR D'ABORD DES MODES DE SAISIE — sans quoi LE CHEVRON NE FAIT RIEN
+               (corrigé le 16/08/2026). `#ui-panel.search-focus` et `.profile-focus` posent
+               `max-height: none !important`, précisément pour que le panneau puisse se
+               coller au clavier ; l'`!important` l'emporte sur le `max-height` inline
+               qu'écrit setPanelSnap(). Résultat : `panelSnapState` basculait bien, le
+               glyphe du chevron s'inversait, et **la hauteur ne bougeait pas d'un pixel**.
+               Un bouton mort qui a pourtant l'air de répondre.
+               Réduire le panneau, c'est en avoir fini avec la saisie : on quitte donc le
+               mode avant d'appliquer l'état, plutôt que d'affaiblir le `!important` — dont
+               le rôle au clavier reste nécessaire. `exitDestinationSearchMode()` restaure
+               l'état mémorisé, que les lignes suivantes remplacent aussitôt. */
+            if (_searchFocusActive) exitDestinationSearchMode();
+            const _panel = document.getElementById('ui-panel');
+            if (_panel && _panel.classList.contains('profile-focus')) {
+                _panel.classList.remove('profile-focus');
+                tenterSansBruit(() => document.activeElement?.blur(), 'togglePanel/blur');
+            }
+
+            const tab = document.querySelector('.panel-tab-content.active')?.id?.replace('panel-tab-', '');
+            if (tab === 'objectifs' || tab === 'profil') {
+                setPanelSnap(panelSnapState === 'immersive' ? 'hidden' : 'immersive');
+                return;
+            }
             if (panelSnapState === 'full') setPanelSnap('half');
             else setPanelSnap('full');
         }
@@ -396,6 +541,11 @@
             if (panelSnapState === 'min' || panelSnapState === 'hidden') setPanelSnap('full');
             // On ferme le formulaire "Créer un contact" s'il était ouvert
             try { toggleCreateContactForm(false); } catch (e) { logAppError('toggleCreateContactForm', e); }
+            /* Idem pour le formulaire des lieux fixes : `place-focus` et `search-focus`
+               masquent chacun la section de l'autre, les deux posées ensemble videraient le
+               panneau. Défense par symétrie avec la ligne ci-dessus — le champ Destination
+               est normalement inatteignable tant que `place-focus` est en place. */
+            try { closePlaceForm(); } catch (e) { logAppError('closePlaceForm', e); }
             panel.scrollTop = 0;
             panel.style.transition = 'max-height 0.25s ease, padding 0.2s ease';
             panel.classList.add('search-focus');
@@ -625,6 +775,17 @@
                 const inertiaDistance = velocity * 150;
                 let targetH = Math.max(minH(), Math.min(maxH(), currentH + inertiaDistance));
 
+                /* Objectifs / Profil : mêmes deux états qu'au chevron (togglePanel) et au
+                   double-appui sur l'onglet (switchMainTab). Sans cette sortie précoce, le
+                   geste retomberait dans la branche « position intermédiaire » ci-dessous et
+                   laisserait le panneau à mi-hauteur — exactement le demi-écran de carte
+                   inutile que ces deux états existent pour supprimer. */
+                const _dragTab = document.querySelector('.panel-tab-content.active')?.id?.replace('panel-tab-', '');
+                if (_dragTab === 'objectifs' || _dragTab === 'profil') {
+                    setPanelSnap(targetH > (minH() + maxH()) / 2 ? 'immersive' : 'hidden');
+                    return;
+                }
+
                 if (targetH < minH() + 30) {
                     // Glissement jusqu'en bas : le panneau s'efface COMPLÈTEMENT sous le
                     // bandeau, exactement comme le double-appui sur l'onglet. Il s'arrêtait
@@ -686,13 +847,23 @@
 
         function toggleInfoWidget() {
             document.getElementById('info-widget').classList.toggle('open');
-            const badge = document.getElementById('info-badge');
-            if (badge) badge.classList.remove('arrived-pulse');
         }
-        function triggerArrivedGlow() {
-            const badge = document.getElementById('info-badge');
-            if (badge) badge.classList.add('arrived-pulse');
-        }
+
+        /* ⚠ LE BADGE D'INFO N'A QU'UN SEUL RÔLE : déplier les informations du trajet.
+           Il a porté quelques heures, le 21/08/2026, un second état où il passait au
+           centre de l'écran en « 🏁 Je suis arrivé » dès 500 m de la destination
+           (`setArrivalUi` / `onInfoBadgeClick`, retirés avec la classe CSS `arrival-mode`).
+
+           **Ne pas le rétablir. Un trajet ne se termine que lorsqu'on est ARRIVÉ à
+           l'adresse.** Un bouton posé au milieu de l'écran alors qu'il reste 400 m à
+           parcourir propose de couper le guidage à quelqu'un qui roule encore et en a
+           toujours besoin ; il annonce une arrivée qui n'a pas eu lieu, et un appui
+           distrait au feu rouge suffit à en faire une erreur.
+
+           Les deux seules façons de terminer sont donc : arriver vraiment (sous
+           `ARRIVAL_AUTO_M`, le trajet se termine seul), ou la bulle 🏁 de la hotbox — un
+           geste délibéré que rien n'affiche spontanément. Voir la note des seuils dans
+           `js/00-noyau-calculs.js`. */
 
         function buildRouteSteps(osrmData) {
             routeSteps = []; stepArrivalDist = []; currentStepIndex = 0; announcedThresholds = {}; _routeDeviationHandled = false; _maxDistAlongM = null;

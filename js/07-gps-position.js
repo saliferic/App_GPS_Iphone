@@ -55,6 +55,11 @@
             const toggleEl = document.getElementById('voice-guidance-toggle');
             if (toggleEl) toggleEl.checked = voiceGuidanceEnabled;
 
+            // Mode « moins bavard » : opt-in, donc `=== '1'` (défaut = voix complète).
+            voiceQuietMode = localStorage.getItem('gps_voice_quiet') === '1';
+            const quietEl = document.getElementById('voice-quiet-toggle');
+            if (quietEl) quietEl.checked = voiceQuietMode;
+
             if (navigator.geolocation) {
                 // On lance d'abord getCurrentPosition pour déclencher la popup de permission.
                 // Ce n'est qu'une fois la permission accordée (callback success) qu'on lance
@@ -109,11 +114,36 @@
                                 // Sortie de tunnel : on reprend la main sur la position réelle
                                 resetDeadReckoning();
                                 _smoothLat = rawLat; _smoothLng = rawLng; // purge du lissage figé
-                                // Mettre à jour lastRealCoords pour que le bearing soit calculé à partir
-                                // de la position actuelle, pas de l'ancienne position avant le tunnel.
-                                lastRealCoords = [lng, lat];
+                                /* ⚠⚠ CETTE LIGNE LEVAIT UNE ReferenceError À CHAQUE SORTIE DE TUNNEL
+                                   (17/08/2026). Elle lisait `lng` et `lat`, qui ne sont déclarés
+                                   qu'une trentaine de lignes plus bas (`const [lat, lng] = _smoothGps(...)`) :
+                                   dans la zone morte temporelle d'un `const`, la lecture ne renvoie
+                                   pas `undefined`, elle **jette**. Tout le reste du callback était
+                                   donc sauté pour ce fix — y compris l'annonce « signal retrouvé »,
+                                   la mise à jour du marqueur et le calcul de vitesse. Pire, comme
+                                   `resetDeadReckoning()` venait de passer `gpsSignalLost` à false,
+                                   le fix suivant reprenait le chemin normal en comparant la position
+                                   de sortie à `lastRealCoords` resté à l'ENTRÉE du tunnel : un saut
+                                   de plusieurs centaines de mètres interprété comme un déplacement.
+                                   Les coordonnées brutes sont les seules disponibles ici, et ce sont
+                                   les bonnes : on veut justement repartir du point réel, pas d'une
+                                   valeur lissée héritée d'avant la coupure. */
+                                lastRealCoords = [rawLng, rawLat];
+                                /* Ré-amorçage de l'horloge de mesure : sans elle, le premier calcul
+                                   de vitesse après la sortie divise le saut de position par la durée
+                                   entière de la traversée. */
+                                lastRealTimestamp = _nowFix;
+                                _gpsRecoveredAt = _nowFix;
+                                /* La vitesse inertielle a dérivé pendant la traversée : dès qu'un
+                                   vrai fix la donne, il fait autorité. Sans ce ré-amorçage, la ligne
+                                   `lastKnownSpeedKmh = systemSpeedKmh || lastKnownSpeedKmh` plus bas
+                                   CONSERVE la valeur dérivée tant que la puce renvoie 0. */
+                                if (systemSpeedKmh > 0) lastKnownSpeedKmh = systemSpeedKmh;
+                                _drSpeedAtLoss = 0;
                                 // Le conducteur doit savoir que les annonces redeviennent fiables.
-                                playAudioSequence(['location_recovered.ogg']);
+                                // 'bavard' : la perte reste annoncée, le retour à la normale
+                                // n'appelle aucune action du conducteur.
+                                playAudioSequence(['location_recovered.ogg'], 0, 'bavard');
                                 if (DEBUG) console.log('[GPS] Signal retrouvé');
                             }
                         } else if (isCourseStarted) {
@@ -122,6 +152,8 @@
                                 (_nowFix - _gpsDegradedSince) > GPS_LOST_DELAY_MS &&
                                 lastKnownSpeedKmh > GPS_DR_MIN_SPEED) {
                                 gpsSignalLost = true;
+                                // Référence pour borner la dérive de l'estimation inertielle.
+                                _drSpeedAtLoss = lastKnownSpeedKmh;
                                 setGpsLostBanner(true);
                                 // Annonce sonore : le bandeau visuel seul passe inaperçu au volant,
                                 // or c'est précisément le moment où le conducteur doit se remettre
@@ -352,6 +384,16 @@
                                     aheadCoords[0] = coords;
                                     setRouteLine(aheadCoords);
                                     currentTurfLine = ahead;
+                                    /* ⚠ La ligne vient d'être ROGNÉE : la progression le long de
+                                       `currentTurfLine` repart de zéro, alors que `_maxDistAlongM`
+                                       retient la valeur mesurée sur la ligne entière d'avant le
+                                       tunnel. Sans cette remise à null, la première frame après la
+                                       sortie voyait un « recul » de plusieurs centaines de mètres —
+                                       la signature exacte d'un virage manqué — et déclenchait un
+                                       recalcul d'itinéraire alors qu'on n'avait jamais quitté la
+                                       route. C'est la même raison qui impose ce reset dans
+                                       buildRouteSteps() : toute ligne neuve repart de zéro. */
+                                    _maxDistAlongM = null;
                                 }
                             } catch (e) { /* tracé conservé tel quel, la position reste correcte */ }
 
@@ -606,9 +648,20 @@
         // C'est cette valeur qui doit être le "plein" de la jauge, pas la valeur
         // théorique 263.9*(220/360)≈161px qui ne remplissait que ~88% de l'arc visible.
         const _SPD_ARC_LEN = 183;
-        // Max dynamique : la jauge se remplit à 100% à limitKmh × 1.5
-        // Ex: limite 50 → arc plein à 75 km/h ; limite 130 → arc plein à 195 km/h
-
+        /* ── L'ARC EST PLEIN À LA LIMITE, PAS À 1,5 × LA LIMITE (17/08/2026) ──
+           Premier réglage : `dynMax = limite × 1,5`, soit l'arc plein à 75 km/h dans une zone
+           50. Conséquence relevée en conduite : à 27 km/h dans une zone 30 — donc à 90 % de
+           la limite, l'attention maximale — la jauge n'était qu'aux 3/5 et se lisait comme
+           « il reste de la marge ». Le contresens était systématique, à toutes les limites.
+           La jauge répond à UNE question, « où en suis-je par rapport à ce qui est autorisé ? »,
+           et sa réponse doit être l'angle, pas une couleur : un coup d'œil périphérique au
+           volant lit un remplissage, il ne lit pas une nuance de vert.
+           L'excès de vitesse ne se perd pas pour autant, il change simplement de canal : la
+           saturation de l'arc, le passage au rouge, le halo d'écran et le chiffre lui-même le
+           disent — quatre signaux, là où la marge des 50 % n'en donnait qu'un, tardif et muet.
+           ⚠ Conséquence assumée : au-delà de la limite, l'arc est plein et ne bouge plus. 60 et
+           80 dans une zone 50 se ressemblent SUR L'ARC. C'est voulu — les deux appellent la
+           même action, ralentir, et c'est le chiffre central qui donne l'ampleur. */
         function updateSpeedometer(speedKmh, limitKmh, isSpeeding) {
             if (!isCourseStarted) return;
             const arcFill    = DOM.speedometerArcFill || document.getElementById('speedometer-arc-fill');
@@ -616,8 +669,8 @@
             const limitVal   = DOM.speedLimitValue    || document.getElementById('speed-limit-value');
             if (!arcFill) return;
 
-            // Max dynamique basé sur la limite courante
-            const dynMax = (limitKmh || 50) * 1.5;
+            // Plein exactement à la limite en vigueur — voir le bloc au-dessus.
+            const dynMax = limitKmh || 50;
             const ratio = Math.min(speedKmh / dynMax, 1);
             const filled = ratio * _SPD_ARC_LEN;
             const gap = _SPD_CIRCUMFERENCE - filled;

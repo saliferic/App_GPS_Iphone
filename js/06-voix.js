@@ -42,6 +42,11 @@
                 return;
             }
 
+            // Étape 2/3 du tutoriel recherche d'adresse (une seule fois) : uniquement sur
+            // le micro de la cellule Destination, pas sur les autres champs dictables
+            // (contact, modal trajet) qui ne font pas partie de ce tutoriel.
+            if (fieldId === 'end-addr') showDestMicHint();
+
             // Arrêter toute reconnaissance en cours
             stopVoiceInput();
 
@@ -159,6 +164,10 @@
             if (fieldId === 'end-addr' || fieldId === 'modal-end-addr') {
                 if (endTempMarker) endTempMarker.remove();
                 endTempMarker = addEmojiMarker(coords[0], coords[1], '🔴');
+            } else if (fieldId === 'place-addr') {
+                // Domicile / travail : c'est js/20 qui possède ce marqueur, son emoji
+                // dépend du lieu en cours d'édition.
+                setPlaceDraftMarker(coords);
             } else if (fieldId === 'modal-start-addr') {
                 if (startTempMarker) startTempMarker.remove();
                 startTempMarker = addEmojiMarker(coords[0], coords[1], '🔵');
@@ -206,6 +215,7 @@
                         else if (fieldId === 'modal-end-addr') modalEndCoords = contactCoords;
                         else if (fieldId === 'end-addr') exactEndCoords = contactCoords;
                         else if (fieldId === 'contact-adresse') contactAdresseCoords = contactCoords;
+                        else if (fieldId === 'place-addr') _placeDraftCoords = contactCoords;
 
                         /* En navigation, ni marqueur ni recadrage : le recalcul d'itinéraire
                            est le vrai retour visuel, et emmener la caméra à l'autre bout du
@@ -273,6 +283,11 @@
                 }
                 else if (fieldId === 'end-addr') exactEndCoords = coords;
                 else if (fieldId === 'contact-adresse') contactAdresseCoords = coords;
+                /* Les coordonnées dictées font foi à l'enregistrement : sans cette ligne,
+                   `savePlaceAddress()` (js/20) re-géocoderait le libellé et ferait dériver
+                   le point — exactement le mode d'échec que son brouillon existe pour
+                   éviter. */
+                else if (fieldId === 'place-addr') _placeDraftCoords = coords;
 
                 // Adresse libre : ce n'est pas un contact enregistré, on désélectionne la liste
                 if (fieldId === 'end-addr') {
@@ -380,6 +395,77 @@
         const REST_STOP_BONUS_POINTS = 50;
         const REST_STOP_RADIUS_KM = 0.25;
         let restStopTracking = { active: false, areaName: null, enteredAt: null, validated: false };
+
+        /* ═══ PLAN DE PAUSE EN 3 ZONES (long trajet) ═══
+           Sur un trajet prévu à plus de REST_STOP_PLAN_MIN_HOURS, on ne se contente plus
+           d'annoncer « l'aire suivante » : on retient TROIS aires successives après le
+           seuil des 1h50 et on les pose sur la carte dès le départ. Le conducteur voit
+           donc ses trois occasions avant même de rouler, et sait qu'il y en a un nombre
+           fini — c'est ce qui donne du poids au fait de laisser passer la première.
+
+           ⚠ Le plan ne remplace PAS l'ancien comportement : sous ce seuil (ou si Overpass
+           ne renvoie aucune aire), `restStopPlan` reste vide et `checkRestStopSuggestion()`
+           retombe sur la suggestion simple toutes les 1h50. */
+        const REST_STOP_PLAN_MIN_HOURS   = 2;
+        const REST_STOP_PLAN_SIZE        = 3;
+        // Deux aires à 2 km l'une de l'autre ne sont pas deux occasions distinctes : sans
+        // cet écart, les trois « chances » pouvaient tenir dans le même échangeur.
+        const REST_STOP_PLAN_MIN_GAP_KM  = 10;
+        // Marge avant de considérer une zone comme dépassée. Le snapping sur la ligne
+        // oscille de quelques dizaines de mètres ; déclencher à l'égalité stricte ferait
+        // passer à la zone suivante alors qu'on est encore en train d'y entrer.
+        const REST_STOP_PASSED_MARGIN_KM = 0.6;
+        const REST_STOP_BANNER_MS        = 10000;
+
+        let restStopPlan       = [];      // [{ name, lat, lng, distAlongKm }] — 3 au plus
+        let restStopPlanIndex  = 0;       // zone actuellement proposée
+        /* Équivalent kilométrique des 1h50, figé à l'armement du plan (js/11). Sert au
+           RÉARMEMENT après une pause : sans lui, le cycle suivant repartait du point
+           d'arrêt et posait ses trois tasses sur les aires immédiatement suivantes,
+           parfois 5 km plus loin. Une pause n'ouvre pas la suivante — elle ouvre 1h50
+           de route, puis la suivante. */
+        let restStopIntervalKm = null;
+        let restStopProposed   = false;   // le seuil des 1h50 a-t-il déjà été franchi ?
+        let restStopBonusLost  = false;   // les 3 zones passées sans arrêt : bonus perdu
+        let restStopMarkers    = [];      // marqueurs « repos » posés sur la carte
+        let _restStopBannerTimer = null;
+        /* Signature du tracé pour lequel `restAreas` a été rempli. Le plan est armé une
+           première fois dans l'APERÇU, puis `startCourse()` redemande les aires : sans ce
+           témoin, tout trajet long payait deux appels Overpass — la dépendance la plus
+           lente et la plus fragile du projet. Même tracé ⇒ on se contente de rebâtir le
+           plan, qui ne coûte que du turf. */
+        let _restAreasRouteSig = null;
+        /* ⚠ JUSQU'OÙ LE RELEVÉ EST-IL FIABLE — et non « combien d'aires connaît-on »
+           (21/08/2026). Les tronçons rentrent dans l'ordre du RÉSEAU : à 38 s on connaissait
+           2 aires, à 48 s on en connaissait 27. Bâtir 3 zones sur un relevé encore troué
+           revient à placer les zones 2 et 3 sur les aires les plus lointaines du moment,
+           puis à les faire reculer à chaque tronçon qui rentre — mesuré sur Paris–Perpignan :
+           zones 2-3 posées à **403 / 430 km**, puis 336 / 350, puis 245 / 278. Le conducteur
+           VOIT les pictos sauter de 160 km sur la carte.
+           On retient donc le kilomètre jusqu'auquel la couverture est CONTINUE depuis le
+           seuil : une zone située en deçà ne peut plus bouger (aucun tronçon manquant ne
+           peut y insérer une aire antérieure), une zone au-delà n'est qu'une conjecture et
+           n'est pas affichée. Mieux vaut 1 zone juste tout de suite, puis 2, puis 3, que 3
+           zones fausses qui se corrigent sous les yeux.
+           `Infinity` = pas de relevé en cours : c'est le régime des appels qui ne viennent
+           pas de js/09 (`validateRestStop()` réarme sur des aires déjà toutes connues). */
+        let restAreasCoverageKm = Infinity;
+        /* ⚠⚠ NUMÉRO DE RELEVÉ — GARDE CONTRE LES RELEVÉS QUI SE CHEVAUCHENT (21/08/2026).
+           Un relevé dure jusqu'à 96 s quand des tronçons sont rejoués. Le lancement du
+           trajet en démarre un second, qui commence par `restAreas = []`. Le PREMIER, encore
+           en vol, continuait alors d'écrire dans ce tableau vidé : mesuré, un rattrapage
+           tardif du tronçon 320-400 km a repeuplé `restAreas` avec ses SEULES aires, et le
+           plan est passé de `223,5 / 244,1 / 276,7` à **`334,9 / 349,0 / 363,7`** — les trois
+           tasses déplacées de 111 km sous les yeux du conducteur, au moment précis du départ.
+           Le signe qui ne trompe pas : `candidats` est passé de 6 à 5. Un relevé qui progresse
+           ne perd jamais d'aires ; seuls deux relevés concurrents le peuvent.
+           Chaque relevé prend donc un numéro et abandonne dès qu'il n'est plus le dernier. */
+        let _restAreasRun = 0;
+        /* Tracé auquel appartiennent les aires actuellement en mémoire, COMPLÈTES OU NON —
+           à ne pas confondre avec `_restAreasRouteSig`, qui n'est posée que sur un relevé
+           sans échec. C'est elle qui distingue « on refait le même trajet » de « le trajet
+           a changé », seul cas où il faut réellement jeter les aires connues. */
+        let _restAreasSigCourante = null;
 
         let testPauseSimEnabled = false;
         let simFrozenAtRestArea = false;

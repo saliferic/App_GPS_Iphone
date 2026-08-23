@@ -1,0 +1,323 @@
+        /* ═══════════════════════════════════════════════════════════════════
+           THÈME CARTOON (N&B) — surcouche commutable
+           ═══════════════════════════════════════════════════════════════════
+           Chargé APRÈS styles.css. Tout est préfixé `body.theme-cartoon` : sans
+           cette classe sur <body>, ce fichier n'a strictement aucun effet et
+           l'app garde son apparence néon d'origine. C'est ce qui permet au
+           bouton de bascule d'être une simple classList.toggle(), et ce qui
+           évite de toucher aux 225 ko de styles.css — donc de risquer une
+           régression sur le thème existant.
+           ⚠ `!important` est employé largement et volontairement : les règles
+           d'origine sont souvent plus spécifiques (#ui-panel.search-focus …)
+           ou posées en style inline dans index.html ; sans lui, la moitié des
+           surcharges perdrait l'arbitrage de cascade.
+           Portée actuelle : panneau Itinéraire + barre d'onglets + carte.
+           ═══════════════════════════════════════════════════════════════════ */
+
+        body.theme-cartoon {
+            /* Encre et papier : le thème est strictement monochrome. Toute
+               couleur ajoutée ici casserait l'illusion de la page imprimée. */
+            --mg-ink: #0d0d0d;
+            --mg-paper: #f5f3ef;
+            --mg-paper-2: #ffffff;
+            --mg-gray: #8a8a8a;
+            --mg-bd: 2.5px;          /* trait courant */
+            --mg-bd-strong: 3.5px;   /* trait des conteneurs */
+            --mg-shadow: 4px 4px 0 var(--mg-ink);
+            --mg-shadow-lg: 6px 6px 0 var(--mg-ink);
+            /* Typo de titrage. Fallbacks costauds : si Google Fonts est
+               injoignable (mode avion en voiture — cas nominal pour un GPS),
+               Impact/Arial Black gardent l'esprit condensé lourd. */
+            --mg-font-title: 'Anton', Impact, 'Arial Black', sans-serif;
+            --mg-font-sfx: 'Bangers', Impact, sans-serif;
+        }
+
+        /* Trame de demi-teinte : réutilisée sur les surfaces « remplies »
+           (titre, bouton Démarrer, curseur). Un dégradé radial répété coûte
+           moins qu'une image et reste net à tous les zooms. */
+        body.theme-cartoon .mg-halftone,
+        body.theme-cartoon .itin-start-btn,
+        body.theme-cartoon .itin-title {
+            background-image: radial-gradient(var(--mg-ink) 1.1px, transparent 1.2px);
+            background-size: 5px 5px;
+            background-color: var(--mg-paper-2);
+        }
+
+        /* ═══ CARTE ═══════════════════════════════════════════════════════
+           Le rendu N&B se fait par filtre sur le canvas plutôt que par
+           réécriture des couches Mapbox : un `setPaintProperty` par couche
+           (il y en a >100 sur navigation-day-v1) devrait être rejoué à chaque
+           `style.load`, et raterait de toute façon le relief et les labels.
+           Le filtre attrape tout, y compris ce que l'app dessine dessus.
+           ⚠ Les marqueurs DOM (.mapboxgl-marker) sont HORS canvas : ils
+           gardent leurs couleurs. C'est délibéré — la voiture et les bornes
+           doivent rester repérables en conduite. */
+        body.theme-cartoon .mapboxgl-canvas {
+            filter: grayscale(1) contrast(1.5) brightness(1.12);
+        }
+
+        /* Trame + lignes de vitesse par-dessus la carte. `pointer-events:none`
+           est vital : cette couche recouvre tout l'écran et avalerait sinon
+           chaque appui destiné à la carte. */
+        /* z-index 6 : juste au-dessus des DEUX cartes — #map (1) et #map-3d (5).
+           À 2, la trame passait sous la vue 3D et disparaissait dès qu'on y
+           basculait. Tout le reste de l'interface est bien plus haut (≥1000)
+           et n'est donc pas tramé. */
+        #cartoon-map-fx {
+            display: none;
+            position: fixed; inset: 0; z-index: 6;
+            pointer-events: none;
+        }
+        body.theme-cartoon #cartoon-map-fx { display: block; }
+        #cartoon-map-fx::before {
+            content: ''; position: absolute; inset: 0;
+            background-image: radial-gradient(#000 0.9px, transparent 1px);
+            background-size: 4px 4px;
+            opacity: 0.16;
+        }
+        /* Lignes de vitesse en biais, cantonnées aux bords : au centre elles
+           masqueraient l'itinéraire. */
+        #cartoon-map-fx::after {
+            content: ''; position: absolute; inset: 0;
+            background:
+                repeating-linear-gradient(72deg, #000 0 2px, transparent 2px 13px) left top / 22% 45% no-repeat,
+                repeating-linear-gradient(-72deg, #000 0 2px, transparent 2px 15px) right top / 20% 38% no-repeat;
+            opacity: 0.22;
+        }
+
+        /* ═══ PANNEAU ITINÉRAIRE ══════════════════════════════════════════ */
+        /* ⚠ La trame « papier » est posée en background-image sur l'élément
+           lui-même, PAS en pseudo-élément : sur mobile, `#ui-panel::before` est
+           déjà la poignée de drag et `::after` la zone de capture tactile
+           (styles.css, media query mobile). Les recycler ici aurait fait
+           disparaître la poignée et le drag du panneau — sur un GPS, la cible
+           d'usage principale. */
+        body.theme-cartoon #ui-panel {
+            background-color: var(--mg-paper) !important;
+            background-image: radial-gradient(rgba(13,13,13,0.09) 0.8px, transparent 0.9px) !important;
+            background-size: 6px 6px !important;
+            border: var(--mg-bd-strong) solid var(--mg-ink) !important;
+            box-shadow: var(--mg-shadow-lg) !important;
+            color: var(--mg-ink) !important;
+        }
+        /* Poignée de drag (mobile) : repassée à l'encre. */
+        body.theme-cartoon #ui-panel::before { background: var(--mg-ink) !important; }
+
+        body.theme-cartoon #ui-panel label,
+        body.theme-cartoon #ui-panel .itin-section label {
+            color: var(--mg-ink) !important;
+            font-family: var(--mg-font-title);
+            letter-spacing: 1.5px;
+        }
+
+        /* Titre en capsule tramée, comme le cartouche d'une case de manga. */
+        body.theme-cartoon .itin-title {
+            color: var(--mg-ink) !important;
+            font-family: var(--mg-font-title);
+            font-size: 20px !important;
+            letter-spacing: 4px;
+            text-align: center;
+            border: var(--mg-bd-strong) solid var(--mg-ink);
+            border-radius: 16px;
+            box-shadow: var(--mg-shadow);
+            padding: 8px 14px;
+            margin: 2px 0 18px !important;
+            /* Un halo blanc autour des lettres les détache de la trame. */
+            text-shadow: 0 0 3px var(--mg-paper-2), 0 0 3px var(--mg-paper-2), 0 0 6px var(--mg-paper-2);
+        }
+
+        body.theme-cartoon .toggle-panel-btn,
+        body.theme-cartoon .itin-hamburger { color: var(--mg-ink) !important; }
+
+        /* ═══ CHAMPS ══════════════════════════════════════════════════════ */
+        body.theme-cartoon .itin-input-row,
+        body.theme-cartoon .itin-select-row {
+            background: var(--mg-paper-2) !important;
+            border: var(--mg-bd) solid var(--mg-ink) !important;
+            border-radius: 999px !important;
+            box-shadow: 3px 3px 0 var(--mg-ink);
+        }
+        /* Le focus se signale par un déplacement du bloc sur son ombre —
+           l'équivalent « encre » du glow bleu d'origine, qui n'a pas de
+           traduction en monochrome. */
+        body.theme-cartoon .itin-input-row:focus-within {
+            box-shadow: 1px 1px 0 var(--mg-ink) !important;
+            transform: translate(2px, 2px);
+        }
+        body.theme-cartoon .itin-input-row input,
+        body.theme-cartoon .itin-select-row select {
+            color: var(--mg-ink) !important;
+            font-weight: 700;
+        }
+        body.theme-cartoon .itin-input-row input::placeholder { color: var(--mg-gray) !important; }
+        body.theme-cartoon .itin-select-row select option { background: var(--mg-paper-2); color: var(--mg-ink); }
+        body.theme-cartoon .itin-icon-leading,
+        body.theme-cartoon .itin-icon-btn,
+        body.theme-cartoon .itin-select-chevron,
+        body.theme-cartoon .itin-pin-btn,
+        body.theme-cartoon .itin-mic-btn,
+        body.theme-cartoon .itin-add-btn { color: var(--mg-ink) !important; }
+        body.theme-cartoon .itin-icon-btn:hover { color: var(--mg-gray) !important; }
+        body.theme-cartoon .itin-pin-btn.active { filter: none; color: var(--mg-ink) !important; }
+        body.theme-cartoon .itin-icon-sep { background: var(--mg-ink) !important; opacity: 1; }
+
+        body.theme-cartoon .addr-suggestions {
+            background: var(--mg-paper-2) !important;
+            border: var(--mg-bd) solid var(--mg-ink) !important;
+            border-radius: 0 0 14px 14px !important;
+            box-shadow: var(--mg-shadow) !important;
+        }
+        body.theme-cartoon .addr-suggestion {
+            color: var(--mg-ink) !important; font-weight: 700;
+            border-bottom: 1.5px solid var(--mg-ink) !important;
+        }
+        body.theme-cartoon .addr-suggestion:last-child { border-bottom: none !important; }
+        body.theme-cartoon .addr-suggestion:hover,
+        body.theme-cartoon .addr-suggestion.highlighted {
+            background: var(--mg-ink) !important; color: var(--mg-paper-2) !important;
+        }
+
+        /* ═══ BOUTONS SECONDAIRES (Go home / Go work / Trajet libre) ══════ */
+        body.theme-cartoon .itin-free-btn,
+        body.theme-cartoon .itin-place-btn,
+        body.theme-cartoon .itin-save-fav {
+            background: var(--mg-paper-2) !important;
+            border: var(--mg-bd) solid var(--mg-ink) !important;
+            border-radius: 999px !important;
+            color: var(--mg-ink) !important;
+            box-shadow: 3px 3px 0 var(--mg-ink) !important;
+        }
+        body.theme-cartoon .itin-free-btn:hover,
+        body.theme-cartoon .itin-place-btn:hover,
+        body.theme-cartoon .itin-save-fav:hover {
+            background: var(--mg-paper) !important;
+            box-shadow: 1px 1px 0 var(--mg-ink) !important;
+            transform: translate(2px, 2px);
+        }
+        body.theme-cartoon .itin-free-title {
+            color: var(--mg-ink) !important;
+            font-family: var(--mg-font-title);
+            font-size: 15px !important; letter-spacing: 0.5px;
+        }
+        body.theme-cartoon .itin-free-sub { color: var(--mg-gray) !important; font-weight: 700; }
+
+        /* ═══ INTERRUPTEUR RÉEL / SIMU ════════════════════════════════════ */
+        body.theme-cartoon .itin-mode-label { color: var(--mg-gray) !important; font-family: var(--mg-font-title); }
+        body.theme-cartoon .itin-mode-label.active { color: var(--mg-ink) !important; }
+        body.theme-cartoon .itin-slider {
+            background: var(--mg-paper-2) !important;
+            border: var(--mg-bd) solid var(--mg-ink) !important;
+        }
+        body.theme-cartoon .itin-slider::before {
+            background-color: var(--mg-ink) !important;
+            background-image: repeating-linear-gradient(90deg, var(--mg-paper-2) 0 1px, transparent 1px 3px);
+        }
+        body.theme-cartoon .itin-switch input:checked + .itin-slider {
+            background: var(--mg-ink) !important; border-color: var(--mg-ink) !important;
+        }
+        body.theme-cartoon .itin-switch input:checked + .itin-slider::before {
+            background-color: var(--mg-paper-2) !important;
+            background-image: repeating-linear-gradient(90deg, var(--mg-ink) 0 1px, transparent 1px 3px);
+        }
+
+        /* ═══ BOUTON DÉMARRER ═════════════════════════════════════════════
+           Les animations d'origine (pulse du halo bleu, balayage de reflet)
+           sont coupées : elles reposent entièrement sur des lueurs colorées,
+           qui en monochrome ne produisent qu'un scintillement gris sale. */
+        body.theme-cartoon .itin-start-btn {
+            border: var(--mg-bd-strong) solid var(--mg-ink) !important;
+            border-radius: 999px !important;
+            color: var(--mg-ink) !important;
+            font-family: var(--mg-font-title);
+            letter-spacing: 3px;
+            box-shadow: var(--mg-shadow) !important;
+            animation: none !important;
+            text-shadow: 0 0 3px var(--mg-paper-2), 0 0 3px var(--mg-paper-2), 0 0 6px var(--mg-paper-2);
+            /* Requis pour que l'onomatopée du ::after déborde du bouton. */
+            overflow: visible !important;
+        }
+        /* Le reflet balayant (::before) n'a pas de sens en encre : supprimé.
+           ::after, lui, est recyclé — il portait le second reflet, il porte
+           maintenant l'onomatopée. Réutiliser le pseudo-élément existant
+           évite d'ajouter un nœud décoratif au balisage. */
+        body.theme-cartoon .itin-start-btn::before { display: none !important; }
+        body.theme-cartoon .itin-start-btn::after {
+            content: 'SHING'; display: block !important;
+            position: absolute; right: -4px; top: -20px;
+            width: auto; height: auto; left: auto;
+            background: none; transform: rotate(-12deg); opacity: 1;
+            font-family: var(--mg-font-sfx); font-size: 19px; letter-spacing: 1px;
+            color: var(--mg-ink); pointer-events: none; animation: none !important;
+        }
+        body.theme-cartoon .itin-start-btn:disabled::after { display: none !important; }
+        body.theme-cartoon .itin-start-btn:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 var(--mg-ink) !important;
+        }
+        body.theme-cartoon .itin-start-btn:disabled {
+            background-color: var(--mg-paper) !important;
+            color: var(--mg-gray) !important;
+            border-color: var(--mg-gray) !important;
+            box-shadow: none !important; transform: none;
+        }
+        body.theme-cartoon .itin-start-spinner {
+            border-color: rgba(0,0,0,0.25) !important;
+            border-top-color: var(--mg-ink) !important;
+        }
+
+        body.theme-cartoon #status { color: var(--mg-ink) !important; font-family: var(--mg-font-title); letter-spacing: 1px; }
+        body.theme-cartoon .itin-footer,
+        body.theme-cartoon #panel-gps-status,
+        body.theme-cartoon #panel-signal,
+        body.theme-cartoon #panel-gps-text { color: var(--mg-ink) !important; }
+        body.theme-cartoon .contact-form-title { color: var(--mg-ink) !important; font-family: var(--mg-font-title); }
+        body.theme-cartoon .trip-option-hint { color: var(--mg-gray) !important; }
+
+        /* Ascenseur du panneau : la barre bleue par défaut est le seul reste
+           de couleur visible quand le contenu déborde. */
+        body.theme-cartoon #ui-panel::-webkit-scrollbar-thumb { background: var(--mg-ink) !important; }
+        body.theme-cartoon #ui-panel::-webkit-scrollbar-track { background: var(--mg-paper) !important; }
+
+        /* ═══ BARRE D'ONGLETS DU BAS ══════════════════════════════════════ */
+        body.theme-cartoon #main-bottom-nav {
+            background: var(--mg-paper) !important;
+            border-top: var(--mg-bd-strong) solid var(--mg-ink) !important;
+            box-shadow: none !important;
+        }
+        body.theme-cartoon .main-nav-tab { color: var(--mg-gray) !important; }
+        body.theme-cartoon .main-nav-tab span { font-family: var(--mg-font-title); letter-spacing: 1px; }
+        body.theme-cartoon .main-nav-tab.active,
+        body.theme-cartoon.nav-active #nav-tab-trajet { color: var(--mg-ink) !important; }
+        body.theme-cartoon .main-nav-tab.active::before,
+        body.theme-cartoon.nav-active #nav-tab-trajet::before {
+            background: var(--mg-ink) !important; box-shadow: none !important; height: 3px !important;
+        }
+
+        /* ═══ BOUTON DE BASCULE DU THÈME ══════════════════════════════════
+           Posé dans #ui-panel mais HORS de .panel-tab-content, pour rester
+           accessible quel que soit l'onglet actif et même panneau réduit
+           (`panel-min` masque les .panel-tab-content). */
+        /* ⚠ z-index 1004 : au-dessus de la poignée de drag (1003) et surtout de
+           la zone de capture tactile `#ui-panel::after` (1002), qui couvre les
+           28 premiers pixels du panneau sur mobile et avalerait sinon l'appui —
+           les pseudo-éléments sont peints après les enfants à z-index égal. */
+        #mg-theme-btn {
+            position: absolute; top: 10px; left: 14px; z-index: 1004;
+            background: rgba(10,14,23,0.7);
+            border: 1px solid rgba(0,140,255,0.25);
+            color: #8892b0;
+            border-radius: 999px; padding: 3px 10px;
+            font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+            text-transform: uppercase; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: 0.2s;
+        }
+        #mg-theme-btn:hover { color: #58a6ff; border-color: rgba(0,150,255,0.5); }
+        body.theme-cartoon #mg-theme-btn {
+            background: var(--mg-paper-2);
+            border: 2px solid var(--mg-ink);
+            color: var(--mg-ink);
+            box-shadow: 2px 2px 0 var(--mg-ink);
+            font-family: var(--mg-font-title);
+        }
+        body.theme-cartoon #mg-theme-btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--mg-ink); }

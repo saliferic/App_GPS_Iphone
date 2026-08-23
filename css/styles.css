@@ -291,7 +291,9 @@
         body.nav-banner-active #info-widget {
             top: 130px; transition: top 0.3s ease;
         }
-        body.nav-banner-active #rest-stop-banner { top: 150px; }
+        /* ⚠ Plus de décalage pour #rest-stop-banner sous la bannière de navigation : elle est
+           désormais centrée au milieu de l'écran, où la bannière plein écran ne la gêne pas.
+           Y remettre un `top` la décrocherait de son `translate(-50%, -50%)`. */
 
         /* === BOUTONS FLOTTANTS DE NAVIGATION (BOUSSOLE / RECHERCHE / MUET) === */
         /* === BOUTON 3D (toujours visible, indépendant du trajet) === */
@@ -354,6 +356,34 @@
             cursor: default; user-select: none;
         }
         #weather-widget.loaded { display: flex; }
+        /* Objectifs/Profil en plein écran (voir setPanelSnap, js/08) : le widget flotte au
+           même endroit que le coin supérieur du panneau et gênait la lecture du titre.
+           !important nécessaire pour l'emporter sur .loaded ci-dessus, même spécificité. */
+        body.panel-immersive-open #weather-widget { display: none !important; }
+        /* ⚠ ET LE PLAFOND GÉNÉRAL DU PANNEAU DOIT ÊTRE LEVÉ AVEC (16/08/2026).
+           `#ui-panel` est plafonné à `100dvh - offset - 60px` : 60 px de carte restent
+           visibles en haut, ce qui a du sens pour une feuille ancrée en bas mais pas pour
+           un écran qui se veut plein. Objectifs et Profil s'arrêtaient donc à 60 px du
+           bord — « la fenêtre ne remonte pas jusqu'en haut ». Le plafond est ici ramené à
+           la seule zone sûre du haut (encoche, barre de statut) : sans `env()`, le titre
+           du panneau passerait dessous sur un téléphone à encoche.
+           ⚠ Pas de `!important` : le `max-height` INLINE que pose `setPanelSnap()` doit
+           rester la valeur qui décide. Cette règle n'est qu'un filet — elle sert si l'inline
+           venait à être effacé — et sa spécificité (élément + classe + id) suffit à battre
+           le plafond général ci-dessus. C'est `getImmersiveHeightPx()` (js/08) qui reproduit
+           ce calcul et fait foi ; les deux doivent rester d'accord. */
+        body.panel-immersive-open #ui-panel {
+            max-height: calc(100dvh
+                             - var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px)))
+                             - env(safe-area-inset-top, 0px));
+        }
+        /* Même raison que le widget météo, en plus flagrant depuis que le panneau monte
+           jusqu'en haut : l'invite hotbox (z-index 1400) se dessinait PAR-DESSUS le contenu
+           d'Objectifs/Profil — elle désigne le centre de la carte et enseigne un appui long
+           sur une carte devenue invisible, tout en barrant le texte qu'on essaie de lire.
+           Elle n'est pas oubliée pour autant : `gps_hotbox_hint` n'étant écrite qu'à la
+           première ouverture RÉELLE de la hotbox, l'invite reparaît dès le retour à la carte. */
+        body.panel-immersive-open #hotbox-hint { display: none; }
         #weather-icon  { font-size: 20px; line-height: 1; }
         #weather-temp  { font-size: 13px; font-weight: 800; color: #e2e8f0; line-height: 1; }
         #weather-desc  { font-size: 9px; font-weight: 700; color: #4a5568; letter-spacing: 0.8px; text-transform: uppercase; line-height: 1; }
@@ -419,47 +449,15 @@
 
         #hotbox-ring { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 
-        /* Noyau central : zone d'annulation + libellé de l'entrée survolée */
-        #hotbox-core {
-            position: absolute; left: 0; top: 0;
-            width: clamp(52px, 15vw, 66px); height: clamp(52px, 15vw, 66px);
-            margin-left: calc(clamp(52px, 15vw, 66px) / -2);
-            margin-top: calc(clamp(52px, 15vw, 66px) / -2);
-            border-radius: 50%;
-            background: radial-gradient(circle at 38% 32%, rgba(20,32,52,0.95), rgba(6,10,18,0.95));
-            border: 1px solid rgba(0,140,255,0.28);
-            box-shadow: 0 6px 22px rgba(0,0,0,0.6), inset 0 0 18px rgba(0,120,255,0.10);
-            display: flex; align-items: center; justify-content: center;
-            color: #4a5568; font-size: clamp(15px, 4.5vw, 19px);
-            animation: hbPop 0.18s cubic-bezier(.34,1.56,.64,1);
-            /* `transform` sert au grossissement de survol. L'animation d'ouverture
-               l'occupe pendant 0,18 s puis le rend (fill-mode par défaut : none). */
-            transform: scale(1);
-            transition: transform 0.14s cubic-bezier(.34,1.56,.64,1), color 0.14s, border-color 0.14s;
-        }
-        #hotbox-core.armed {
-            border-color: rgba(88,166,255,0.55);
-            box-shadow: 0 6px 22px rgba(0,0,0,0.6), 0 0 0 4px rgba(0,120,255,0.12);
-        }
-        /* ── Aperçu de l'entrée visée, AU CENTRE ──
-           Le doigt masque l'entrée qu'il survole : c'est le défaut structurel du menu
-           radial. Le retour visuel est donc déporté là où le doigt n'est jamais, au
-           centre — qui devient un indicateur de RÉSULTAT (« voilà ce qui se passera si
-           je relâche ») au lieu d'un simple bouton d'annulation.
-           ⚠ Le facteur vient de `--hb-core-scale`, calculé en JS depuis `_hbDeadzone` :
-           le noyau grossi ne doit JAMAIS déborder de la zone morte, sinon il suggère
-           qu'y revenir annule alors que la logique d'annulation couvre un disque plus
-           petit — on croirait annuler et on déclencherait l'action. */
-        #hotbox-core.showing {
-            transform: scale(var(--hb-core-scale, 1.4));
-            color: #e2e8f0;
-            border-color: rgba(88,166,255,0.7);
-        }
-
-        /* Libellé sous le noyau : hors du disque, il resterait illisible dedans */
+        /* Libellé de l'entrée armée, AU-DESSUS de la rangée.
+           Il n'a plus à basculer selon la position de l'entrée (l'ancienne classe
+           `.above`) : toutes les entrées sont désormais du même côté du doigt, donc le
+           haut est toujours le côté libre. `--hb-label-off`, posé en JS, dégage la
+           demi-bulle — les entrées partageant toutes la même ordonnée, il n'y a plus
+           d'élévation à franchir en plus. */
         #hotbox-label {
             position: absolute; left: 0; top: 0;
-            transform: translate(-50%, var(--hb-label-off, 42px));
+            transform: translate(-50%, calc(-1 * var(--hb-label-off, 90px) - 100%));
             padding: clamp(4px, 1.2vw, 7px) clamp(10px, 3vw, 15px);
             border-radius: 999px; white-space: nowrap; pointer-events: none;
             background: rgba(6,10,18,0.92); border: 1px solid rgba(0,140,255,0.22);
@@ -469,62 +467,100 @@
         #hotbox-label.visible { opacity: 1; }
         /* ⚠ Empilement dans #hotbox-ring. Les entrées sont créées par appendChild à
            chaque ouverture, donc APRÈS le libellé dans l'ordre du DOM : à z-index égal
-           elles passent devant lui et le texte se lit derrière les bulles. Les rangs
-           sont donc explicites — le libellé et l'intitulé au-dessus de tout, le noyau
-           ensuite, les entrées au fond. */
-        #hotbox-label, #hotbox-title { z-index: 4; }
-        #hotbox-core { z-index: 3; }
-        .hotbox-item { z-index: 1; }
-        .hotbox-item.hover { z-index: 2; }   /* grossie, elle chevauche ses voisines */
-        /* Entrée visée dans la moitié BASSE : le libellé passe au-dessus du noyau.
-           Laissé en dessous, il s'afficherait du côté où se trouve justement le pouce —
-           on aurait seulement déplacé l'occlusion de l'icône vers le mot. */
-        #hotbox-label.above {
-            transform: translate(-50%, calc(-1 * var(--hb-label-off, 42px) - 100%));
+           elles passent devant lui et le texte se lit derrière les bulles. Le libellé et
+           l'intitulé sont donc explicitement au-dessus de tout.
+           Les entrées, elles, reçoivent leur rang EN JS (_hbLayout) et non ici : sur un
+           arc, l'ordre de recouvrement dépend de la profondeur, qui change à chaque image
+           du glissement — une valeur figée ferait passer une bulle du fond devant celle
+           du premier plan dès qu'elles se chevauchent. */
+        #hotbox-label, #hotbox-title { z-index: 60; }
+
+        /* ── Noyau ✕ du MODE POINTAGE ──
+           Visible uniquement quand le menu n'a pas d'entrée `pivot` (voir `_hbNeutral`,
+           js/10) : il occupe alors la place neutre laissée libre entre les bulles, celle
+           où l'on revient pour ne rien choisir. `display: none` par défaut — dans un
+           carrousel il n'y a AUCUNE place neutre, l'entrée centrée occupe le milieu et le
+           noyau se superposerait à elle.
+           Sa taille vient de `--hb-core`, posée en JS : c'est la même valeur qui sert à
+           calculer l'écartement des bulles pour qu'il tienne entre elles sans les toucher.
+           Deux sources de vérité divergeraient au premier réglage. */
+        #hotbox-core {
+            position: absolute; left: 0; top: 0; display: none;
+            width: var(--hb-core, 53px); height: var(--hb-core, 53px);
+            margin-left: calc(var(--hb-core, 53px) / -2);
+            margin-top: calc(var(--hb-core, 53px) / -2);
+            border-radius: 50%; z-index: 50;
+            background: radial-gradient(circle at 38% 32%, rgba(20,32,52,0.95), rgba(6,10,18,0.95));
+            border: 1px solid rgba(0,140,255,0.28);
+            box-shadow: 0 6px 22px rgba(0,0,0,0.6), inset 0 0 18px rgba(0,120,255,0.10);
+            align-items: center; justify-content: center;
+            color: #7b8794; font-size: calc(var(--hb-core, 53px) * 0.36);
+            pointer-events: none;
+            transition: opacity 0.14s, color 0.14s;
         }
+        #hotbox-ring.neutral #hotbox-core { display: flex; }
+        /* Une bulle est visée : le noyau s'efface sans disparaître — il reste la cible du
+           retour en arrière, mais cesse de disputer l'attention à ce qui va se lancer. */
+        #hotbox-core.dim { opacity: 0.4; }
 
         .hotbox-item {
             position: absolute; left: 0; top: 0;
-            width: clamp(44px, 12.5vw, 54px); height: clamp(44px, 12.5vw, 54px);
-            margin-left: calc(clamp(44px, 12.5vw, 54px) / -2);
-            margin-top: calc(clamp(44px, 12.5vw, 54px) / -2);
+            /* Taille posée en JS (--hb-item) : la géométrie de l'arc en dépend, un
+               clamp() dupliqué ici finirait par diverger de celui du JS. */
+            width: var(--hb-item, 60px); height: var(--hb-item, 60px);
+            margin-left: calc(var(--hb-item, 60px) / -2);
+            margin-top: calc(var(--hb-item, 60px) / -2);
             border-radius: 50%; border: 1px solid rgba(0,140,255,0.22);
             background: linear-gradient(170deg, #0a0e17, #0f1825);
             box-shadow: 0 4px 15px rgba(0,0,0,0.55);
             display: flex; align-items: center; justify-content: center;
-            color: #7b8794; font-size: clamp(17px, 5vw, 21px); font-weight: 900;
+            color: #7b8794; font-size: calc(var(--hb-item, 60px) * 0.42); font-weight: 900;
             padding: 0; pointer-events: none;
-            transition: transform 0.13s ease, border-color 0.13s, box-shadow 0.13s, color 0.13s,
-                        filter 0.13s ease, opacity 0.13s ease;
+            /* ⚠ AUCUNE TRANSITION SUR transform / filter / opacity. Ces trois propriétés
+               sont réécrites à chaque image par _hbLayout() pendant le glissement : une
+               transition les ferait courir derrière le doigt, et le carrousel donnerait
+               l'impression de coller. Seuls les changements d'ÉTAT (armement) s'animent. */
+            transition: border-color 0.13s, box-shadow 0.13s, color 0.13s;
             animation: hbItemIn 0.2s cubic-bezier(.34,1.56,.64,1) backwards;
-            /* La position sur le cercle passe par --hb-tx/--hb-ty et NON par un transform
-               inline : le survol et l'animation d'entrée agissent sur le même transform,
-               un translate posé en style écraserait leur scale (l'entrée survolée
-               sauterait au centre). */
-            --hb-tx: 0px; --hb-ty: 0px;
-            transform: translate(var(--hb-tx), var(--hb-ty)) scale(1);
+            /* Position et profondeur passent par ces variables et NON par un transform
+               inline : l'animation d'entrée agit sur le même `transform`, un translate
+               posé en style écraserait son scale. */
+            /* Rangée HORIZONTALE : plus de `--hb-ty`, toutes les entrées partagent la même
+               ordonnée. Seul l'écartement horizontal et la profondeur les distinguent. */
+            --hb-tx: 0px; --hb-sc: 1; --hb-blur: 0px; --hb-op: 1;
+            transform: translateX(var(--hb-tx)) scale(var(--hb-sc));
+            /* ⚠ PAS DE `grayscale()` ICI. Une icône ne se reconnaît pour ainsi dire que par
+               sa couleur (⛽ rouge, 🚦 tricolore, ☀️ jaune) : la désaturer revient à retirer
+               l'information qu'on cherche à montrer, et rendait par-dessus le marché les
+               entrées du fond indiscernables de l'état d'abandon, qui grise tout le menu.
+               Le retrait passe donc par la TAILLE et le flou. Et jamais par l'opacité seule :
+               les bulles sont très sombres (#0a0e17) sur un voile sombre, sous ~0,6 elles se
+               confondent avec le fond — d'où la plage étroite écrite par _hbLayout(). */
+            filter: blur(var(--hb-blur));
+            opacity: var(--hb-op);
         }
         /* Entrée déjà active (3D en cours, son coupé, trafic affiché…) */
         .hotbox-item.on {
             background: rgba(0,120,255,0.18); border-color: rgba(0,150,255,0.45); color: #58a6ff;
         }
+        /* Entrée ARMÉE : elle partira au relâchement. Le halo est le seul signal qui
+           distingue « cette entrée est devant moi » de « elle va se déclencher » — c'est
+           lui qui rend sûre l'annulation par simple relâchement avant tout glissement.
+           ⚠ Pas de `transform` ici : il est piloté au pixel près par _hbLayout(), une
+           surcharge de scale ferait sauter la bulle hors de l'arc. */
         .hotbox-item.hover {
-            transform: translate(var(--hb-tx), var(--hb-ty)) scale(1.22);
             border-color: rgba(88,166,255,0.85); color: #e2e8f0;
             box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 0 3px rgba(0,120,255,0.22);
         }
-        /* Mise au point sur l'entrée visée : les autres passent en retrait, sans jamais
-           DISPARAÎTRE — l'utilisateur doit continuer à voir où aller, la mémoire de la
-           position des entrées étant tout l'intérêt d'un menu radial.
-           ⚠ Ne pas baisser l'opacité pour obtenir ce retrait : les bulles sont déjà très
-           sombres (#0a0e17) et posées sur un voile sombre ; sous ~0,6 elles se confondent
-           purement et simplement avec le fond. Un premier essai à 0,45 combiné à
-           blur(2,5px) les effaçait complètement de l'écran.
-           Le retrait passe donc par la COULEUR — désaturation complète — avec un flou
-           minime pour le second plan, et une opacité qui reste haute. */
-        #hotbox-ring.focusing .hotbox-item:not(.hover) {
-            filter: grayscale(1) blur(0.8px);
-            opacity: 0.85;
+        /* Position d'abandon (le doigt DESCEND franchement, voir _hbOnMove) : toute la
+           rangée se met en retrait pour dire « relâcher ici ne lancera rien ». C'est le
+           seul endroit où l'opacité a le droit de tomber — l'effacement est ici le message,
+           et le seul endroit où la désaturation subsiste, précisément parce qu'elle ne
+           signifie plus que ça. Les deux ensemble rendent cet état impossible à confondre
+           avec le simple retrait des entrées du fond. */
+        #hotbox-ring.aborting .hotbox-item {
+            filter: grayscale(1) blur(2px);
+            opacity: 0.42;
         }
         /* Accents de choix binaire. Plus spécifiques que .hotbox-item.hover (trois
            sélecteurs simples contre deux), ils l'emportent donc sur le survol neutre
@@ -539,12 +575,98 @@
         }
         .hotbox-item .hb-glyph { font-size: 0.62em; font-weight: 900; letter-spacing: 0.5px; }
 
-        /* Intitulé de la cible (nom de station…), posé au-dessus du cercle.
-           --hb-r porte le rayon courant, sinon l'intitulé chevaucherait les entrées
-           quand le rayon change avec la taille de l'écran. */
+        /* ── PICTOGRAMMES : EN COULEUR, AUCUN FILTRE ──
+           Décision de l'auteur, revenue sur un essai en blanc (16/08/2026). Les emoji
+           gardent leurs couleurs natives : c'est par elles qu'on les reconnaît d'un coup
+           d'œil au volant (⛽ rouge, 🚦 tricolore, ☀️ jaune).
+           Le `<span>` reste — il isole le pictogramme de la bulle, et c'est le seul
+           endroit où un filtre pourrait être posé sans emporter le fond ni la bordure
+           (un filtre CSS agit sur tout le sous-arbre).
+           ⚠ SI L'ENVIE DE BLANC REVIENT, deux impasses déjà parcourues : `grayscale(1)`
+           seul donne un gris moyen, or le gris est le signal de l'état d'abandon
+           (`.aborting`) — les deux deviennent indiscernables ; et `brightness(0) invert(1)`
+           donne un blanc parfait mais une SILHOUETTE PLEINE, parce que les détails d'un
+           emoji sont des différences de couleur et non des trous dans la transparence
+           (la pompe ⛽ devient une brique, le feu 🚦 une gélule). Le seul rendu blanc qui
+           tenait était `grayscale(1) brightness(1.85) contrast(1.15)`. */
+        .hotbox-item .hb-ico { display: block; line-height: 1; }
+
+        /* ── PICTOGRAMMES EN IMAGE (Images/*.png, 192×192 RVB+alpha) ──
+           Taille exprimée en part de `--hb-item`, jamais en px : la bulle elle-même est
+           calculée en JS et varie avec la largeur d'écran ; une valeur figée se
+           décalerait du reste dès le premier changement d'appareil.
+           192 px de source pour ~48 px affichés couvre jusqu'à dpr 4 — inutile de monter
+           à 512, on ne paierait que du décodage.
+           `object-fit: contain` garantit qu'une image non carrée (la pompe est plus haute
+           que large) tienne sans être déformée. */
+        .hotbox-item .hb-img {
+            display: block;
+            width: calc(var(--hb-item, 60px) * 0.55);
+            height: calc(var(--hb-item, 60px) * 0.55);
+            object-fit: contain;
+            -webkit-user-drag: none; user-select: none;
+        }
+        /* ── SENS INTERDIT SUPERPOSÉ À UN PICTOGRAMME (« Masquer stations ») ──
+           Dessiné en CSS et non livré en PNG : il se superpose ainsi à N'IMPORTE quel picto
+           d'entrée (la pompe aujourd'hui, une future image de borne demain) sans qu'il faille
+           dessiner puis maintenir une variante barrée de chacun. Un cercle + une barre, c'est
+           deux règles ; une variante barrée par picto, c'est un fichier de plus à chaque fois.
+           `.hb-stack` ne fait qu'empiler : c'est `.hb-img` qui continue de dicter la taille,
+           donc l'entrée barrée reste rigoureusement au gabarit des autres. */
+        .hotbox-item .hb-stack {
+            position: relative; display: inline-flex;
+            align-items: center; justify-content: center;
+        }
+        /* ⚠ L'ÉPAISSEUR DU TRAIT SE DÉDUIT DE `--hb-item`, comme `.hb-img` — pas de valeur
+           en px, et pas d'`em` non plus : `em` suivrait la taille du TEXTE, qui n'a aucun
+           rapport avec la bulle, calculée en JS et variable avec la largeur d'écran. Le
+           facteur reprend celui de l'image (0.55) pour rester dans la même échelle. La
+           variable est déclarée sur `.hb-off` et héritée par `::after`, ce qui garde le
+           cercle et sa barre à la même épaisseur — les désolidariser se verrait tout de
+           suite sur un dessin aussi petit. */
+        .hotbox-item .hb-off {
+            --hb-off-w: calc(var(--hb-item, 60px) * 0.55 * 0.09);
+            position: absolute; left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            width: 78%; height: 78%;
+            border: var(--hb-off-w) solid #ff4d4d; border-radius: 50%;
+            box-sizing: border-box; pointer-events: none;
+            /* Sans cette ombre portée, le trait rouge se perd sur les zones claires du
+               dessin de pompe — le seul endroit où il DOIT rester lisible. */
+            filter: drop-shadow(0 0 2px rgba(0,0,0,0.85));
+        }
+        /* Barre en diagonale : une ligne verticale de la hauteur du cercle, tournée de 45°.
+           Les débordements haut et bas d'exactement une épaisseur de trait la font partir
+           du bord EXTÉRIEUR du cercle et non de son intérieur — sans eux, elle s'arrêterait
+           visiblement avant le trait circulaire aux deux extrémités. */
+        .hotbox-item .hb-off::after {
+            content: ''; position: absolute;
+            left: 50%; width: var(--hb-off-w);
+            top: calc(-1 * var(--hb-off-w)); bottom: calc(-1 * var(--hb-off-w));
+            background: #ff4d4d;
+            transform: translateX(-50%) rotate(45deg);
+        }
+
+        /* ⚠ RATTRAPAGE DE MARGE, propre à `mode_nuit.png`. Son dessin n'occupe que 54 % de
+           la toile, contre 85 % pour le soleil, le trafic et la pompe (mesuré sur le canal
+           alpha). Rendue à la même taille de boîte, la lune paraîtrait un tiers plus petite
+           que le soleil — et comme les deux sont les états du MÊME bouton, l'icône
+           rétrécirait à vue d'œil à chaque bascule.
+           0,85 / 0,54 ≈ 1,57. L'agrandissement ne coûte aucune netteté : le dessin fait
+           99 px de source pour ~102 px affichés sur un écran à dpr 2,625, soit du 1:1.
+           ⚠ À SUPPRIMER si l'image est réexportée avec la même marge que les autres —
+           cette règle est une rustine liée à UN fichier, pas une propriété du système. */
+        .hotbox-item .hb-img-nuit {
+            width: calc(var(--hb-item, 60px) * 0.55 * 1.57);
+            height: calc(var(--hb-item, 60px) * 0.55 * 1.57);
+        }
+
+        /* Intitulé de la cible (nom de station…), posé au-dessus du libellé.
+           --hb-title-off vient du JS, comme --hb-label-off dont il se déduit : les deux
+           dépendent de la hauteur réelle de l'arc, qui varie avec la taille de l'écran. */
         #hotbox-title {
             position: absolute; left: 0; top: 0;
-            transform: translate(-50%, calc(-1 * var(--hb-r, 100px) - 42px));
+            transform: translate(-50%, calc(-1 * var(--hb-title-off, 136px) - 100%));
             max-width: min(78vw, 320px); padding: 5px 12px; border-radius: 999px;
             background: rgba(6,10,18,0.94); border: 1px solid rgba(0,140,255,0.25);
             color: #cbd5e0; font-size: clamp(10px, 3vw, 12px); font-weight: 800;
@@ -552,13 +674,13 @@
             text-align: center; pointer-events: none; display: none;
         }
         #hotbox-title.visible { display: block; }
-        @keyframes hbPop {
-            from { opacity: 0; transform: scale(0.35); }
-            to   { opacity: 1; transform: scale(1); }
-        }
+        /* ⚠ L'image de fin doit REPRENDRE les variables, pas des valeurs en dur. Avec un
+           `scale(1)` figé, chaque bulle du fond se déployait à taille pleine puis sautait
+           à sa profondeur réelle en fin d'animation ; et une `opacity: 1` écrasait de même
+           l'effacement des entrées en bord de fenêtre pendant 0,2 s. */
         @keyframes hbItemIn {
-            from { opacity: 0; transform: translate(var(--hb-tx), var(--hb-ty)) scale(0.35); }
-            to   { opacity: 1; transform: translate(var(--hb-tx), var(--hb-ty)) scale(1); }
+            from { opacity: 0; transform: translateX(var(--hb-tx)) scale(0.35); }
+            to   { opacity: var(--hb-op); transform: translateX(var(--hb-tx)) scale(var(--hb-sc)); }
         }
 
         /* ── Anneau de progression de l'appui long ──
@@ -786,6 +908,59 @@
             60%  { transform: scale(1.06); opacity: 1;    box-shadow: 0 0 0 14px rgba(0,120,255,0); }
             100% { transform: scale(0.88); opacity: 0.55; box-shadow: 0 0 0 0 rgba(0,120,255,0); }
         }
+        /* Corps de la bulle : titre puis les deux lignes du geste (ouvrir / fermer).
+           ⚠ `text-align: center` est posé sur la bulle et convient au titre, PAS aux deux
+           lignes : centrées, leurs libellés « Ouvrir » et « Fermer » ne s'alignent plus
+           entre eux et la lecture en tableau se perd. Elles sont donc ferrées à gauche.
+           L'étiquette « Étape X/2 » a disparu avec la seconde invite (18/08/2026) : il n'y
+           a plus qu'une étape, la numéroter annoncerait une suite qui ne vient pas. */
+        .hb-hint-text { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+        .hb-hint-title {
+            font-size: clamp(9px, 2.6vw, 11px); font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: #58a6ff;
+        }
+        /* Le mot du geste, en tête de chaque ligne : c'est lui qu'on cherche des yeux. */
+        .hb-hint-text strong { color: #e2e8f0; font-weight: 800; }
+
+        /* Tutoriel recherche d'adresse (#dest-hint, #dest-mic-hint, #dest-pin-hint) :
+           message plein écran, fond flouté sur tout le reste — le focus doit être
+           entièrement sur le texte, contrairement aux autres invites de l'app (hotbox,
+           ping) qui restent des couches fines en pointer-events:none. Ici toute la
+           couche est cliquable : un tap n'importe où (backdrop, carte ou bouton) referme. */
+        .tuto-focus {
+            position: fixed; inset: 0; z-index: 5000;
+            display: none; align-items: center; justify-content: center;
+            background: rgba(4,6,10,0.6);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            padding: 24px; box-sizing: border-box;
+            cursor: pointer;
+        }
+        .tuto-focus.visible { display: flex; animation: hbVeilIn 0.25s ease-out; }
+        .tuto-focus-card {
+            max-width: min(88vw, 420px);
+            background: rgba(10,14,23,0.97);
+            border: 1px solid rgba(0,140,255,0.35);
+            border-radius: 20px;
+            padding: clamp(20px, 6vw, 30px) clamp(18px, 5vw, 26px);
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+            color: #e2e8f0;
+            font-size: clamp(16px, 4.5vw, 20px);
+            font-weight: 800;
+            line-height: 1.5;
+            animation: tutoFocusPop 0.3s ease-out;
+        }
+        .tuto-focus-close {
+            display: block; margin: 18px auto 0;
+            background: none; border: 1px solid rgba(0,140,255,0.35); border-radius: 10px;
+            color: #58a6ff; font-size: clamp(12px, 3.2vw, 14px); font-weight: 700;
+            padding: 9px 22px; cursor: pointer;
+        }
+        @keyframes tutoFocusPop {
+            from { transform: scale(0.92); opacity: 0; }
+            to   { transform: scale(1); opacity: 1; }
+        }
 
         /* Toast de confirmation live share */
         #liveshare-toast {
@@ -866,16 +1041,20 @@
 
 
         /* === BANNIERE PAUSE CONSEILLEE === */
+        /* Centrée au MILIEU de l'écran (20/08/2026) : posée à `top: 100px` elle se perdait
+           parmi les widgets du haut, au moment précis où le message doit être vu. Le centre
+           est le seul endroit qu'aucun autre élément ne dispute, et l'auto-effacement au
+           bout de 10 s (js/11) fait qu'elle n'y masque la carte que le temps d'être lue. */
         #rest-stop-banner {
-            display: none; position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             z-index: 1300; background: linear-gradient(170deg, #0a0e17, #0f1825); border: 1px solid rgba(243,156,18,0.3); border-radius: 14px;
             padding: 10px 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(243,156,18,0.05); align-items: center; gap: 10px;
             max-width: 320px; width: 88%;
         }
         #rest-stop-banner.visible { display: flex; animation: restStopSlideIn 0.4s ease; }
         @keyframes restStopSlideIn {
-            from { transform: translate(-50%, -30px); opacity: 0; }
-            to { transform: translate(-50%, 0); opacity: 1; }
+            from { transform: translate(-50%, calc(-50% - 30px)); opacity: 0; }
+            to { transform: translate(-50%, -50%); opacity: 1; }
         }
         #rest-stop-icon { font-size: 26px; flex-shrink: 0; }
         #rest-stop-text { flex: 1; color: #fff; min-width: 0; }
@@ -885,6 +1064,35 @@
         #rest-stop-dismiss:hover { color: #fff; }
         #rest-stop-banner.validated { border-color: #28a745; }
         #rest-stop-banner.validated #rest-stop-title { color: #28a745; }
+        #rest-stop-banner.lost { border-color: rgba(231,76,60,0.5); }
+        #rest-stop-banner.lost #rest-stop-title { color: #e74c3c; }
+        #rest-stop-banner.lost #rest-stop-detail { white-space: normal; }
+
+        /* === PICTOS « ZONE DE REPOS » SUR LA CARTE === */
+        /* Les trois zones du plan sont posées dès le calcul du trajet : voir la carte avant
+           de partir fait partie de la mécanique — on ne découvre pas ses occasions d'arrêt
+           au moment où l'alerte tombe. `pointer-events: none` parce qu'ils n'ouvrent rien :
+           les laisser cliquables volerait des appuis destinés à la carte. */
+        .rest-area-marker {
+            display: flex; align-items: center; gap: 3px; pointer-events: none;
+            padding: 3px 7px 3px 5px; border-radius: 11px;
+            background: linear-gradient(170deg, #0a0e17, #0f1825);
+            border: 1.5px solid rgba(243,156,18,0.45);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+            font-size: 12px; line-height: 1; white-space: nowrap;
+            opacity: 0.75; transition: opacity 0.25s ease, border-color 0.25s ease;
+        }
+        .rest-area-icon { font-size: 13px; }
+        .rest-area-num { font-weight: 800; font-size: 11px; color: #f39c12; }
+        /* Zone en cours de proposition : la seule qui compte à cet instant. */
+        .rest-area-marker.current {
+            opacity: 1; border-color: #f39c12;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.5), 0 0 14px rgba(243,156,18,0.45);
+        }
+        /* Zone déjà dépassée : conservée à l'écran, éteinte et barrée. Elle rend visible
+           le compte à rebours des occasions restantes. */
+        .rest-area-marker.passed { opacity: 0.35; border-color: rgba(255,255,255,0.15); }
+        .rest-area-marker.passed .rest-area-num { color: #888; text-decoration: line-through; }
 
         /* === BANNIÈRE DE CONNECTIVITÉ === */
         #connectivity-banner {
@@ -1004,13 +1212,10 @@
             transition: border-color 0.2s; color: #fff; font-weight: bold; font-size: 13px;
         }
         #info-widget.open #info-badge { border-color: #4da3ff; }
-        #info-badge.arrived-pulse { animation: infoArrivedPulse 1s ease-in-out infinite; }
-        @keyframes infoArrivedPulse {
-            0%, 100% { transform: scale(1); border-color: #dc3545; box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 6px rgba(220,53,69,0.5); }
-            25% { transform: scale(1.15); border-color: #ff6b6b; box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 28px rgba(220,53,69,0.95); }
-            50% { transform: scale(1); border-color: #dc3545; box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 6px rgba(220,53,69,0.5); }
-            75% { transform: scale(1.15); border-color: #ff6b6b; box-shadow: 0 8px 25px rgba(0,0,0,0.6), 0 0 28px rgba(220,53,69,0.95); }
-        }
+        /* `.arrived-pulse` et son animation ont ete retires le 21/08/2026 avec l'etat
+           « Arrivee a destination » du badge : plus rien ne posait cette classe. Une
+           arrivee constatee termine le trajet d'elle-meme, il n'y a plus d'evenement a
+           signaler par un clignotement. */
         #info-widget-panel {
             display: none; position: absolute; top: calc(100% + 8px); left: 0;
             width: 250px; background: #1e1e1e; border: 1px solid #333; border-radius: 12px;
@@ -1021,6 +1226,46 @@
         #info-widget.open #info-widget-panel { display: flex; }
         .info-item { display: flex; justify-content: space-between; font-size: 14px; font-weight: bold;}
         .info-item span:last-child { color: #4da3ff; }
+
+        /* Un « mode arrivee » a vecu ici quelques heures le 21/08/2026 : la classe
+           `.arrival-mode` sortait ce badge de son coin pour le poser au centre de l'ecran
+           en bouton « Je suis arrive », des 500 m de la destination. Retire — un trajet ne
+           se termine que lorsqu'on est ARRIVE a l'adresse, et un bouton proposant de couper
+           le guidage a 400 m induit le conducteur en erreur. Le widget reste donc toujours
+           dans son coin. */
+
+        /* === FENETRE D'ARRIVEE === */
+        #arrival-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 3000;
+            background: rgba(0,0,0,0.75);
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        #arrival-modal-overlay.open { display: flex; }
+        #arrival-modal {
+            width: min(88vw, 360px); box-sizing: border-box;
+            background: linear-gradient(170deg, #0f1825, #0a0e17);
+            border: 1px solid rgba(40,167,69,0.4); border-radius: 20px;
+            padding: 26px 22px; text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.75);
+        }
+        #arrival-modal-icon { font-size: clamp(34px, 9vw, 44px); line-height: 1; }
+        #arrival-modal-title {
+            margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: 2.5px;
+            text-transform: uppercase; color: #8892b0;
+        }
+        #arrival-modal-points { margin-top: 16px; }
+        .arrival-points-value { font-size: clamp(38px, 11vw, 52px); font-weight: 800; color: #28a745; }
+        .arrival-points-unit  { font-size: 14px; color: #4a5568; margin-left: 6px; }
+        #arrival-modal-sub {
+            margin-top: 8px; font-size: 12px; color: #4a5568; line-height: 1.5;
+        }
+        #arrival-modal-close {
+            width: 100%; margin-top: 22px; padding: 13px; border-radius: 12px;
+            font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer;
+            border: 1px solid rgba(40,167,69,0.45); background: rgba(40,167,69,0.15);
+            color: #28a745;
+        }
+        #arrival-modal-close:active { background: rgba(40,167,69,0.3); }
 
 
         /* === PANNEAU DE CONTRÔLE UI === */
@@ -1067,6 +1312,7 @@
             overflow: visible !important;
         }
         #ui-panel.search-focus #itin-saved-section,
+        #ui-panel.search-focus #itin-places-section,
         #ui-panel.search-focus .itin-mode-toggle,
         #ui-panel.search-focus #btn-start,
         #ui-panel.search-focus #btn-free,
@@ -1081,6 +1327,7 @@
            démarrer, trajet libre, statut GPS). Le panneau retrouve son contenu complet
            dès la fermeture du formulaire. */
         #ui-panel.contact-focus #itin-destination-section,
+        #ui-panel.contact-focus #itin-places-section,
         #ui-panel.contact-focus .itin-mode-toggle,
         #ui-panel.contact-focus #btn-start,
         #ui-panel.contact-focus #btn-free,
@@ -1093,6 +1340,30 @@
            rognage, sinon la règle ci-dessus laisserait déborder le formulaire. */
         #ui-panel.contact-focus.panel-min,
         #ui-panel.contact-focus.panel-hidden { overflow: hidden !important; }
+
+        /* === MODE SAISIE D'UN LIEU FIXE (domicile / travail) ===
+           Décalque de `contact-focus` ci-dessus, et NON une réutilisation de cette classe :
+           `toggleCreateContactForm(false)` est appelée depuis une demi-douzaine d'endroits
+           (dont clearDestination()) et retirerait `contact-focus` sous le formulaire de lieu
+           encore ouvert. Deux états distincts ne peuvent pas s'éteindre l'un l'autre par
+           accident.
+           `#itin-saved-section` disparaît ici alors que `#itin-places-section` reste —
+           c'est l'inverse du bloc contact, et c'est normal : on masque tout SAUF la section
+           en cours de saisie. Les DEUX boutons restent donc visibles pendant l'édition de
+           l'un d'eux, ce qui rend le titre du formulaire (« Mon domicile » / « Mon lieu de
+           travail ») nécessaire : sans lui, rien ne dirait lequel on est en train de
+           modifier. */
+        #ui-panel.place-focus #itin-destination-section,
+        #ui-panel.place-focus #itin-saved-section,
+        #ui-panel.place-focus .itin-mode-toggle,
+        #ui-panel.place-focus #btn-start,
+        #ui-panel.place-focus #btn-free,
+        #ui-panel.place-focus #status,
+        #ui-panel.place-focus .itin-footer { display: none !important; }
+        #ui-panel.place-focus #ui-panel-title { margin-bottom: 12px; }
+        #ui-panel.place-focus { overflow: visible !important; }
+        #ui-panel.place-focus.panel-min,
+        #ui-panel.place-focus.panel-hidden { overflow: hidden !important; }
 
         /* Ancrage de la liste de suggestions du champ Adresse du formulaire contact */
         .contact-addr-wrap { position: relative; }
@@ -1191,9 +1462,12 @@
         .driver-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 1.5vw, 8px); font-size: 12px; margin-top: clamp(2px, 1vw, 4px); color: #7b8794; }
         .stat-item { background: rgba(10,14,23,0.6); border: 1px solid rgba(0,140,255,0.08); border-radius: 10px; padding: clamp(6px, 1.5vw, 8px); display: flex; justify-content: space-between; align-items: center; }
         .stat-item .val { font-weight: 700; color: #e2e8f0; font-size: 13px; }
-        .points-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: clamp(4px, 1vw, 6px); }
-        .speed-limit { font-size: 11px; color: #7b8794; background: rgba(10,14,23,0.5); padding: clamp(2px, 0.5vw, 4px) clamp(6px, 1.5vw, 8px); border: 1px solid rgba(0,140,255,0.1); border-radius: 8px; display: flex; align-items: center; gap: clamp(3px, 1vw, 5px); }
-        .points-box { font-weight: 800; font-size: 22px; color: #58a6ff; position: relative; letter-spacing: 0.5px;}
+        /* `.points-row`, `.speed-limit` et `.points-box` habillaient la ligne
+           « Limite: xx km/h  /  x.xxx pts » de la carte conducteur, retiree du balisage le
+           22/08/2026 (voir renderDriversUI, js/14). Regles supprimees avec elle.
+           ⚠ Ne pas confondre `.speed-limit` avec `#speed-limit-badge` / `#speed-limit-value`
+           (plus bas), la pastille de limitation affichee en navigation : elle vit toujours
+           et c'est desormais le seul rendu de la limite. */
 
         #status { font-size: 13px; color: #ff6b6b; margin-top: 5px; text-align: center; min-height: 18px; font-weight: 700; letter-spacing: 0.5px; }
 
@@ -1253,7 +1527,39 @@
 
         .itin-select-row select { appearance: none; -webkit-appearance: none; cursor: pointer; }
         .itin-select-row select option { background: #0d1420; color: #c9d1d9; }
-        .itin-select-chevron { color: #4a5568; display: flex; flex-shrink: 0; }
+        .itin-select-chevron { color: #4a5568; display: flex; flex-shrink: 0; transition: transform 0.15s; }
+
+        /* Déclencheur du menu déroulant personnalisé du profil (#profile-dropdown-menu),
+           calqué à l'identique sur le <select> qu'il remplace visuellement : mêmes
+           flex/police/couleur, pour que rien ne bouge dans la ligne. */
+        .itin-select-fake {
+            flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+            color: #c9d1d9; font-size: 14px; text-align: left; cursor: pointer; padding: 0;
+        }
+        .itin-select-fake span {
+            display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        /* Une ligne du menu = le nom (sélection) + sa propre suppression, alignés aux
+           deux bouts. `.addr-suggestion` ne prévoyait qu'un seul élément cliquable par
+           ligne ; ce gabarit lui ajoute la colonne d'action sans toucher à ses réglages
+           de base (police, séparateur, survol). */
+        .profile-menu-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: clamp(8px, 2vw, 10px) clamp(10px, 3vw, 12px);
+            border-bottom: 1px solid rgba(0,140,255,0.08);
+        }
+        .profile-menu-row:last-child { border-bottom: none; }
+        .profile-menu-row.active { background: rgba(0,120,255,0.1); }
+        .profile-menu-name {
+            flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-size: clamp(12px, 3.5vw, 13px); color: #b0bec5; cursor: pointer;
+        }
+        .profile-menu-row:hover .profile-menu-name, .profile-menu-row.active .profile-menu-name { color: #e2e8f0; }
+        .profile-menu-delete {
+            background: transparent; border: none; color: #f85149; cursor: pointer;
+            flex-shrink: 0; display: flex; align-items: center; padding: 2px;
+        }
+        .profile-menu-delete:hover { color: #ff6b6b; }
         .itin-select-chevron svg { width: 16px; height: 16px; }
 
         /* Bouton "+" de création de profil, logé dans la ligne de sélection à côté de la
@@ -1355,6 +1661,58 @@
         .itin-free-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.3; }
         .itin-free-title { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #c9d1d9; }
         .itin-free-sub { font-size: 11px; color: #4a5568; }
+
+        /* === LIEUX FIXES (« Go home » / « Go work ») ===
+           Les boutons empruntent le gabarit de `.itin-free-btn` : même hauteur, même paire
+           titre / sous-titre, même retenue visuelle. Volontaire — ces raccourcis et
+           « Trajet libre » sont de même rang, et deux gabarits proches mais pas identiques
+           se seraient lus comme un défaut d'alignement.
+
+           ⚠ `grid` à DEUX COLONNES `1fr 1fr`, et non un flex à deux enfants : les colonnes
+           sont ainsi rigoureusement égales quel que soit le contenu. En flex, l'adresse la
+           plus longue aurait élargi sa moitié au détriment de l'autre — deux boutons
+           jumeaux de largeurs différentes, ce qui se lit comme un bug de mise en page. */
+        .itin-places-row {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: clamp(6px, 2vw, 8px); align-items: stretch;
+        }
+        /* `min-width: 0` sur la cellule ET sur le bloc de texte : sans lui, la taille
+           minimale de contenu d'un élément de grille l'emporte sur `1fr` et l'adresse
+           pousse la colonne au lieu d'être tronquée. C'est la cause classique d'une
+           grille qui déborde alors que l'ellipsis est bien déclarée. */
+        .itin-place-cell { display: flex; align-items: stretch; gap: 2px; min-width: 0; }
+        .itin-place-cell .itin-place-btn { flex: 1; min-width: 0; margin-bottom: 0; }
+        .itin-place-cell > .itin-icon-btn { flex: 0 0 auto; padding: 0 2px; }
+
+        /* Deux fois plus étroits qu'un bouton pleine largeur : la gouttière interne et le
+           centrage doivent suivre, sinon le picto et le texte se disputent les ~120 px
+           utiles et le libellé se tronque avant même d'avoir commencé. */
+        .itin-place-btn {
+            gap: clamp(6px, 1.8vw, 8px);
+            padding: clamp(9px, 2.2vw, 11px) clamp(8px, 2vw, 10px);
+            justify-content: flex-start;
+        }
+        .itin-place-btn .itin-free-icon { flex: 0 0 auto; }
+        .itin-place-btn .itin-free-icon svg { width: 18px; height: 18px; }
+
+        /* Lieu renseigné : le bouton cesse d'être une invite et devient une action. L'écart
+           tient à la seule bordure et à la couleur du picto — assez pour distinguer les
+           deux états d'un coup d'œil, pas assez pour rivaliser avec « Démarrer », qui reste
+           le bouton principal du panneau. */
+        .itin-place-btn.has-place { border-color: rgba(0,150,255,0.25); }
+        .itin-place-btn.has-place .itin-free-icon { color: #58a6ff; }
+        .itin-place-btn.has-place .itin-free-title { color: #e2e8f0; }
+        /* L'adresse peut être longue, et la moitié de largeur ne pardonne rien : une ligne
+           coupée proprement vaut mieux qu'un bouton qui grandit et décale tout ce qui le
+           suit dans le panneau. Le titre est tronqué lui aussi — « Domicile » tient, mais
+           rien ne garantit qu'un libellé futur tiendra. */
+        .itin-place-btn .itin-free-text { min-width: 0; flex: 1; }
+        .itin-place-btn .itin-free-title,
+        .itin-place-btn .itin-free-sub {
+            max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .itin-place-btn .itin-free-sub { font-size: 10px; }
+        .itin-place-btn.has-place .itin-free-sub { color: #7b8794; }
 
         .itin-footer { display: flex; align-items: center; justify-content: space-between; padding-top: clamp(8px, 2vw, 10px); border-top: 1px solid rgba(0,140,255,0.08); margin-top: clamp(2px, 1vw, 4px); }
         #panel-gps-status { display: flex; align-items: center; gap: clamp(6px, 1.5vw, 8px); font-size: 12px; font-weight: 700; color: #4a5568; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -1554,6 +1912,8 @@
                    forme courte remet les DEUX axes, c'est voulu — les suggestions doivent
                    pouvoir sortir du panneau. */
                 border-top: 1px solid rgba(0,140,255,0.2); overflow-y: auto; overflow-x: hidden;
+                /* Plafond général : 60 px de carte restent visibles en haut, pour qu'une
+                   feuille ancrée en bas ne se confonde jamais avec un écran plein. */
                 max-height: calc(100dvh - var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px))) - 60px);
                 min-height: 54px;
                 will-change: max-height;
@@ -1666,6 +2026,101 @@
             #ui-panel.minimized .toggle-panel-btn { left: 50%; transform: translateX(-50%); right: auto; }
 
             #nav-side-controls { top: 15px; right: 15px; }
+        }
+
+        /* ═══ PAYSAGE EN TRAJET — COLONNE D'INFOS À GAUCHE, CARTE À DROITE ═══
+           (inspiré de la disposition CarPlay/Android Auto)
+
+           En paysage, la bannière du prochain virage occupait toute la largeur en haut et
+           les compteurs formaient un bloc en bas à DROITE : les deux zones où la route à
+           venir se lit — devant le véhicule, et du côté vers lequel on tourne. La carte
+           n'avait plus qu'une bande centrale.
+
+           Tout ce qui est textuel passe donc dans une colonne unique à gauche : le virage
+           en haut, les compteurs en bas, l'un sous l'autre et à la même largeur pour que la
+           colonne se lise comme un seul bloc. Le reste de l'écran est de la carte.
+
+           Les règles sont TOUTES préfixées `body.nav-active` : hors trajet, le paysage garde
+           la disposition d'origine (bloc à droite), et rien n'est touché en portrait.
+
+           ⚠ Aucun nœud n'est déplacé dans le DOM — uniquement du positionnement. Les `id`
+           de ces blocs sont adressés depuis tout le JS de navigation.
+           ⚠ La largeur de la colonne est aussi lue par getMapFollowPadding() (js/08) pour
+           décaler la caméra : le véhicule suivi doit rester au centre de la CARTE VISIBLE,
+           pas du canevas. Les deux vont ensemble. */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body.nav-active {
+                --nav-rail-w: clamp(200px, 30vw, 290px);
+                --nav-rail-gap: 10px;
+            }
+
+            /* ── Haut de colonne : le prochain virage ── */
+            body.nav-active #next-turn-panel {
+                top: var(--nav-rail-gap); left: var(--nav-rail-gap);
+                width: var(--nav-rail-w);
+                border-radius: 16px;
+                padding: 10px 12px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+            }
+            body.nav-active #next-turn-primary { gap: 10px; }
+            body.nav-active #next-turn-icon-container { width: 34px; height: 34px; }
+            body.nav-active #next-turn-icon-container svg { width: 26px; height: 30px; }
+            body.nav-active #next-turn-distance { font-size: 21px; }
+            body.nav-active #next-turn-street { font-size: 12.5px; }
+            body.nav-active #next-turn-secondary { margin-top: 8px; padding-top: 8px; gap: 8px; }
+            body.nav-active #next-turn-secondary .puis-label,
+            body.nav-active #next-turn-secondary-street { font-size: 12px; }
+
+            /* Le décalage vertical d'#info-widget servait à passer SOUS une bannière pleine
+               largeur ; celle-ci n'existe plus ici. Le badge se range à droite de la colonne,
+               en haut de la carte, où il ne recouvre plus rien. */
+            body.nav-active #info-widget {
+                top: var(--nav-rail-gap);
+                left: calc(var(--nav-rail-w) + var(--nav-rail-gap) * 2);
+            }
+
+            /* ── Bas de colonne : les compteurs du trajet ──
+               Même largeur et même gouttière que la carte du virage. Le `bottom` reprend
+               --panel-bottom-offset (hauteur mesurée de la barre d'onglets permanente),
+               au lieu des 20 px en dur de la règle paysage générique qui passaient dessous. */
+            body.nav-active #nav-bottom-bar {
+                left: var(--nav-rail-gap); right: auto;
+                bottom: calc(var(--panel-bottom-offset, 64px) + var(--nav-rail-gap));
+                width: var(--nav-rail-w); box-sizing: border-box;
+                padding: 8px 10px 9px; border-radius: 16px;
+                border: 1px solid rgba(0,140,255,0.15);
+                gap: 6px;
+            }
+            /* Les trois compteurs restent sur une ligne — comme la ligne arrivée / durée /
+               distance de la référence. C'est la taille du texte qui cède, pas la mise en
+               page : empilés, ils mangeraient la moitié de la hauteur utile (~350 px). */
+            body.nav-active .nav-stats-row { gap: 8px; padding: 0 2px; }
+            body.nav-active .nav-stat-label { font-size: 8px; letter-spacing: 0.5px; }
+            body.nav-active .nav-stat-value { font-size: 15px; gap: 3px; }
+            body.nav-active #nav-eta { font-size: 14px; }
+            body.nav-active #nav-google-close,
+            body.nav-active #nav-google-altroute { width: 30px; height: 30px; font-size: 14px; }
+            body.nav-active #nav-eco-counter { gap: 10px; padding: 4px 4px 2px; flex-wrap: wrap; }
+
+            /* ── Droite : la carte, et seulement les pastilles de vitesse ──
+               Coin BAS droit, et non haut droit comme sur la référence : le haut droit est
+               déjà la colonne de boutons #nav-side-controls (boussole, recherche, muet), que
+               la règle paysage ci-dessus y place. Le bas droit vient d'être libéré par le
+               départ des compteurs vers la gauche.
+               Le `bottom` se cale sur la barre d'onglets permanente (--panel-bottom-offset),
+               là où le 20 px en dur de la règle paysage générique passait dessous. */
+            body.nav-active #nav-speed-display,
+            body.bottom-bars-active.nav-active #nav-speed-display {
+                bottom: calc(var(--panel-bottom-offset, 64px) + 6px); right: 10px; top: auto;
+                width: 86px; height: 86px;
+            }
+            body.nav-active #nav-speed-value { font-size: 26px; }
+            body.nav-active #speed-limit-badge,
+            body.bottom-bars-active.nav-active #speed-limit-badge {
+                bottom: calc(var(--panel-bottom-offset, 64px) + 22px); right: 100px; top: auto;
+                width: 44px; height: 44px; border-width: 3px;
+            }
+            body.nav-active #speed-limit-value { font-size: 16px; }
         }
 
         /* === BOUTON RECENTRER === */
@@ -1914,16 +2369,176 @@
             font-size: 14px; font-weight: 900; letter-spacing: 1.5px; color: #f1c40f; margin-bottom: 6px;
         }
         #weekly-goals-timer { font-size: 11px; color: #8892b0; margin-bottom: 14px; }
+        /* ═══ OBJECTIFS DE LA SEMAINE — CARTES A EMBLEME (21/08/2026) ═══
+           Les cartes etaient des rectangles gris a filet vertical, l'etat porte par une
+           case ⬜/✅ collee au titre. Chaque carte porte desormais un EMBLEME qui dit la
+           nature de l'objectif (points, kilometres, trajets), la pastille verte de
+           completion se posant dessus : deux informations d'un coup d'oeil au lieu d'une.
+           Toutes les tailles sont en clamp() par la regle responsive du projet. */
         .wg-item {
-            background: #22262c; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
-            border-left: 4px solid #333;
+            display: flex; align-items: center; gap: clamp(10px, 2.8vw, 14px);
+            background: linear-gradient(170deg, #131b27, #0c111a);
+            border: 1px solid rgba(0,140,255,0.14);
+            border-radius: clamp(12px, 3.4vw, 16px);
+            padding: clamp(11px, 3vw, 14px);
+            margin-bottom: clamp(8px, 2.2vw, 10px);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
         }
-        .wg-item.completed { border-left-color: #2ecc71; }
-        .wg-item-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
-        .wg-item-bar { background: #111; border-radius: 6px; height: 8px; overflow: hidden; }
-        .wg-item-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #3498db, #2ecc71); transition: width 0.5s ease; }
-        .wg-item-fill.done { background: linear-gradient(90deg, #2ecc71, #27ae60); }
-        .wg-item-progress { font-size: 11px; color: #8892b0; margin-top: 4px; text-align: right; }
+        /* Objectif atteint : la carte entiere vire au vert, halo compris. Le filet vertical
+           d'avant ne se voyait pas sur une liste parcourue rapidement. */
+        .wg-item.completed {
+            border-color: rgba(40,167,69,0.45);
+            background: linear-gradient(170deg, #10231a, #0a1410);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.35), 0 0 20px rgba(40,167,69,0.12), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .wg-emblem {
+            flex-shrink: 0;
+            width: clamp(38px, 10.5vw, 46px); height: clamp(38px, 10.5vw, 46px);
+            border-radius: clamp(10px, 2.8vw, 13px);
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,140,255,0.07);
+            border: 1px solid rgba(0,140,255,0.16);
+        }
+        .wg-item.completed .wg-emblem {
+            background: rgba(40,167,69,0.12); border-color: rgba(40,167,69,0.4);
+        }
+        /* La coche EST le contenu de l'embleme, a la taille qu'occupait le pictogramme.
+           Une premiere version mettait un emoji de nature (etoile, ville) avec une petite
+           pastille de validation en debord : deux symboles dans un carre de 46 px, dont un
+           trop petit pour se lire au premier coup d'oeil.
+           ⚠ Glyphe texte « ✓ » (U+2713) et NON un emoji : il prend la couleur du CSS et se
+           dessine avec la fonte du texte, donc identiquement partout — meme raison que la
+           puce `.ui-dot` (un emoji est rendu par la police systeme, sa taille et son
+           alignement vertical varient d'un appareil a l'autre). */
+        .wg-emblem-check {
+            font-size: clamp(18px, 5vw, 22px); line-height: 1; font-weight: 900;
+            /* Objectif non atteint : la coche reste en place, en gris eteint. C'est sa
+               COULEUR qui porte l'etat — une case vide n'annoncerait pas ce qu'elle
+               attend, et la faire apparaitre decalerait le titre au moment de la reussite. */
+            color: #2f3947;
+        }
+        .wg-item.completed .wg-emblem-check {
+            color: #3ddc84;
+            text-shadow: 0 0 12px rgba(40,167,69,0.45);
+        }
+
+        .wg-body { flex: 1; min-width: 0; }
+        /* `align-items: flex-start` et non center : le titre peut passer sur deux lignes,
+           le chiffre jamais — centre, il flotterait au milieu d'un titre long. */
+        .wg-head {
+            display: flex; align-items: flex-start; justify-content: space-between;
+            gap: 10px; margin-bottom: clamp(6px, 1.8vw, 8px);
+        }
+        .wg-item-title {
+            font-size: clamp(12px, 3.2vw, 13px); font-weight: 700; color: #c9d1d9;
+            line-height: 1.35; min-width: 0;
+        }
+        .wg-item.completed .wg-item-title { color: #d7e6dc; }
+        .wg-item-progress { flex-shrink: 0; text-align: right; white-space: nowrap; }
+        /* La valeur atteinte est le seul chiffre qui bouge : elle porte donc le contraste,
+           la cible restant en retrait. */
+        .wg-val { font-size: clamp(15px, 4.2vw, 18px); font-weight: 800; color: #e2e8f0; }
+        .wg-item.completed .wg-val { color: #3ddc84; }
+        .wg-tot { font-size: clamp(9px, 2.5vw, 10px); color: #4a5568; margin-left: 4px; }
+
+        .wg-item-bar {
+            background: rgba(0,0,0,0.45); border-radius: 6px;
+            height: clamp(6px, 1.8vw, 8px); overflow: hidden;
+        }
+        .wg-item-fill {
+            height: 100%; border-radius: 6px;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            transition: width 0.5s ease;
+        }
+        .wg-item-fill.done {
+            background: linear-gradient(90deg, #28a745, #3ddc84);
+            box-shadow: 0 0 12px rgba(40,167,69,0.5);
+        }
+        .wg-tag {
+            font-size: clamp(8px, 2.2vw, 9px); font-weight: 700; color: #58a6ff;
+            background: rgba(0,140,255,0.12); border-radius: 5px;
+            padding: 1px 5px; margin-left: 6px; white-space: nowrap;
+        }
+
+        /* Compte a rebours : pastille encadree + legende. C'est la seule information
+           perissable de l'ecran ; en ligne de texte grise elle passait pour une note. */
+        #weekly-goals-timer-panel { text-align: center; margin-bottom: clamp(12px, 3.4vw, 16px); }
+        .wg-timer-pill {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: clamp(6px, 1.8vw, 8px) clamp(12px, 3.4vw, 16px);
+            border-radius: 999px;
+            border: 1px solid rgba(0,140,255,0.28); background: rgba(0,140,255,0.07);
+            font-size: clamp(11px, 3vw, 12px); font-weight: 800;
+            letter-spacing: 1.2px; text-transform: uppercase; color: #c9d1d9;
+        }
+        /* La puce herite d'un `margin-right` prevu pour un titre : dans une pastille reglee
+           par `gap`, il ajoutait un decalage a droite du point. */
+        .wg-timer-pill .ui-dot { margin-right: 0; }
+        .wg-timer-cap {
+            margin-top: 5px; font-size: clamp(8px, 2.2vw, 9px); font-weight: 700;
+            letter-spacing: 2px; text-transform: uppercase; color: #4a5568;
+        }
+
+        /* Encart baseline / phase d'observation — styles sortis des attributs inline. */
+        .wg-note {
+            display: flex; gap: 9px; align-items: flex-start;
+            background: rgba(0,150,255,0.06); border: 1px solid rgba(0,140,255,0.12);
+            border-radius: clamp(10px, 2.8vw, 12px);
+            padding: clamp(9px, 2.6vw, 11px) clamp(10px, 3vw, 13px);
+            margin-bottom: clamp(10px, 2.8vw, 13px);
+            font-size: clamp(11px, 3vw, 12px); color: #7b8794; line-height: 1.45;
+        }
+        .wg-note strong { color: #c9d1d9; }
+        .wg-note .wg-note-strong { color: #58a6ff; }
+        .wg-note-ico { flex-shrink: 0; font-size: 1.1em; }
+        .wg-note.observation { background: rgba(243,156,18,0.06); border-color: rgba(243,156,18,0.15); }
+        .wg-note.observation .wg-note-strong { color: #f39c12; }
+
+        /* Semaine reussie. ⚠ PAS DE POLICE SCRIPT : l'app ne charge aucune police externe
+           (elle tourne en file:// et depuis android_asset), et la WebView Android n'embarque
+           aucune fonte cursive — un `font-family: cursive` y retomberait sur Roboto, donnant
+           un rendu different du navigateur de bureau. L'emphase vient donc de la taille, de
+           l'italique et de l'or, qui rendent pareil partout. */
+        .wg-badge-won {
+            position: relative; overflow: hidden;
+            border-radius: clamp(14px, 3.8vw, 18px);
+            border: 1px solid rgba(212,175,55,0.35);
+            background: linear-gradient(170deg, #16200f, #0b120a);
+            padding: clamp(16px, 4.4vw, 22px) clamp(14px, 4vw, 18px);
+        }
+        /* Halo unique derriere la medaille, a la place du filigrane repete du modele :
+           un texte repete en fond passe derriere le libelle et le rend penible a lire sur
+           un ecran de telephone, pour un gain purement decoratif. */
+        .wg-badge-won::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 22%, rgba(212,175,55,0.18), transparent 62%);
+            pointer-events: none;
+        }
+        .wg-badge-medal {
+            position: relative; font-size: clamp(30px, 8.5vw, 38px); line-height: 1;
+            filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));
+        }
+        .wg-badge-title {
+            position: relative; margin-top: 6px;
+            font-size: clamp(17px, 4.8vw, 21px); font-weight: 800; font-style: italic;
+            letter-spacing: 0.3px; color: #e8c96a;
+        }
+        .wg-badge-sub {
+            position: relative; margin-top: 5px;
+            font-size: clamp(11px, 3vw, 12px); color: #8892b0; line-height: 1.5;
+        }
+
+        .wg-claim-btn {
+            background: linear-gradient(135deg, #00b4d8, #0077b6); color: #fff;
+            border: none; border-radius: clamp(10px, 3vw, 12px);
+            padding: clamp(12px, 3.4vw, 14px) clamp(22px, 6vw, 28px);
+            font-size: clamp(13px, 3.6vw, 15px); font-weight: 900; font-family: inherit;
+            letter-spacing: 1px; cursor: pointer;
+            box-shadow: 0 6px 22px rgba(0,120,200,0.35);
+        }
+        .wg-claim-btn:active { transform: scale(0.97); }
+        .wg-remaining { color: #4a5568; font-size: clamp(11px, 3vw, 12px); line-height: 1.5; }
         #weekly-goals-bonus {
             text-align: center; margin-top: 10px; padding: 10px;
             border-radius: 12px; font-weight: 700; font-size: 13px;
@@ -1931,13 +2546,10 @@
 
         /* === GALERIE DES TROPHÉES === */
         /* Geometrie et fond : voir .profil-row / .profil-row-btn (format partage).
-           Seul le compteur « 0 / 8 » est propre a cette ligne. */
+           La pastille « 0 / 8 » qui vivait ici a ete retiree le 22/08/2026, comme celle
+           de l'historique des trajets (.th-count) : elles n'apprenaient rien qu'on ne
+           lise en ouvrant la page. */
         #trophy-gallery-toggle .tg-left { display: flex; align-items: center; gap: 8px; }
-        #trophy-gallery-toggle .tg-count {
-            font-size: 11px; font-weight: 700; color: #4a5568;
-            background: rgba(0,140,255,0.08); border-radius: 20px;
-            padding: 2px 8px; letter-spacing: 0.3px;
-        }
         #trophy-gallery-toggle .tg-arrow {
             font-size: 12px; color: #4a5568; transition: transform 0.3s ease;
         }
@@ -2046,6 +2658,18 @@
         }
         #badge-category-sub {
             font-size: 12px; color: #8892b0; font-weight: 600;
+        }
+        /* Prénom du profil actif, à droite de la médaille : savoir SUR QUEL PROFIL on
+           joue est la première question que pose cette carte, puisque badges, points et
+           objectifs sont cloisonnés par profil. `margin-left:auto` le pousse au bord,
+           `min-width:0` + ellipsis pour qu'un prénom long rétrécisse au lieu de pousser
+           la médaille hors du cadre. Masqué quand aucun profil n'est actif (js/12) —
+           un libellé « aucun profil » dirait la même chose que la liste juste dessous. */
+        #badge-category-profile {
+            margin-left: auto; margin-right: 35px; flex-shrink: 1; min-width: 0;
+            font-size: 30px; font-weight: 800; letter-spacing: 0.3px;
+            color: #c9d1d9; text-align: right;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         #stats-pill-btn {
             width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
@@ -2321,6 +2945,53 @@
             color: #58a6ff; text-decoration: none;
         }
 
+        /* === PROPOSITION D'ITINÉRAIRE PLUS RAPIDE ===
+           Même emplacement que les bannières ⛽ et ZFE (bas d'écran, au-dessus de la barre) :
+           z-index 4550, donc AU-DESSUS de la station essence (4500, confort) et EN DESSOUS
+           de la ZFE (4600, contrainte légale). Si les deux devaient s'afficher ensemble,
+           c'est l'information contraignante qui doit rester lisible. */
+        #reroute-banner {
+            display: none; position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+            z-index: 4550; width: calc(100% - 32px); max-width: 420px; box-sizing: border-box;
+            background: linear-gradient(135deg, #06210f, #0a2f18);
+            border: 1px solid rgba(46,213,115,0.5); border-radius: 18px;
+            padding: 14px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 22px rgba(46,213,115,0.18);
+            animation: rerouteSlideIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        #reroute-banner.visible { display: block; }
+        @keyframes rerouteSlideIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(30px); }
+            to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        #reroute-banner-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;
+        }
+        #reroute-banner-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 15px; font-weight: 800; color: #2ed573; letter-spacing: 0.3px;
+        }
+        #reroute-banner-gain {
+            font-size: 17px; font-weight: 900; color: #7bed9f; white-space: nowrap;
+        }
+        #reroute-banner-msg { font-size: 13px; color: #a8d5b8; line-height: 1.45; }
+        /* Boutons pleine largeur et hauts : ils sont pressés au volant, en roulant.
+           « Suivre » à DROITE, côté pouce, et le refus volontairement moins saillant —
+           mais jamais caché : ne rien faire doit rester possible sans viser une croix. */
+        #reroute-banner-actions { display: flex; gap: 10px; margin-top: 12px; }
+        #reroute-banner-actions button {
+            flex: 1; min-height: 46px; border-radius: 12px; cursor: pointer;
+            font-size: 14px; font-weight: 800; letter-spacing: 0.3px;
+        }
+        #reroute-banner-no {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #c8d6cd;
+        }
+        #reroute-banner-yes {
+            background: linear-gradient(135deg, #2ed573, #1dd1a1); border: none; color: #05210f;
+        }
+        #reroute-banner-countdown {
+            margin-top: 8px; font-size: 11px; font-weight: 700; color: #6b8f78; text-align: center;
+        }
+
         /* === ÉCO-CONDUITE === */
         #eco-alert-toast {
             display: none; position: fixed; top: 140px; left: 50%; transform: translateX(-50%);
@@ -2474,6 +3145,158 @@
             text-align: center; padding: 30px 0; color: #4a5568; font-size: 13px;
         }
 
+        /* === HISTORIQUE DES TRAJETS === */
+        /* Meme regle que #trophy-gallery-body : le corps reste masque DANS le panneau
+           Profil, il n'est affiche qu'une fois deplace dans la page pleine, ou
+           `#profil-sheet-body > .in-profil-sheet` leve ce display. */
+        #trip-history-body {
+            display: none; padding: 14px 12px 16px;
+            background: linear-gradient(170deg, #0a0e17, #080b12);
+            border-top: 1px solid rgba(0,140,255,0.08);
+        }
+        /* La pastille `.th-count` de la ligne du Profil a ete retiree le 22/08/2026.
+           ⚠ NE PAS CONFONDRE avec `.th-count-pill` plus bas, qui vit TOUJOURS : celle-la
+           compte les trajets par annee et par mois DANS la page Historique, et reste utile
+           puisqu'elle qualifie une section repliee. */
+
+        #trip-history-list { display: flex; flex-direction: column; gap: 8px; }
+
+        /* === SECTIONS ANNEE / MOIS === */
+        /* Deux niveaux repliables, volontairement distincts a l'oeil : l'annee porte un
+           fond et une bordure (c'est un bloc), le mois n'a qu'un filet a gauche (c'est une
+           subdivision). Sans cet ecart, deux en-tetes empiles se lisaient comme deux
+           sections de meme rang. */
+        .th-year {
+            border: 1px solid rgba(0,140,255,0.14); border-radius: 12px;
+            background: rgba(10,14,23,0.5); overflow: hidden;
+        }
+        .th-year-head, .th-month-head {
+            width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+            background: none; border: none; color: inherit; font-family: inherit;
+            text-align: left; cursor: pointer;
+        }
+        .th-year-head { padding: 11px 12px; }
+        .th-year-label {
+            flex: 1; font-size: 13px; font-weight: 800; color: #c9d1d9; letter-spacing: 1px;
+        }
+        .th-year-body, .th-month-body { display: none; }
+        .th-year.open > .th-year-body, .th-month.open > .th-month-body { display: block; }
+        .th-year-body { padding: 0 10px 10px; }
+
+        .th-month { border-left: 2px solid rgba(0,140,255,0.16); padding-left: 8px; margin-top: 6px; }
+        .th-month-head { padding: 7px 4px; }
+        .th-month-label { flex: 1; font-size: 12px; font-weight: 700; color: #8892b0; }
+        .th-month-body { padding: 2px 0 6px; }
+
+        .th-count-pill {
+            flex-shrink: 0; font-size: 10px; font-weight: 700; color: #4a5568;
+            background: rgba(0,140,255,0.08); border-radius: 20px; padding: 2px 7px;
+        }
+        .th-chevron {
+            flex-shrink: 0; font-size: 13px; color: #4a5568; transition: transform 0.25s ease;
+        }
+        .th-year.open > .th-year-head .th-chevron,
+        .th-month.open > .th-month-head .th-chevron { transform: rotate(90deg); }
+
+        /* Le jour n'est pas repliable : simple intertitre au-dessus de ses trajets. */
+        .th-day {
+            font-size: 10px; font-weight: 700; color: #4a5568;
+            text-transform: uppercase; letter-spacing: 1.5px;
+            margin: 10px 0 5px 2px;
+        }
+        .th-month-body .trip-row { margin-bottom: 6px; }
+
+        .trip-row {
+            background: rgba(10,14,23,0.6); border: 1px solid rgba(0,140,255,0.1);
+            border-radius: 12px; overflow: hidden;
+        }
+        .trip-row-head {
+            width: 100%; box-sizing: border-box; display: flex; align-items: center;
+            justify-content: space-between; gap: 10px;
+            padding: 11px 12px; background: none; border: none;
+            color: inherit; text-align: left; cursor: pointer; font-family: inherit;
+        }
+        .trip-row-head:active { background: rgba(0,140,255,0.08); }
+        /* `min-width: 0` est indispensable : sans lui, un enfant en ellipsis dans un
+           conteneur flex refuse de retrecir sous sa largeur de contenu, et la colonne
+           de droite (score + drapeau) est repoussee hors de la ligne. */
+        .trip-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+        .trip-row-date { font-size: 12px; font-weight: 700; color: #c9d1d9; }
+        /* L'adresse est deja tronquee a la premiere virgule par tripPlacesLabel ; cette
+           ellipsis rattrape le cas d'un nom de lieu long a lui seul. */
+        .trip-row-places {
+            font-size: 11px; color: #58a6ff;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .trip-row-summary { font-size: 11px; color: #4a5568; }
+
+        .trip-row-score { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .trip-row-pts { font-size: 16px; font-weight: 800; color: #c9d1d9; text-align: right; }
+        .trip-row-pts-unit { font-size: 10px; color: #4a5568; margin-left: 3px; }
+        .trip-row-flag {
+            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+            border-radius: 20px; padding: 3px 7px;
+        }
+        .trip-row-flag.ok  { color: #28a745; background: rgba(40,167,69,0.12); }
+        .trip-row-flag.bad { color: #f85149; background: rgba(248,81,73,0.12); }
+        .trip-row-chevron {
+            font-size: 14px; color: #4a5568; transition: transform 0.25s ease;
+        }
+        .trip-row.open .trip-row-chevron { transform: rotate(90deg); }
+
+        .trip-row-detail {
+            display: none; grid-template-columns: 1fr 1fr; gap: 8px;
+            padding: 0 12px 12px; border-top: 1px solid rgba(0,140,255,0.08);
+            margin-top: 0; padding-top: 10px;
+        }
+        .trip-row.open .trip-row-detail { display: grid; }
+
+        /* Les deux extremites traversent la grille a deux colonnes : une adresse
+           complete tenue dans une demi-largeur serait illisible. */
+        .trip-endpoints {
+            grid-column: 1 / -1;
+            display: flex; flex-direction: column; gap: 6px; margin-bottom: 2px;
+        }
+        .trip-endpoint {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            background: rgba(0,140,255,0.04); border-radius: 10px; padding: 8px 10px;
+        }
+        /* `min-width: 0` : sans lui l'adresse en ellipsis refuse de retrecir et pousse le
+           bouton « Y aller » hors de la ligne (meme piege que .trip-row-main). */
+        .trip-endpoint-text { min-width: 0; flex: 1; }
+        .trip-endpoint-role {
+            font-size: 9px; color: #4a5568; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 2px;
+        }
+        .trip-endpoint-addr {
+            font-size: 12px; font-weight: 600; color: #c9d1d9;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .trip-endpoint-go {
+            flex-shrink: 0; padding: 7px 12px; border-radius: 20px;
+            font-size: 11px; font-weight: 700; font-family: inherit;
+            border: 1px solid rgba(0,150,255,0.4); background: rgba(0,100,255,0.15);
+            color: #58a6ff; cursor: pointer;
+        }
+        .trip-endpoint-go:active { background: rgba(0,120,255,0.3); }
+
+        .trip-detail-cell {
+            background: rgba(0,140,255,0.04); border-radius: 10px; padding: 8px 10px;
+        }
+        .trip-detail-label {
+            font-size: 9px; color: #4a5568; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 3px;
+        }
+        .trip-detail-value { font-size: 14px; font-weight: 800; color: #c9d1d9; }
+
+        /* L'etat vide se compose de .stats-empty (partage avec le modal statistiques)
+           suivi de cette ligne d'explication. `.stats-empty` porte deja son propre
+           padding vertical : ce bloc-ci n'ajoute donc aucune marge haute, sinon les deux
+           phrases se detacheraient l'une de l'autre au point de ne plus se lire ensemble. */
+        .trip-history-hint {
+            text-align: center; font-size: 11px; color: #4a5568; line-height: 1.5;
+        }
+
         /* === SECTION STATIONS DANS LE MODAL CONFIRMER LE TRAJET === */
         #gas-stations-section {
             display: none;
@@ -2537,6 +3360,11 @@
         .gas-fuel-btn.active.gazole { background: rgba(77,163,255,0.12); border-color: rgba(77,163,255,0.45); color: #4da3ff; }
         .gas-fuel-btn.active.e10    { background: rgba(40,167,69,0.12);  border-color: rgba(40,167,69,0.45);  color: #28a745; }
         .gas-fuel-btn.active.sp98   { background: rgba(156,39,176,0.12); border-color: rgba(156,39,176,0.45); color: #ce93d8; }
+        /* Pastille « ⚡ » du premier étage de filtre en hybride (#gas-kind-selector) :
+           bleu bornes, même code couleur que les filtres du scan (.gas-scan-chip.ev).
+           Sans elle, « ⛽ » et « ⚡ » s'allumaient tous deux en orange carburant. */
+        .gas-fuel-btn.ev:hover      { border-color: rgba(77,163,255,0.45); }
+        .gas-fuel-btn.active.ev     { background: rgba(77,163,255,0.12); border-color: rgba(77,163,255,0.55); color: #4da3ff; }
 
         /* Bouton « Faire le plein » — séparé visuellement des filtres carburant :
            ce n'est pas un filtre mais un mode qui change l'arbitrage prix / détour. */
@@ -2660,12 +3488,22 @@
         /* === MODALE COFFRE DE RECOMPENSE === */
         #loot-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 4000; align-items: center; justify-content: center; }
         #loot-modal-overlay.open { display: flex; animation: fadeIn 0.3s ease; }
+        /* ⚠ ALIGNÉ SUR #arrival-modal (21/08/2026) — les deux fenêtres se SUIVENT en fin de
+           trajet : la fenêtre de points, puis celle-ci. Vues coup sur coup, un gris uni
+           cerclé de bleu derrière un dégradé cerclé de vert donnait l'impression de deux
+           applications différentes. Mêmes largeur, rayon et fond ; seul le cadre vert de
+           depart est propre a ce moment-la, et il change ensuite.
+           ⚠ LA COULEUR DU CADRE EST AUSSI POSÉE EN INLINE par le JS, qui l'emporte sur ces
+           regles : `openLootChestModal()` remet le vert d'ouverture, puis `onChestClick()`
+           le remplace par la couleur de RARETÉ du butin tiré. Modifier la teinte de départ
+           ici ne suffit donc pas — il faut toucher les deux endroits, sans quoi la fenetre
+           s'ouvre d'une couleur et la feuille de style en annonce une autre. */
         #loot-modal {
-            background: #1a1a1e; border: 2px solid #3b9dff; border-radius: 20px;
-            padding: 35px 25px; text-align: center; color: #fff; 
-            max-width: 380px; /* MODIFICATION : Cadre agrandi pour intégrer l'image */
-            width: 90%;
-            box-shadow: 0 10px 50px rgba(59, 157, 255, 0.35);
+            background: linear-gradient(170deg, #0f1825, #0a0e17);
+            border: 2px solid rgba(40,167,69,0.5); border-radius: 20px;
+            padding: 26px 22px; text-align: center; color: #fff;
+            width: min(88vw, 360px); box-sizing: border-box;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.75);
             transform: scale(0.85); animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes popUp { to { transform: scale(1); } }
@@ -2683,7 +3521,10 @@
 
         #loot-modal h3 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: 0.3px; }
         .loot-subtitle { margin: 0 0 28px; font-size: 14px; color: #aaa; }
-        #loot-chest-icon { font-size: 72px; cursor: pointer; display: inline-block; user-select: none; filter: drop-shadow(0 0 22px rgba(255, 165, 0, 0.75)); transition: transform 0.15s ease; }
+        /* Pas de `filter: drop-shadow(...)` : le halo orange qui entourait le cadeau a ete
+           retire le 21/08/2026. Le secouement au clic et l'agrandissement suffisent a dire
+           que l'icone est cliquable. */
+        #loot-chest-icon { font-size: 72px; cursor: pointer; display: inline-block; user-select: none; transition: transform 0.15s ease; }
         #loot-chest-icon:active { transform: scale(0.92); }
         #loot-chest-icon.shaking { animation: chestShake 0.15s linear infinite; pointer-events: none; }
         @keyframes chestShake {
@@ -2842,6 +3683,28 @@
             cursor: pointer; transition: 0.2s; width: 100%; margin-bottom: clamp(6px, 1.5vw, 8px);
         }
         #btn-add-waypoint:hover { border-color: rgba(0,150,255,0.5); background: rgba(0,140,255,0.06); color: #58a6ff; }
+
+        /* === MODE « SAISIE D'ÉTAPE » ===
+           Au clic sur « Ajouter une étape », la feuille se réduit au SEUL champ de
+           l'étape en cours de saisie : départ, arrivée, sections déroulantes, aperçu
+           et boutons disparaissent le temps de la saisie. Raison : ce moment est
+           précisément celui où l'on a besoin de la carte — pour situer l'étape, ou
+           pour la poser au doigt via le bouton 📍 de la ligne.
+
+           `!important` est indispensable sur les deux règles : plusieurs de ces blocs
+           (#trip-preview, #route-choice-section, #modal-toll-section) reçoivent un
+           `style="display:..."` INLINE posé par le JS, qu'une règle de classe ne bat
+           pas sans lui. Même chose pour la hauteur, écrite inline par closeTripModal()
+           et le glissement du modal.
+
+           La hauteur passe à `auto` : #trip-modal est un flex column dont
+           .trip-modal-body est en flex:1, la feuille se moule donc sur le seul champ
+           restant, et la transition `height` déjà déclarée sur #trip-modal fait
+           l'animation. Le handle (titre + croix ✕) reste visible : c'est la seule
+           sortie du modal, il ne doit jamais disparaître. */
+        #trip-modal.wp-focus { height: auto !important; }
+        #trip-modal.wp-focus .trip-modal-body > *:not(#modal-waypoints-container) { display: none !important; }
+        #trip-modal.wp-focus #modal-waypoints-container > *:not(.wp-editing) { display: none !important; }
 
         /* Badge étape dans la barre nav */
         #nav-waypoint-badge {
@@ -3222,16 +4085,6 @@
             position: relative; width: clamp(190px, 58vw, 234px); aspect-ratio: 1;
             display: flex; align-items: center; justify-content: center;
         }
-        #intro-hb-core {
-            width: 58px; height: 58px; border-radius: 50%;
-            background: radial-gradient(circle at 38% 32%, rgba(20,32,52,0.95), rgba(6,10,18,0.95));
-            border: 1px solid rgba(88,166,255,0.5);
-            box-shadow: 0 0 0 4px rgba(0,120,255,0.12), 0 6px 22px rgba(0,0,0,0.6);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 20px; color: #4a5568;
-            opacity: 0; animation: introRise 0.4s ease both;
-            animation-delay: calc(var(--t) + 0.35s);
-        }
         .intro-hb-item {
             position: absolute; width: 46px; height: 46px; border-radius: 50%;
             margin-left: -23px; margin-top: -23px; left: 50%; top: 50%;
@@ -3241,64 +4094,84 @@
             border: 1px solid rgba(0,140,255,0.22);
             box-shadow: 0 4px 15px rgba(0,0,0,0.55);
             opacity: 0;
-            /* Même principe que la vraie hotbox : la position vit dans --hx/--hy,
-               jamais dans un transform inline, pour que le scale de l'animation
-               ne l'écrase pas. */
+            /* Même principe que la vraie hotbox : position ET profondeur vivent dans des
+               variables, jamais dans un transform inline, pour que le scale de l'animation
+               ne les écrase pas. Le retrait passe par la taille et le flou — **pas** par
+               `grayscale()`, qui rendrait les pictogrammes méconnaissables (voir
+               .hotbox-item, même raison). Rangée à plat : aucune variable verticale. */
+            filter: blur(var(--hbl, 0px));
             animation: introHbItem 0.5s cubic-bezier(.34,1.56,.64,1) both;
         }
-        @keyframes introHbItem {
-            from { opacity: 0; transform: translate(0, 0) scale(0.3); }
-            to   { opacity: 1; transform: translate(var(--hx), var(--hy)) scale(1); }
+        /* Pictogrammes en couleur, comme dans la vraie hotbox — voir `.hotbox-item .hb-ico`.
+           La scène doit montrer ce que l'utilisateur verra ; si le rendu des pictos change
+           là-bas, il change ici. */
+        .intro-hb-item .hb-ico { display: block; line-height: 1; }
+        /* Mêmes images que la vraie hotbox, mêmes proportions — la bulle de l'intro fait
+           46 px là où celle de l'app en fait 86, d'où une taille en dur et non en part de
+           `--hb-item`, qui n'existe pas ici. Le rattrapage de `mode_nuit.png` s'applique
+           aussi : voir `.hotbox-item .hb-img-nuit` pour la raison. */
+        .intro-hb-item .hb-img {
+            display: block; width: 25px; height: 25px; object-fit: contain;
+            -webkit-user-drag: none; user-select: none;
         }
-        /* Les 9 délais vivent ici et non en style inline : l'entrée mise en avant
-           porte DEUX animations, donc deux délais — un attribut style écraserait
-           les deux d'un coup avec la même valeur.
-           ⚠ Les indices démarrent à 2 : #intro-hb-core est le premier enfant de
-           #intro-hotbox, et #intro-hb-finger le dernier. Compter à partir de 1
-           laissait la 9ᵉ entrée sans délai — elle surgissait donc dès la scène 1. */
-        .intro-hb-item:nth-child(2)  { animation-delay: calc(var(--t) + 0.50s); }
-        .intro-hb-item:nth-child(3)  { animation-delay: calc(var(--t) + 0.57s); }
-        .intro-hb-item:nth-child(4)  { animation-delay: calc(var(--t) + 0.64s); }
-        .intro-hb-item:nth-child(5)  { animation-delay: calc(var(--t) + 0.71s); }
-        .intro-hb-item:nth-child(6)  { animation-delay: calc(var(--t) + 0.78s); }
-        .intro-hb-item:nth-child(7)  { animation-delay: calc(var(--t) + 0.85s); }
-        .intro-hb-item:nth-child(8)  { animation-delay: calc(var(--t) + 0.92s); }
-        .intro-hb-item:nth-child(9)  { animation-delay: calc(var(--t) + 0.99s); }
-        .intro-hb-item:nth-child(10) { animation-delay: calc(var(--t) + 1.06s); }
-        /* Une entrée se met en avant en fin de scène : c'est le geste qu'on montre.
-           Même spécificité que les règles nth-child ci-dessus (deux sélecteurs
-           simples) : c'est l'ordre source qui la fait gagner, elle doit donc
-           rester APRÈS elles. */
+        .intro-hb-item .hb-img-nuit { width: 39px; height: 39px; }
+        @keyframes introHbItem {
+            from { opacity: 0; transform: translateX(0) scale(0.3); }
+            to   { opacity: var(--ho, 1); transform: translateX(var(--hx)) scale(var(--hs, 1)); }
+        }
+        /* Les délais vivent ici et non en style inline : l'entrée mise en avant porte
+           DEUX animations, donc deux délais — un attribut style écraserait les deux d'un
+           coup avec la même valeur.
+           ⚠ Les indices démarrent à 1 depuis le passage à l'arc (16/08/2026) : le noyau
+           central #intro-hb-core a disparu avec le cercle, il occupait jusque-là la
+           première place. Les entrées commencent au centre et se déploient vers les
+           bords, c'est le sens dans lequel l'arc se lit. #intro-hb-finger reste dernier. */
+        .intro-hb-item:nth-child(1) { animation-delay: calc(var(--t) + 0.71s); }
+        .intro-hb-item:nth-child(2) { animation-delay: calc(var(--t) + 0.60s); }
+        .intro-hb-item:nth-child(3) { animation-delay: calc(var(--t) + 0.50s); }
+        .intro-hb-item:nth-child(4) { animation-delay: calc(var(--t) + 0.60s); }
+        .intro-hb-item:nth-child(5) { animation-delay: calc(var(--t) + 0.71s); }
+        /* L'entrée CENTRÉE s'arme en fin de scène : c'est le geste qu'on montre — au
+           centre de l'arc, pas là où se trouve le doigt. Même spécificité que les règles
+           nth-child ci-dessus (deux sélecteurs simples) : c'est l'ordre source qui la fait
+           gagner, elle doit donc rester APRÈS elles. */
         .intro-hb-item.pick {
             animation: introHbItem 0.5s cubic-bezier(.34,1.56,.64,1) both,
                        introHbPick 1.4s ease 1 forwards;
-            animation-delay: calc(var(--t) + 0.92s), calc(var(--t) + 2.1s);
+            animation-delay: calc(var(--t) + 0.50s), calc(var(--t) + 2.1s);
         }
         @keyframes introHbPick {
-            0%   { transform: translate(var(--hx), var(--hy)) scale(1); }
-            40%  { transform: translate(var(--hx), var(--hy)) scale(1.28);
+            0%   { transform: translateX(var(--hx)) scale(1); }
+            40%  { transform: translateX(var(--hx)) scale(1.16);
                    border-color: rgba(88,166,255,0.9); color: #e2e8f0;
                    box-shadow: 0 0 0 3px rgba(0,120,255,0.25), 0 6px 20px rgba(0,0,0,0.6); }
-            100% { transform: translate(var(--hx), var(--hy)) scale(1.28);
+            100% { transform: translateX(var(--hx)) scale(1.16);
                    border-color: rgba(88,166,255,0.9); color: #e2e8f0;
                    box-shadow: 0 0 0 3px rgba(0,120,255,0.25), 0 6px 20px rgba(0,0,0,0.6); }
         }
-        /* Doigt qui glisse du centre vers l'entrée retenue */
-        /* La cible du doigt est la position de l'entrée mise en avant (⛽) :
-           les deux valeurs doivent rester identiques à ses --hx/--hy. */
+        /* Doigt : il glisse à l'HORIZONTALE, dans une bande située sous l'arc et jamais
+           dessus. C'est tout le propos de la scène — le doigt ne va pas chercher l'icône,
+           il la fait venir au centre — donc --fy reste constant d'un bout à l'autre du
+           mouvement, et il doit rester sous la rangée (posée à --fy du centre du bloc,
+           demi-bulle comprise).
+           Le mouvement est un ALLER-RETOUR court des deux côtés, et non un balayage d'un
+           bord à l'autre : depuis que l'arc s'ouvre au milieu de la liste (16/08/2026),
+           tout est à un ou deux crans dans l'un OU l'autre sens. Montrer un grand
+           glissement à sens unique enseignerait le geste de l'ancienne version. */
         #intro-hb-finger {
             position: absolute; left: 50%; top: 50%; font-size: 26px;
-            --fx: -68px; --fy: 39px;
+            --fd: 30px; --fy: 58px;
             margin-left: -8px; margin-top: -6px; opacity: 0;
             animation: introFinger 2.4s ease both;
             animation-delay: calc(var(--t) + 1.1s);
         }
         @keyframes introFinger {
-            0%   { opacity: 0; transform: translate(0, 0) scale(0.8); }
-            15%  { opacity: 1; transform: translate(0, 0) scale(1); }
-            55%  { opacity: 1; transform: translate(var(--fx), var(--fy)) scale(1); }
-            85%  { opacity: 1; transform: translate(var(--fx), var(--fy)) scale(0.86); }
-            100% { opacity: 0; transform: translate(var(--fx), var(--fy)) scale(0.86); }
+            0%   { opacity: 0; transform: translate(0, var(--fy)) scale(0.8); }
+            12%  { opacity: 1; transform: translate(0, var(--fy)) scale(1); }
+            38%  { opacity: 1; transform: translate(var(--fd), var(--fy)) scale(1); }
+            66%  { opacity: 1; transform: translate(calc(-1 * var(--fd)), var(--fy)) scale(1); }
+            85%  { opacity: 1; transform: translate(0, var(--fy)) scale(0.86); }
+            100% { opacity: 0; transform: translate(0, var(--fy)) scale(0.86); }
         }
 
         /* ── Scène 5 : coffre et récompenses ── */
@@ -3420,5 +4293,88 @@
         @media (prefers-reduced-motion: reduce) {
             #intro, #intro * { animation: none !important; }
         }
+
+        /* ═══ CLASSEMENT EN LIGNE (23/08/2026) ═══
+           Calqué sur #weekly-goals-overlay : même z-index, même `.open`, même carte
+           sombre. Toutes les tailles en clamp() par la règle responsive du projet —
+           ce panneau contient des champs de saisie, donc il doit rester utilisable
+           du 320 px au clavier virtuel ouvert. */
+        #classement-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 3000; align-items: center; justify-content: center;
+        }
+        #classement-overlay.open { display: flex; }
+        #classement-modal {
+            background: #1a1d23; border: 1px solid #333; border-radius: clamp(14px, 4vw, 20px);
+            padding: clamp(16px, 4.5vw, 22px) clamp(14px, 4vw, 20px);
+            width: min(90vw, 360px); max-height: 84vh; overflow-y: auto;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8); color: #f1f1f1;
+        }
+        #classement-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: clamp(12px, 3.4vw, 14px); font-weight: 900; letter-spacing: 1.5px;
+            color: #f1c40f; margin-bottom: clamp(10px, 3vw, 14px);
+        }
+        #classement-header button {
+            background: none; border: none; color: #aaa;
+            font-size: clamp(17px, 5vw, 20px); cursor: pointer;
+        }
+        .cl-status { font-size: clamp(10px, 2.9vw, 12px); color: #8892b0; margin-bottom: 8px; }
+        .cl-status:empty { display: none; }
+        .cl-status-err { color: #ff6b6b; }
+        .cl-intro, .cl-note { font-size: clamp(10px, 2.9vw, 12px); color: #8892b0; line-height: 1.5; }
+        .cl-intro { margin-bottom: clamp(10px, 3vw, 14px); }
+        .cl-note  { margin-top: clamp(10px, 3vw, 14px); }
+        .cl-intro strong { color: #2ecc71; display: block; margin-top: 4px; }
+        .cl-vide { text-align: center; color: #8892b0; font-size: clamp(11px, 3.1vw, 13px); padding: clamp(18px, 5vw, 26px) 0; line-height: 1.6; }
+        .cl-input {
+            width: 100%; box-sizing: border-box; margin-bottom: clamp(8px, 2.2vw, 10px);
+            background: #0c111a; border: 1px solid rgba(0,140,255,0.2);
+            border-radius: clamp(9px, 2.6vw, 12px); color: #f1f1f1;
+            padding: clamp(10px, 3vw, 13px); font-size: clamp(13px, 3.7vw, 15px);
+        }
+        /* ⚠ 16 px minimum sur mobile : en dessous, iOS zoome sur le champ à la mise au
+           point et ne dézoome jamais — la carte reste agrandie après la saisie. */
+        @media (max-width: 480px) { .cl-input { font-size: 16px; } }
+        .cl-input:focus { outline: none; border-color: rgba(0,140,255,0.55); }
+        .cl-actions { display: flex; gap: clamp(6px, 2vw, 10px); margin-top: clamp(10px, 3vw, 14px); }
+        .cl-btn {
+            flex: 1; border-radius: clamp(9px, 2.6vw, 12px); cursor: pointer;
+            padding: clamp(10px, 3vw, 13px); font-size: clamp(11px, 3.2vw, 13px); font-weight: 700;
+        }
+        .cl-btn-pri { background: linear-gradient(135deg, #008cff, #0066cc); border: none; color: #fff; }
+        .cl-btn-sec { background: #0c111a; border: 1px solid #333; color: #c8d0e0; }
+        .cl-moi-carte {
+            display: flex; justify-content: space-between; align-items: center;
+            background: linear-gradient(170deg, #131b27, #0c111a);
+            border: 1px solid rgba(46,204,113,0.3); border-radius: clamp(12px, 3.4vw, 16px);
+            padding: clamp(11px, 3vw, 14px); margin-bottom: clamp(10px, 3vw, 14px);
+            font-size: clamp(12px, 3.4vw, 14px);
+        }
+        .cl-moi-carte strong { color: #2ecc71; }
+        /* Profil local non lié au compte affiché : l'avertissement remplace le compteur,
+           il ne s'y ajoute pas — un chiffre faux à côté d'une mise en garde reste lu. */
+        .cl-moi-delie {
+            border-color: rgba(241,196,15,0.35); color: #d9c7a0;
+            font-size: clamp(10px, 2.9vw, 12px); line-height: 1.5;
+        }
+        .cl-moi-delie strong { color: #f1c40f; }
+        /* La carte passe en colonne : le bouton se pose sous le texte au lieu de le
+           comprimer, l'avertissement devant rester lisible sur un écran de 320 px. */
+        .cl-moi-delie { flex-direction: column; align-items: stretch; gap: clamp(8px, 2.4vw, 11px); }
+        .cl-btn-lier { flex: none; width: 100%; }
+        .cl-ligne {
+            display: flex; align-items: center; gap: clamp(8px, 2.4vw, 12px);
+            padding: clamp(8px, 2.4vw, 11px) clamp(6px, 2vw, 10px);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: clamp(11px, 3.2vw, 13px);
+        }
+        .cl-ligne:last-child { border-bottom: none; }
+        .cl-ligne-moi { background: rgba(46,204,113,0.08); border-radius: clamp(8px, 2.4vw, 10px); }
+        .cl-rang   { width: clamp(22px, 6vw, 28px); text-align: center; font-weight: 900; color: #f1c40f; flex: none; }
+        /* Le pseudo cède la place au score, jamais l'inverse : un score tronqué ne
+           voudrait rien dire, un pseudo tronqué reste reconnaissable. */
+        .cl-pseudo { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cl-pts    { color: #8892b0; font-variant-numeric: tabular-nums; flex: none; }
 
    

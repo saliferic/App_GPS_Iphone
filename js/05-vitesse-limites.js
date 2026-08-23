@@ -77,11 +77,43 @@
         // une simple absence de fix (> 3 s) sans que la perte de signal soit déclarée.
         // Conditionne le « environ » des annonces vocales et le « ≈ » du bandeau de manœuvre.
         let _positionIsEstimated = false;
+        /* Vitesse au MOMENT de la perte de signal. Le dead reckoning inertiel (13-stats-eco)
+           intègre l'accéléromètre dans `lastKnownSpeedKmh` ; une intégration ne se corrige
+           jamais toute seule, son biais s'accumule et la vitesse dérive vers le plafond
+           pendant toute la traversée. Cette référence borne la dérive — voir le clamp dans
+           handleDeviceMotion. 0 = pas de perte en cours. */
+        let _drSpeedAtLoss = 0;
+        /* Horodatage du retour d'un fix satellite propre après une perte. Les premières
+           secondes qui suivent sont les MOINS fiables de tout le trajet (la puce reconverge,
+           la position peut atterrir sur la chaussée d'à côté) — or c'est précisément à cet
+           instant qu'on déclenchait un recalcul d'itinéraire, donc sur une position fausse.
+           Voir la fenêtre de grâce dans handleRealMovement. */
+        let _gpsRecoveredAt = 0;
+        const GPS_RECOVERY_GRACE_MS = 6000;
         let currentVisualBearing = 0;
         let headingUpMode = true; // true = carte orientée cap (par défaut), false = carte orientée nord
 
         let currentTurfLine = null;
         let isRecalculating = false;
+        /* ⚠ `isRecalculating` seul ne suffit pas à garantir qu'un recalcul reste possible.
+           Il est levé à la fin de `recalculateRoute`, donc APRÈS l'aller-retour réseau — et
+           celui-ci peut durer très longtemps sans jamais échouer franchement : `fetchRouteMapbox`
+           enchaîne deux tentatives avec relance (6 s ×2 puis 8 s ×2), soit ~29 s dans le pire
+           cas, pendant lesquelles TOUTE nouvelle demande de recalcul est jetée en silence.
+           Deux tours de ce genre et l'itinéraire reste faux près d'une minute.
+           D'où ces trois garde-fous :
+           — `_recalcGeneration` : jeton d'ordre. Une réponse qui revient alors qu'un recalcul
+             plus récent a démarré est ignorée, ce qui rend sûr le fait de relâcher le verrou
+             avant la fin d'une requête (sinon deux réponses se disputeraient `currentTurfLine`).
+           — `_recalcWatchdog` : relâche le verrou au bout de RECALC_HARD_DEADLINE_MS. La requête
+             en cours n'est pas annulée, elle est simplement déclassée.
+           — `_lastRecalcAttemptMs` : intervalle minimum entre deux tentatives, pour que le
+             relâchement anticipé ne se transforme pas en martèlement de l'API à chaque frame. */
+        let _recalcGeneration = 0;
+        let _recalcWatchdog = null;
+        let _lastRecalcAttemptMs = 0;
+        const RECALC_HARD_DEADLINE_MS = 9000;
+        const RECALC_MIN_INTERVAL_MS  = 4000;
         // Devient true dès la première frame hors-itinéraire détectée, et reste true tant que
         // la déviation persiste : évite de re-couper l'audio et de re-supprimer les seuils
         // annoncés à CHAQUE frame GPS pendant les quelques secondes que prend le recalcul,
@@ -156,6 +188,22 @@
             if (!voiceGuidanceEnabled) stopAudio();
         }
 
+        /* ═══ MODE « MOINS BAVARD » ═══
+           Même principe que la voix réduite de Google Maps / Waze : on ne coupe pas le son,
+           on ne garde que ce qui sert à conduire. Deux effets, et seulement deux :
+             1. les annonces classées 'bavard' (confort, gamification, confirmations) sont
+                filtrées ici, au seul goulot d'étranglement audio de l'app — un appelant qui
+                oublie le niveau reste donc audible, c'est le défaut sûr ;
+             2. un virage n'est plus annoncé qu'une fois au lieu de trois (cf. js/09).
+           Ce qui reste toujours audible : manœuvres, arrivée, perte de GPS, alerte ZFE. */
+        let voiceQuietMode = localStorage.getItem('gps_voice_quiet') === '1';
+
+        function onVoiceQuietChange() {
+            const el = document.getElementById('voice-quiet-toggle');
+            voiceQuietMode = el ? el.checked : voiceQuietMode;
+            localStorage.setItem('gps_voice_quiet', voiceQuietMode ? '1' : '0');
+        }
+
         let audioGeneration = 0;
 
         function stopAudio() {
@@ -166,8 +214,10 @@
             }
         }
 
-        function playAudioSequence(files, index = 0) {
+        // `niveau` : 'essentiel' (défaut) = toujours joué ; 'bavard' = coupé en mode moins bavard.
+        function playAudioSequence(files, index = 0, niveau = 'essentiel') {
             if (!voiceGuidanceEnabled || index >= files.length) return;
+            if (niveau === 'bavard' && voiceQuietMode) return;
             audioGeneration++;
             const myGeneration = audioGeneration;
             if (currentAudioObject) { currentAudioObject.pause(); currentAudioObject = null; }
@@ -175,11 +225,11 @@
             currentAudioObject = new Audio(filePath);
             currentAudioObject.onended = () => {
                 if (myGeneration !== audioGeneration) return; // cette séquence a été remplacée entre-temps
-                playAudioSequence(files, index + 1);
+                playAudioSequence(files, index + 1, niveau);
             };
             currentAudioObject.play().catch(e => {
                 if (myGeneration !== audioGeneration) return; // interruption volontaire (pause), pas une vraie erreur
                 console.warn(`Audio introuvable ou erreur de lecture: ${filePath}`, e);
-                playAudioSequence(files, index + 1);
+                playAudioSequence(files, index + 1, niveau);
             });
         }

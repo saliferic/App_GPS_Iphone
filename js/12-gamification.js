@@ -3,14 +3,18 @@
         // Progression mise à jour à chaque fin de trajet.
         // Bonus : coffre Légendaire garanti si les 3 sont atteints avant dimanche soir.
 
+        /* ⚠ AUCUNE MISSION COMPTÉE EN NOMBRE DE TRAJETS — retiré le 18/08/2026, à ne pas
+           réintroduire. Quatre gabarits existaient (trips_long, trips_total, perfect_runs,
+           trips_short) : compter des trajets, même qualifiés "sans excès", encourage
+           mécaniquement à en multiplier le nombre plutôt qu'à bien conduire — et
+           `trips_total` allait jusqu'à l'écrire noir sur blanc, « avec ou sans excès »,
+           un objectif que l'appli ne peut pas se permettre de tolérer. Seules des mesures
+           qui ne se contournent pas en enchaînant les trajets restent : km parcourus,
+           points accumulés. */
         const WEEKLY_GOAL_TEMPLATES = [
             { id: 'km_no_speed',   text: 'Parcourir {v} km sans excès de vitesse',       unit: 'km',     min: 50,  max: 200, step: 25 },
-            { id: 'trips_long',    text: 'Effectuer {v} trajets de plus de 10 km sans excès', unit: 'trajets', min: 3,   max: 8,   step: 1 },
-            { id: 'trips_total',   text: 'Effectuer {v} trajets (avec ou sans excès)',     unit: 'trajets', min: 5,   max: 15,  step: 1 },
             { id: 'km_total',      text: 'Parcourir {v} km au total',                     unit: 'km',     min: 80,  max: 300, step: 20 },
-            { id: 'perfect_runs',  text: 'Terminer {v} trajets "sans faute" (0 excès)',    unit: 'trajets', min: 2,   max: 6,   step: 1 },
             { id: 'score_total',   text: 'Accumuler {v} points sur la semaine',            unit: 'pts',    min: 20,  max: 80,  step: 5 },
-            { id: 'trips_short',   text: 'Effectuer {v} trajets en ville (< 5 km) sans excès', unit: 'trajets', min: 3, max: 10, step: 1 },
         ];
 
         function getWeekId() {
@@ -73,9 +77,16 @@
 
         // Adapter les plages min/max des templates km selon la baseline
         function getAdaptedTemplates(baselineKm) {
+            /* ⚠ Ne plus exclure km_total/km_no_speed pendant la phase d'observation
+               (corrigé le 18/08/2026). Ce filtre s'appuyait sur les missions comptées en
+               trajets pour remplir les 3 objectifs hebdomadaires avant que la baseline ne
+               soit connue — leur retrait ne laissait plus alors QUE score_total.
+               Les deux gabarits km gardent de toute façon leurs plages par défaut
+               (min/max déclarés ci-dessus) tant qu'aucune baseline n'existe pour les
+               adapter : elles ne sont pas ajustées à l'utilisateur cette semaine-là, mais
+               restent des cibles raisonnables (50-200 km / 80-300 km), pas absentes. */
             if (baselineKm === null) {
-                // Phase d'observation : uniquement missions qualitatives (pas de km total/km_no_speed)
-                return WEEKLY_GOAL_TEMPLATES.filter(t => !['km_total', 'km_no_speed'].includes(t.id));
+                return WEEKLY_GOAL_TEMPLATES;
             }
             // Calculer les bornes adaptatives
             const target = Math.max(BASELINE_KM_FLOOR, baselineKm * BASELINE_FACTOR);
@@ -147,12 +158,8 @@
             data.goals.forEach(g => {
                 switch(g.id) {
                     case 'km_no_speed':   if (isPerfect) g.progress += distKm; break;
-                    case 'trips_long':    if (isPerfect && distKm >= 10) g.progress += 1; break;
-                    case 'trips_total':   g.progress += 1; break;
                     case 'km_total':      g.progress += distKm; break;
-                    case 'perfect_runs':  if (isPerfect) g.progress += 1; break;
                     case 'score_total':   g.progress += score; break;
-                    case 'trips_short':   if (isPerfect && distKm < 5) g.progress += 1; break;
                 }
                 // Plafonner la progression au target
                 g.progress = Math.min(g.progress, g.target);
@@ -196,63 +203,96 @@
         function renderWeeklyGoalsPanel() {
             const data = loadWeeklyGoals();
 
+            /* Le compte à rebours devient une pastille encadrée, avec sa légende dessous :
+               c'est la seule information périssable de l'écran, et une ligne de texte grise
+               la faisait passer pour une note de bas de page.
+               ⚠ La puce `.ui-dot sm` est CONSERVÉE, pas remplacée par un emoji horloge. Ce
+               remplacement avait été fait exprès (voir la note de `.ui-dot` dans le CSS) :
+               un emoji est rendu par la police système, sa taille et son alignement
+               vertical changent d'un appareil à l'autre. Y revenir pour « faire plus
+               graphique » rendrait la pastille bancale sur la moitié des téléphones. */
             const timerEl = document.getElementById('weekly-goals-timer-panel');
-            // `.ui-dot sm` à la place de l'emoji horloge — même puce que les intitulés
-            // de section. Le compte à rebours reste un nœud texte à côté d'elle.
             if (timerEl) {
-                timerEl.textContent = '';
-                const puce = document.createElement('span');
-                puce.className = 'ui-dot sm';
-                timerEl.appendChild(puce);
-                timerEl.appendChild(document.createTextNode(getTimeUntilEndOfWeek()));
+                timerEl.innerHTML = `
+                    <div class="wg-timer-pill"><span class="ui-dot sm"></span>${getTimeUntilEndOfWeek()}</div>
+                    <div class="wg-timer-cap">Temps restant</div>`;
             }
 
             const listEl = document.getElementById('weekly-goals-list-panel');
             if (!listEl) return;
-            listEl.innerHTML = '';
 
-            // Indicateur de baseline
+            // Indicateur de baseline — mêmes textes qu'avant, styles sortis en classes.
             const baseline = getKmBaseline();
             const weeksCount = getHistoryWeeksCount();
             const baselineHtml = baseline !== null
-                ? `<div style="background:rgba(0,150,255,0.06);border:1px solid rgba(0,140,255,0.12);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#7b8794;">
-                    📊 <strong style="color:#58a6ff;">Objectifs adaptés à ton profil</strong><br>
-                    Moyenne sur ${Math.min(weeksCount, BASELINE_WEEKS)} sem. : <strong style="color:#c9d1d9;">${Math.round(baseline)} km</strong> · Objectif km : <strong style="color:#58a6ff;">${Math.round(baseline * BASELINE_FACTOR)} km</strong>
+                ? `<div class="wg-note">
+                    <span class="wg-note-ico">📊</span>
+                    <div><strong class="wg-note-strong">Objectifs adaptés à ton profil</strong><br>
+                    Moyenne sur ${Math.min(weeksCount, BASELINE_WEEKS)} sem. : <strong>${Math.round(baseline)} km</strong> · Objectif km : <strong>${Math.round(baseline * BASELINE_FACTOR)} km</strong></div>
                   </div>`
-                : `<div style="background:rgba(243,156,18,0.06);border:1px solid rgba(243,156,18,0.15);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#7b8794;">
-                    🔍 <strong style="color:#f39c12;">Phase d'observation</strong> — ${weeksCount}/${BASELINE_MIN_WEEKS} semaines<br>
-                    Roule encore ${BASELINE_MIN_WEEKS - weeksCount} sem. pour que les objectifs km s'adaptent à ton profil.
+                : `<div class="wg-note observation">
+                    <span class="wg-note-ico">🔍</span>
+                    <div><strong class="wg-note-strong">Phase d'observation</strong> — ${weeksCount}/${BASELINE_MIN_WEEKS} semaines<br>
+                    Roule encore ${BASELINE_MIN_WEEKS - weeksCount} sem. pour que les objectifs km s'adaptent à ton profil.</div>
                   </div>`;
-            listEl.innerHTML = baselineHtml;
 
-            data.goals.forEach(g => {
+            const cartes = data.goals.map(g => {
                 const pct = Math.min(100, Math.round((g.progress / g.target) * 100));
                 const done = g.progress >= g.target;
-                const progressText = g.unit === 'km'
-                    ? `${g.progress.toFixed(1)} / ${g.target} km`
-                    : g.unit === 'pts'
-                        ? `${g.progress.toFixed(1)} / ${g.target} pts`
-                        : `${Math.floor(g.progress)} / ${g.target} trajets`;
-                const adaptiveBadge = g.adaptive ? ' <span style="font-size:10px;color:#58a6ff;background:rgba(0,140,255,0.1);border-radius:4px;padding:1px 5px;">adaptatif</span>' : '';
-                listEl.innerHTML += `
+                /* Valeur atteinte et cible séparées : c'est le chiffre de gauche qui
+                   change, et le mettre en avant permet de suivre sa progression sans lire
+                   la phrase entière. */
+                const valeur = g.unit === 'trajets' ? String(Math.floor(g.progress)) : g.progress.toFixed(1);
+                const total  = g.unit === 'km' ? `/ ${g.target} km`
+                             : g.unit === 'pts' ? `/ ${g.target} pts`
+                             : `/ ${g.target} trajets`;
+                const adaptatif = g.adaptive ? '<span class="wg-tag">adaptatif</span>' : '';
+                /* La coche est TOUJOURS présente, c'est sa couleur qui dit l'état (voir
+                   `.wg-emblem-check` dans le CSS). La retirer tant que l'objectif n'est pas
+                   atteint laisserait une case vide dont on ne devinerait pas ce qu'elle
+                   attend, et la faire apparaître décalerait le titre au moment de la
+                   réussite.
+                   ⚠ Ce commentaire est DEHORS du gabarit, et doit y rester : il contient
+                   des accents graves, qui refermeraient le littéral s'ils étaient dedans
+                   (c'est exactement ce qui a vidé cette page le 21/08/2026). */
+                return `
                     <div class="wg-item ${done ? 'completed' : ''}">
-                        <div class="wg-item-title">${done ? '✅' : '⬜'} ${g.text}${adaptiveBadge}</div>
-                        <div class="wg-item-bar"><div class="wg-item-fill ${done ? 'done' : ''}" style="width:${pct}%"></div></div>
-                        <div class="wg-item-progress">${progressText}</div>
+                        <div class="wg-emblem"><span class="wg-emblem-check">✓</span></div>
+                        <div class="wg-body">
+                            <div class="wg-head">
+                                <div class="wg-item-title">${g.text}${adaptatif}</div>
+                                <div class="wg-item-progress"><span class="wg-val">${valeur}</span><span class="wg-tot">${total}</span></div>
+                            </div>
+                            <div class="wg-item-bar"><div class="wg-item-fill ${done ? 'done' : ''}" style="width:${pct}%"></div></div>
+                        </div>
                     </div>`;
-            });
+            }).join('');
+
+            // Une seule écriture du DOM plutôt qu'un `innerHTML +=` par objectif, qui
+            // reparsait tout le bloc à chaque tour.
+            listEl.innerHTML = baselineHtml + cartes;
 
             const bonusEl = document.getElementById('weekly-goals-bonus-panel');
             if (!bonusEl) return;
             if (allGoalsCompleted(data) && !data.bonusClaimed) {
-                bonusEl.innerHTML = `<button onclick="claimWeeklyBonus()" style="background:linear-gradient(135deg,#00b4d8,#0077b6);color:#fff;border:none;border-radius:12px;padding:14px 28px;font-size:15px;font-weight:900;cursor:pointer;letter-spacing:1px;">🏅 RÉCUPÉRER MON BADGE</button>`;
+                bonusEl.innerHTML = `<button class="wg-claim-btn" onclick="claimWeeklyBonus()">🏅 RÉCUPÉRER MON BADGE</button>`;
             } else if (allGoalsCompleted(data) && data.bonusClaimed) {
                 const badges = loadBadges();
                 const cat = getBadgeCategory(badges.total);
-                bonusEl.innerHTML = `<div style="color:#28a745;font-weight:700;">✅ Badge obtenu ! ${cat.icon} Catégorie <span style="color:${cat.color};">${cat.name}</span> — Rendez-vous la semaine prochaine.</div>`;
+                /* La semaine réussie mérite mieux qu'une ligne verte : médaille de la
+                   catégorie atteinte, titre mis en avant, rappel du rendez-vous en dessous.
+                   `cat.color` reste posée en inline — elle vient de la table des catégories
+                   (bronze/argent/or…) et change avec elle, une classe CSS par catégorie
+                   ferait deux endroits à tenir d'accord. */
+                bonusEl.innerHTML = `
+                    <div class="wg-badge-won">
+                        <div class="wg-badge-medal">${cat.icon}</div>
+                        <div class="wg-badge-title">Badge obtenu !</div>
+                        <div class="wg-badge-sub">Catégorie <strong style="color:${cat.color};">${cat.name}</strong><br>Rendez-vous la semaine prochaine.</div>
+                    </div>`;
             } else {
                 const remaining = data.goals.filter(g => g.progress < g.target).length;
-                bonusEl.innerHTML = `<div style="color:#4a5568;font-size:12px;">🏅 Complétez les ${remaining} objectif${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''} pour obtenir votre badge de la semaine !</div>`;
+                bonusEl.innerHTML = `<div class="wg-remaining">🏅 Complétez les ${remaining} objectif${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''} pour obtenir votre badge de la semaine !</div>`;
             }
         }
 
@@ -480,8 +520,17 @@
         // Conserver pour compatibilité interne (appelé depuis awardWeeklyBadge)
         function showBadgeEarnedToast(newTotal) {
             const overlay = document.getElementById('loot-modal-overlay');
-            const coffreOuvert = overlay && overlay.classList.contains('open');
-            console.log('[Badge] showBadgeEarnedToast — total:', newTotal, '— coffre ouvert:', coffreOuvert);
+            /* ⚠ LA FENÊTRE D'ARRIVÉE BLOQUE AUTANT QUE LE COFFRE (21/08/2026). Ce test ne
+               regardait que le coffre : sur un trajet ARRIVÉ mais non parfait, aucun coffre
+               ne s'ouvre — la modale de badge partait donc « immédiatement », c'est-à-dire
+               par-dessus la fenêtre d'arrivée que `stopCourse()` venait d'ouvrir deux lignes
+               plus haut. Exactement la superposition que l'on cherchait à supprimer, avec
+               une autre modale. `closeArrivalSummary()` reprend le relais et libère le badge
+               en attente — directement, ou après le coffre s'il y en a un. */
+            const arrivee = document.getElementById('arrival-modal-overlay');
+            const coffreOuvert = (overlay && overlay.classList.contains('open'))
+                              || (arrivee && arrivee.classList.contains('open'));
+            console.log('[Badge] showBadgeEarnedToast — total:', newTotal, '— fenêtre de fin ouverte:', coffreOuvert);
             // Toujours stocker le total en attente — closeLootModal l'affichera si coffre ouvert,
             // sinon on l'affiche immédiatement
             _pendingBadgeTotal = newTotal;
@@ -497,8 +546,6 @@
 
         // Rendu de la carte catégorie dans l'onglet Profil
         function renderBadgeCategoryCard() {
-            // Mettre à jour le compteur de la galerie (sans risque de récursion)
-            _updateTrophyCount();
             const badges = loadBadges();
             const total = badges.total;
             const cat = getBadgeCategory(total);
@@ -519,6 +566,22 @@
             nameEl.style.color   = cat.color;
             subEl.textContent    = `${total} badge${total > 1 ? 's' : ''} obtenu${total > 1 ? 's' : ''}`;
             if (cardEl) cardEl.style.borderColor = cat.color + '33';
+
+            /* Prénom du profil actif dans la carte. Posé ICI et nulle part ailleurs :
+               `renderBadgeCategoryCard()` est déjà rappelée par TOUS les chemins qui
+               changent de profil — `selectProfile()` (js/13), l'import de profil (js/02),
+               l'ouverture de l'onglet Profil (js/14) — alors qu'un rafraîchissement écrit
+               à part en aurait forcément raté un. Les badges affichés étant eux-mêmes
+               ceux du profil actif, le nom et le contenu de la carte ne peuvent pas
+               diverger. `profiles` / `activeProfileId` vivent dans js/13, chargé après
+               celui-ci : lecture au runtime uniquement, jamais au chargement. */
+            const profilEl = document.getElementById('badge-category-profile');
+            if (profilEl) {
+                const actif = tenterSansBruit(
+                    () => profiles.find(p => p.id === activeProfileId), 'badgeCard/profilActif');
+                profilEl.textContent   = actif ? actif.name : '';
+                profilEl.style.display = actif ? '' : 'none';
+            }
 
             // Pips (badges dans la catégorie en cours)
             const earnedInCat = total - cat.min;
@@ -565,15 +628,9 @@
             const badges = loadBadges();
             const total  = badges.total;
             const grid   = document.getElementById('trophy-grid');
-            const countEl = document.getElementById('trophy-gallery-count');
             const hintEl  = document.getElementById('trophy-gallery-hint');
             if (!grid) return;
 
-            const unlockedCount = BADGE_CATEGORIES.filter(cat => {
-                const earned = Math.max(0, Math.min(total - cat.min, cat.max - cat.min + 1));
-                return earned > 0;
-            }).length;
-            if (countEl) countEl.textContent = `${unlockedCount} / ${BADGE_CATEGORIES.length}`;
             if (hintEl) {
                 const hasVideo = BADGE_CATEGORIES.some(cat => {
                     const earned = Math.max(0, Math.min(total - cat.min, cat.max - cat.min + 1));
@@ -628,26 +685,18 @@
             });
         }
 
-        // Met à jour seulement le compteur (sans re-render la grille)
-        function _updateTrophyCount() {
-            const total = loadBadges().total;
-            const countEl = document.getElementById('trophy-gallery-count');
-            if (!countEl) return;
-            const unlockedCount = BADGE_CATEGORIES.filter(cat => {
-                const earned = Math.max(0, Math.min(total - cat.min, cat.max - cat.min + 1));
-                return earned > 0;
-            }).length;
-            countEl.textContent = `${unlockedCount} / ${BADGE_CATEGORIES.length}`;
-        }
+        /* `_updateTrophyCount()` a disparu avec le compteur « x / 8 » de la ligne Profil
+           (22/08/2026) : elle ne faisait QUE l'écrire. `renderBadgeCategoryCard()`, son
+           seul appelant, ne l'appelle plus. */
 
-        // Mettre à jour le compteur de la galerie sans ouvrir le panel
+        /* Ne porte plus son nom qu'à moitié depuis le retrait du compteur : il ne reste
+           que le re-rendu de la galerie. Conservée sous ce nom parce que quatre appelants
+           la citent (js/12, js/13, js/14 ×2) et qu'un renommage n'apporterait rien de plus.
+           ⚠ LE `if (!countEl) return;` QUI OUVRAIT CETTE FONCTION A ÉTÉ RETIRÉ AVEC LE
+           COMPTEUR — le laisser en place aurait fait sortir la fonction avant le re-rendu
+           dès la disparition de l'élément du DOM : la galerie ouverte aurait cessé de
+           refléter un badge gagné, sans que rien ne le signale. */
         function refreshTrophyGalleryCount() {
-            const badges = loadBadges();
-            const total  = badges.total;
-            const countEl = document.getElementById('trophy-gallery-count');
-            if (!countEl) return;
-            const unlockedCount = BADGE_CATEGORIES.filter(cat => total > cat.min || (cat.min === 0 && total >= 1)).length;
-            countEl.textContent = `${unlockedCount} / ${BADGE_CATEGORIES.length}`;
             /* Regrille uniquement si la galerie est SOUS LES YEUX. Le test portait sur la
                classe .open de la section, mécanique de l'accordéon supprimé : il ne se
                vérifiait donc plus jamais, et un badge gagné pendant que la page est ouverte
@@ -793,7 +842,11 @@
             }
         }
 
-        function openLootChestModal(finalScore, arrived = true) {
+        /* `opts.silencieux` coupe l'annonce sonore. Utile dans un seul cas : le coffre
+           enchaîné DERRIÈRE la fenêtre d'arrivée, qui vient déjà de jouer
+           `reached_destination.ogg`. Sans lui, l'arrivée serait annoncée deux fois de
+           suite, à quelques secondes d'intervalle. */
+        function openLootChestModal(finalScore, arrived = true, opts) {
             // Plafonner avant tout calcul de loot : un multiplicateur x2 appliqué à un
             // score négatif doublerait la perte au lieu de récompenser.
             pendingLootScore = clampTripScore(finalScore);
@@ -801,13 +854,115 @@
             document.getElementById('loot-reward-view').style.display = 'none';
             const chestIcon = document.getElementById('loot-chest-icon');
             chestIcon.classList.remove('shaking');
+            /* Vert d'arrivée et non plus bleu : cette fenêtre suit immédiatement celle des
+               points, qui est verte — enchaîner deux cadres de couleurs différentes se lit
+               comme un changement de contexte, alors que c'est la suite du même moment.
+               ⚠ Ces deux lignes INLINE l'emportent sur `#loot-modal` en CSS : toute
+               modification de la teinte d'ouverture doit toucher les deux endroits.
+               `onChestClick()` remplace ensuite cette couleur par celle de la rareté tirée,
+               et c'est voulu — la révélation du butin a le droit de changer de couleur. */
             const lootModal = document.getElementById('loot-modal');
-            lootModal.style.borderColor = '#3b9dff';
-            lootModal.style.boxShadow = '0 10px 50px rgba(59, 157, 255, 0.35)';
+            lootModal.style.borderColor = 'rgba(40,167,69,0.5)';
+            lootModal.style.boxShadow = '0 20px 60px rgba(0,0,0,0.75)';
             document.getElementById('loot-modal-overlay').classList.add('open');
             // "reached_destination.ogg" ne doit être annoncé qu'en cas d'arrivée réelle à destination.
             // En cas d'arrêt manuel avant la fin du trajet, on annonce plutôt la fin de trajet.
-            playAudioSequence([arrived ? 'reached_destination.ogg' : 'trip_ended.ogg']);
+            if (!(opts && opts.silencieux)) {
+                playAudioSequence([arrived ? 'reached_destination.ogg' : 'trip_ended.ogg']);
+            }
+        }
+
+        /* ═══ FENÊTRE D'ARRIVÉE — TOUJOURS LA PREMIÈRE          (21/08/2026) ═══
+
+           Le retour sobre de fin de trajet : les points gagnés, rien d'autre. Avant elle,
+           un trajet arrivé sans conduite parfaite ne produisait RIEN à l'écran — seul
+           `#status` changeait, dans le panneau Itinéraire, c'est-à-dire hors du regard de
+           quelqu'un qui vient de se garer.
+
+           ⚠ ELLE N'AFFICHE QUE LES POINTS, et c'est le point à ne pas défaire. Distance
+           restante, temps restant et « Terminer Trajet » — le contenu du panneau du widget
+           — n'ont plus aucun sens une fois arrivé : les rejouer ici remettrait sous les yeux
+           l'interface de navigation d'un trajet qui n'existe plus.
+
+           ⚠⚠ ELLE S'OUVRE AUSSI SUR UNE CONDUITE PARFAITE, ET LE COFFRE ATTEND DERRIÈRE.
+           La première version la réservait à `!isPerfectRun`, en croyant éviter une
+           superposition ; le résultat était pire — sur un trajet parfait le coffre partait
+           SEUL et IMMÉDIATEMENT, sans qu'on ait vu ses points. Les deux fenêtres sont des
+           moments distincts : d'abord ce que le trajet a rapporté, ensuite seulement le
+           bonus. `closeArrivalSummary()` enchaîne le coffre ; il n'y a jamais deux fenêtres
+           à l'écran en même temps, mais il y en a bien deux à la suite.
+
+           ⚠ SUR UNE CONDUITE PARFAITE, LES POINTS AFFICHÉS NE SONT PAS ENCORE CRÉDITÉS.
+           C'est `onChestClick()` qui les crédite, après application du multiplicateur de
+           butin — ce chiffre est donc le score de BASE, avant bonus, et le sous-titre doit
+           le dire. L'annoncer « ajoutés à ton profil » serait faux à cet instant précis. */
+        let _arrivalPendingChest = null;   // { score, arrived } — coffre à ouvrir à la fermeture
+
+        function showArrivalSummary(points, opts) {
+            const overlay = document.getElementById('arrival-modal-overlay');
+            if (!overlay) return;
+            const options = opts || {};
+            _arrivalPendingChest = options.chest || null;
+
+            const pts = Number(points);
+            const gagnes = Number.isFinite(pts) && pts > 0 ? pts : 0;
+
+            const valeur = document.getElementById('arrival-modal-points');
+            const sous   = document.getElementById('arrival-modal-sub');
+            if (valeur) {
+                valeur.textContent = '';
+                const n = document.createElement('span');
+                n.className = 'arrival-points-value';
+                n.textContent = gagnes.toFixed(2);
+                const u = document.createElement('span');
+                u.className = 'arrival-points-unit';
+                u.textContent = 'pts';
+                valeur.appendChild(n); valeur.appendChild(u);
+            }
+            /* Un zéro n'est pas une panne : c'est un trajet où la conduite n'a rien
+               rapporté. Le dire explicitement, et rappeler que le capital acquis est
+               intact — le score d'un trajet est plafonné à 0, il n'entame jamais le total.
+               Sans cette phrase, « 0.00 pts » se lit comme un bug. */
+            if (sous) {
+                if (_arrivalPendingChest) sous.textContent = 'Conduite parfaite — un bonus t\'attend';
+                else if (gagnes > 0)      sous.textContent = 'Points ajoutés à ton profil';
+                else                      sous.textContent = 'Aucun point sur ce trajet — ton total reste intact';
+            }
+            /* Le bouton dit ce qui va se passer : refermer n'est pas la même chose selon
+               qu'un coffre attend derrière ou que le trajet est vraiment fini. */
+            const btn = document.getElementById('arrival-modal-close');
+            if (btn) btn.textContent = _arrivalPendingChest ? 'Voir mon bonus' : 'Terminé';
+
+            overlay.classList.add('open');
+            playAudioSequence(['reached_destination.ogg']);
+        }
+
+        /* Fermer cette fenêtre, c'est aussi laisser passer ce qui attendait derrière elle.
+           DEUX choses peuvent attendre, et l'ordre compte :
+             1. le coffre à butin, si la conduite a été parfaite ;
+             2. la modale de badge, si un badge a été décroché pendant ce trajet.
+           Quand le coffre est là, on ne touche PAS au badge : `closeLootModal()` l'affichera
+           à son tour, ce qu'il sait déjà faire. Sans coffre, c'est à nous de le libérer —
+           sinon un badge gagné sur un trajet non parfait ne s'afficherait jamais. */
+        function closeArrivalSummary() {
+            document.getElementById('arrival-modal-overlay')?.classList.remove('open');
+            const coffre = _arrivalPendingChest;
+            _arrivalPendingChest = null;
+
+            if (coffre) {
+                /* Le délai laisse la fenêtre d'arrivée disparaître avant que le coffre
+                   n'apparaisse : sans lui, les deux se croisent et on retombe visuellement
+                   sur la superposition que tout ce mécanisme cherche à supprimer.
+                   `silencieux` : l'arrivée vient d'être annoncée, ne pas la rejouer. */
+                setTimeout(() => openLootChestModal(coffre.score, coffre.arrived, { silencieux: true }), 320);
+                return;
+            }
+            if (_pendingBadgeTotal > 0) {
+                const totalToShow = _pendingBadgeTotal;
+                _pendingBadgeModal = false;
+                _pendingBadgeTotal = 0;
+                setTimeout(() => showBadgeUnlockedModal(totalToShow), 400);
+            }
         }
 
         // Légendaire conservé dans le pool aléatoire — la garantie via objectifs est remplacée par le badge

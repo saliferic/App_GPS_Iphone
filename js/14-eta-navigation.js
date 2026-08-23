@@ -47,6 +47,16 @@
                 const card = document.createElement('div');
                 card.className = `driver-card ${d.isSpeeding ? 'speeding' : ''}`;
                 card.id = `driver-card-${d.id}`;
+                /* La ligne « Limite: xx km/h » + le total de points qui suivait l'en-tête a
+                   été retirée (22/08/2026, demande utilisateur). Les deux informations sont
+                   déjà à l'écran pendant la navigation, en plus lisible : la limite dans la
+                   pastille `#speed-limit-badge`, les points dans `#nav-points`.
+                   ⚠ Les id `limit-<id>` et `pts-<id>` n'existent donc PLUS. Tous les sites
+                   qui y écrivaient passent par `setText()` ou testent l'existence de
+                   l'élément — sauf un, corrigé en même temps (`updateSpeedLimitForDriver`,
+                   js/19), qui faisait un `.innerText` direct et aurait levé une TypeError à
+                   chaque point GPS en navigation réelle. Ne pas réintroduire d'écriture non
+                   gardée sur ces id. */
                 card.innerHTML = `
                     <div class="driver-header">
                         <div style="margin-top: 5px;"><span class="driver-color-dot" style="background-color: ${d.color}"></span> Style de conduite</div>
@@ -57,14 +67,67 @@
                             </select>
                         </div>
                     </div>
-                    <div class="points-row">
-                        <div class="speed-limit">Limite: <span id="limit-${d.id}">--</span></div>
-                        <div class="points-box"><span id="pts-${d.id}" style="color: ${d.score < 0 ? '#ff6b6b' : '#4da3ff'}">${Math.max(0, d.score).toFixed(3)}</span> pts</div>
-                    </div>`;
+                    `;
                 container.appendChild(card);
             });
         }
         addDriver();
+
+        /* === TUTORIEL RECHERCHE D'ADRESSE (première utilisation, 17-18/08/2026) ===
+           Suite indépendante du tutoriel hotbox (js/10) : une fois "Rechercher une
+           adresse" ouvert, trois messages plein écran, chacun sa propre clé "vue une
+           fois" — cellule Destination (déclenché depuis openSearchFromHotbox, js/09),
+           micro (startVoiceInput, js/06) et ping (toggleMapPick, ci-dessous). Aucune
+           séquence forcée entre les trois : l'utilisateur peut tomber sur le micro
+           avant le ping ou ignorer l'un des deux, contrairement au tutoriel hotbox qui,
+           lui, s'enchaîne. Marqués "vus" au moment de l'AFFICHAGE, pas de la fermeture :
+           l'objectif est qu'ils n'apparaissent qu'une fois, remarqués ou non.
+           ⚠ Fond flouté plein écran (voir .tuto-focus) : à la différence des autres
+           invites de l'app, celles-ci PRENNENT la main (tap n'importe où pour fermer),
+           volontairement — le but est de concentrer l'attention sur un texte assez
+           grand pour se lire d'un coup d'œil, pas de rester en arrière-plan. */
+        let _destHintTimer = null;
+        function showDestHint() {
+            if (localStorage.getItem('gps_dest_hint') === 'seen') return;
+            const hint = document.getElementById('dest-hint');
+            if (!hint) return;
+            safeLocalSet('gps_dest_hint', 'seen');
+            hint.classList.add('visible');
+            clearTimeout(_destHintTimer);
+            _destHintTimer = setTimeout(dismissDestHint, 7000);
+        }
+        function dismissDestHint() {
+            document.getElementById('dest-hint')?.classList.remove('visible');
+            clearTimeout(_destHintTimer);
+        }
+        let _destMicHintTimer = null;
+        function showDestMicHint() {
+            if (localStorage.getItem('gps_dest_mic_hint') === 'seen') return;
+            const hint = document.getElementById('dest-mic-hint');
+            if (!hint) return;
+            safeLocalSet('gps_dest_mic_hint', 'seen');
+            hint.classList.add('visible');
+            clearTimeout(_destMicHintTimer);
+            _destMicHintTimer = setTimeout(dismissDestMicHint, 7000);
+        }
+        function dismissDestMicHint() {
+            document.getElementById('dest-mic-hint')?.classList.remove('visible');
+            clearTimeout(_destMicHintTimer);
+        }
+        let _destPinHintTimer = null;
+        function showDestPinHint() {
+            if (localStorage.getItem('gps_dest_pin_hint') === 'seen') return;
+            const hint = document.getElementById('dest-pin-hint');
+            if (!hint) return;
+            safeLocalSet('gps_dest_pin_hint', 'seen');
+            hint.classList.add('visible');
+            clearTimeout(_destPinHintTimer);
+            _destPinHintTimer = setTimeout(dismissDestPinHint, 7000);
+        }
+        function dismissDestPinHint() {
+            document.getElementById('dest-pin-hint')?.classList.remove('visible');
+            clearTimeout(_destPinHintTimer);
+        }
 
         /* Ping carte depuis le formulaire contact : le panneau descend en état réduit
            pour dégager la carte, le formulaire reste ouvert derrière et réapparaît
@@ -103,6 +166,7 @@
             if (pickingMode === mode) {
                 // Annuler le ping → remonter le panneau
                 pickingMode = null;
+                document.getElementById('map-pick-hint')?.classList.remove('visible');
                 setPanelSnap('full');
             } else {
                 pickingMode = mode;
@@ -114,6 +178,10 @@
                 // fait par la validation du point, le bouton Annuler du bandeau d'aide, ou
                 // un appui sur l'onglet.
                 setPanelSnap('hidden');
+                // Étape 3/3 du tutoriel recherche d'adresse, une seule fois : ce mode ping
+                // n'affichait auparavant AUCUN texte explicatif — le curseur en croix seul
+                // ne dit pas à un nouvel utilisateur ce qu'il vient de déclencher.
+                if (mode === 'end') showDestPinHint();
             }
         }
         function pickOnMapForModal(which) {
@@ -130,6 +198,7 @@
             // La bannière est partagée par tous les modes de ping : on route l'annulation
             // vers le bon contexte, sinon on rouvrirait le modal de trajet par erreur.
             if (pickingMode === 'contact-addr') { toggleContactMapPick(); return; }
+            if (pickingMode === 'place-addr')   { togglePlaceMapPick();   return; }
             pickingMode = null; document.getElementById('map').classList.remove('crosshair-cursor');
             document.getElementById('map-pick-hint').classList.remove('visible');
             document.getElementById('trip-modal-overlay').classList.add('open');
@@ -183,6 +252,12 @@
                 toggleContactMapPick();   // annule le mode et remonte le panneau
                 return;
             }
+            // Ping carte pour « Go home » / « Go work » — tout le traitement est dans
+            // js/20, aux côtés du formulaire et de la fiche du lieu.
+            if (pickingMode === 'place-addr') {
+                await applyPlacePickedPoint(lng, lat);
+                return;
+            }
             if (pickingMode === 'modal-start' || pickingMode === 'modal-end') {
                 const which = pickingMode === 'modal-start' ? 'start' : 'end';
                 if (which === 'start') {
@@ -221,6 +296,11 @@
                 pickingMode = null;
                 document.getElementById('map').classList.remove('crosshair-cursor');
                 document.getElementById('map-pick-hint').classList.remove('visible');
+                /* L'étape vient d'être posée au doigt : on redéploie la feuille AVANT de
+                   la rouvrir, sinon elle réapparaît repliée sur le seul champ le temps
+                   d'une image. Définie dans js/15, chargé après celui-ci — appel au
+                   runtime dans ce handler, donc sans risque de ReferenceError. */
+                exitWaypointFocus();
                 document.getElementById('trip-modal-overlay').classList.add('open');
                 refreshWaypointMarkers();
                 recalcIfReady();
@@ -513,6 +593,47 @@
             return sorties;
         }
 
+        /* === ADRESSES POSTALES FRANÇAISES : BASE ADRESSE NATIONALE (BAN) ===
+           Le tri des réponses est dans js/00-noyau-calculs.js (`banPickAddress`), avec
+           le détail de chaque filtre ; ici, uniquement l'appel réseau.
+
+           ⚠ ON ENVOIE LE TEXTE BRUT, PAS `normalizeFrHouseNumber()`. Ce n'est pas un
+           oubli : cette normalisation existe pour Mapbox, qui n'indexe le bis/ter que
+           sous forme compacte (« 20b Rue Wilhem »). La BAN fait l'inverse — son champ
+           `housenumber` vaut « 20 bis », en toutes lettres, et son moteur plein texte
+           comprend la forme dictée. Lui envoyer « 20b » lui ferait manquer le suffixe
+           exactement comme « 20 bis » le fait manquer à Mapbox.
+
+           Pas de `fetchResilient` : un échec n'a pas à être réessayé puisqu'il est déjà
+           rattrapé par la passe Mapbox qui suit. Un seul appel, délai court — la BAN
+           n'est jamais sur le chemin critique.
+
+           Le cache évite de re-solliciter le service quand on quitte puis revalide le
+           même champ (`resolveTypedDestination()` puis validation du trajet). Un échec
+           RÉSEAU n'est pas mis en cache — il est réessayable ; un rejet de tri l'est
+           (`null` mémorisé), il donnerait le même verdict. */
+        const _banCache = new Map();
+
+        async function _banAddress(rawAddress, proximity) {
+            const cle = _deburr(rawAddress);
+            if (_banCache.has(cle)) return _banCache.get(cle);
+            const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(rawAddress)}`
+                + `&limit=5&autocomplete=0&lat=${proximity[1]}&lon=${proximity[0]}`;
+            let choisi = null;
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+                if (!res.ok) throw new Error('BAN ' + res.status);
+                const data = await res.json();
+                choisi = banPickAddress((data && data.features) || [], rawAddress);
+            } catch (e) {
+                console.warn('[Géocodage] BAN indisponible:', e.message);
+                return null;   // hors de France ou service muet : Mapbox reprend la main
+            }
+            if (_banCache.size > 120) _banCache.clear();
+            _banCache.set(cle, choisi);
+            return choisi;
+        }
+
         /* Renvoie { coords, label } : le libellé est celui que Mapbox associe au lieu trouvé.
            Indispensable pour les monuments — « moulin rouge » doit rester « Moulin Rouge »
            à l'écran. Un reverse-géocodage des coordonnées obtenues rendrait « 82 Boulevard
@@ -520,7 +641,10 @@
            demande, et qui donne l'impression que la recherche a échoué. */
         async function geocodeDetailed(address) {
             if (!navigator.onLine) throw new Error('Géocodage impossible hors ligne');
-            address = normalizeFrHouseNumber(address);
+            /* La saisie d'origine est conservée : la BAN veut le bis/ter en toutes
+               lettres là où Mapbox veut la forme compacte (voir `_banAddress`). */
+            const saisie = (address || '').trim();
+            address = normalizeFrHouseNumber(saisie);
             const coordMatch = address.match(/^([0-9.-]+),\s*([0-9.-]+)$/);
             if (coordMatch) {
                 return { coords: [parseFloat(coordMatch[2]), parseFloat(coordMatch[1])], label: address };
@@ -555,6 +679,21 @@
             if (!looksLikeStreetAddress) {
                 const nomme = await findNamedPlace(address, proximityCoords);
                 if (nomme && nomme.coords && !isNaN(nomme.coords[0]) && !isNaN(nomme.coords[1])) return nomme;
+            }
+
+            /* Adresse numérotée : le référentiel officiel français AVANT Mapbox. C'est
+               le seul des deux qui LIT la position du numéro au lieu de l'interpoler le
+               long de la rue — le mode d'échec mesuré à Courbevoie (147 m, du mauvais
+               côté d'un boulevard à chaussées séparées). Hors de France, ou sur le
+               moindre doute, `_banAddress()` rend `null` et rien ne change : la passe
+               Mapbox ci-dessous reste le chemin nominal. */
+            if (looksLikeStreetAddress && saisie.length >= 3) {
+                const ban = await _banAddress(saisie, proximityCoords);
+                if (ban) {
+                    console.log(`[Géocodage] BAN « ${saisie} » → ${ban.label}`
+                        + ` (score ${ban.score.toFixed(2)})`);
+                    return { coords: ban.coords, label: ban.label };
+                }
             }
 
             const res = await fetchResilient(baseUrl + '&limit=1');
@@ -877,6 +1016,14 @@
             overlay.style.pointerEvents = '';
             isUserPanning = false; showRecenterBtn(false);
             clearAltRoutes();
+            /* Pictos ☕ posés par l'aperçu : ils ne doivent pas survivre à une annulation,
+               sinon les zones d'un trajet abandonné restent sur la carte.
+               ⚠ Sur ANNULATION seulement : un lancement passe par `startCourse()`, qui
+               réarme le plan à partir des aires déjà relevées — les effacer ici les ferait
+               clignoter au départ, et jetterait le relevé Overpass qu'on cherche à réutiliser. */
+            if (cancelled && !isCourseStarted) {
+                restAreas = []; _restAreasRouteSig = null; clearRestStopPlan();
+            }
             // Reset sections déroulantes
             _routeChoicePanelOpen = false;
             const _rcs = document.getElementById('route-choice-section');
@@ -902,8 +1049,41 @@
                c'est le cas quand on renonce à la confirmation ouverte depuis un trajet libre.
                Le panneau se poserait par-dessus l'interface de navigation. */
             if (!isCourseStarted) {
-                document.getElementById('ui-panel').classList.remove('panel-hidden');
-                document.getElementById('ui-panel').style.display = 'flex';
+                const panel = document.getElementById('ui-panel');
+                panel.classList.remove('panel-hidden');
+                panel.style.display = 'flex';
+
+                /* ═══ LE PANNEAU REVIENT DANS SA MISE EN PAGE PAR DÉFAUT ═══
+                   Le rendre visible ne suffisait pas : `openTripModal()` se contente de
+                   poser `display:none`, si bien que TOUT l'état de mise en page d'avant
+                   l'aperçu survit sous le modal et réapparaît tel quel. Deux symptômes,
+                   tous deux sur la cellule « Où allez-vous ? » qu'on vient justement de
+                   vider pour une nouvelle saisie :
+
+                   1. **Le défilement.** Le panneau est son propre conteneur de défilement
+                      (`panel.scrollTop`, cf. enterDestinationSearchMode). Descendre jusqu'à
+                      « Go home / Go work » ou au bouton Démarrer avant de lancer l'aperçu
+                      laissait le panneau défilé au retour : la cellule Destination était
+                      hors écran, au-dessus.
+                   2. **Les modes de saisie.** `search-focus`, `contact-focus` et
+                      `place-focus` masquent chacun une partie du panneau — les deux
+                      derniers masquent précisément `#itin-destination-section`. Un
+                      formulaire resté ouvert rendait donc un panneau amputé de la seule
+                      cellule qui compte à cet instant.
+
+                   On passe par les fermetures officielles plutôt que par un retrait de
+                   classes : elles seules remettent aussi l'état interne (`_searchFocusActive`,
+                   `_placeEditing`, marqueur temporaire du contact). Retirer la classe à la
+                   main laisserait des drapeaux qui bloqueraient la sortie suivante. */
+                tenterSansBruit(() => exitDestinationSearchMode(), 'closeTripModal/searchFocus');
+                tenterSansBruit(() => toggleCreateContactForm(false), 'closeTripModal/contactForm');
+                tenterSansBruit(() => closePlaceForm(), 'closeTripModal/placeForm');
+                /* APRÈS les fermetures : `exitDestinationSearchMode()` restaure l'état de
+                   panneau mémorisé avant la saisie, et `toggleCreateContactForm(false)` peut
+                   imposer 'full' — les laisser décider après nous rendrait la remise à zéro
+                   inopérante une fois sur deux. */
+                setPanelSnap('full');
+                panel.scrollTop = 0;
             }
             // Nettoyer les marqueurs et la section stations
             clearGasStationMarkers();
@@ -915,6 +1095,36 @@
                 clearRouteLine();
                 if (startTempMarker) { startTempMarker.remove(); startTempMarker = null; }
                 currentTurfLine = null; modalPendingRoute = null;
+
+                /* ═══ LA ZFE PART AVEC LE TRACÉ AUQUEL ELLE APPARTIENT ═══
+                   Les polygones ZFE sont dessinés par `analyzeZFEForRoute()` pendant le
+                   calcul de l'aperçu, mais rien ne les retirait à l'annulation : ni
+                   `clearRouteLine()`, qui ne vide que la source `route`, ni les deux seuls
+                   appelants de `clearZFEMapLayer()` — la case à cocher du réglage et
+                   `stopCourse()`, dont aucun ne passe par ici. Les zones restaient donc
+                   affichées sur une carte redevenue vierge, en promettant une restriction
+                   pour un trajet qui n'existe plus.
+                   `renderZFEPreviewCard()` suit obligatoirement : la carte de l'aperçu et
+                   la couche cartographique lisent la MÊME source de vérité
+                   (`zfeRouteCrossings`, vidée par `clearZFEMapLayer`), et laisser la carte
+                   remplie la ferait réapparaître telle quelle à l'ouverture suivante.
+                   ⚠ Le bandeau n'est PAS refermé : il n'est jamais levé par l'aperçu (seuls
+                   `checkZFEApproach` et `checkZFELive` le lèvent, en navigation). Le fermer
+                   ici effacerait une alerte de position bien réelle — et `checkZFELive` ne
+                   la relèverait pas, `_zfeLiveInsideId` retenant la zone déjà signalée. */
+                tenterSansBruit(() => {
+                    clearZFEMapLayer();
+                    renderZFEPreviewCard();
+                    /* Une course peut tourner sous l'aperçu (confirmation ouverte pendant un
+                       trajet libre, ou changement de destination en roulant) : l'analyse de
+                       l'aperçu a alors ÉCRASÉ `zfeRouteCrossings`, donc les zones de la course
+                       réellement en cours et les alertes qui en dépendent. On les lui rend.
+                       Sans course, ou en trajet libre — pas de `fullRouteLine` —, la fonction
+                       ne trouve aucun tracé et ne fait rien : le nettoyage ci-dessus reste
+                       le mot de la fin. `modalPendingRoute` doit déjà être à `null` au-dessus,
+                       sinon elle réanalyserait précisément le trajet qu'on vient d'annuler. */
+                    _zfeReanalyzeCurrentRoute();
+                }, 'closeTripModal/zfe');
 
                 /* Renoncer à la confirmation annule AUSSI la destination : on revient au
                    panneau Itinéraire avec la cellule « Où allez-vous ? » vide, prête pour
@@ -1246,7 +1456,10 @@
                 // 'min' laissait dépasser une poignée de 54 px : c'est l'état voulu pour un
                 // glissement au doigt, pas pour un appui sur l'onglet.
                 if (panelSnapState === 'hidden' || panelSnapState === 'min') {
-                    setPanelSnap('full');
+                    // Objectifs/Profil rouvrent en 'immersive' (quasi plein écran) : la
+                    // carte n'a rien à montrer derrière eux. Itinéraire reste sur 'full',
+                    // la règle 50/50, dont la moitié de carte visible a un sens réel.
+                    setPanelSnap(tab === 'objectifs' || tab === 'profil' ? 'immersive' : 'full');
                 } else {
                     setPanelSnap('hidden');
                 }
@@ -1308,8 +1521,11 @@
             if (titleEl) titleEl.setAttribute('data-tab', tab);
 
             // Afficher le panel et l'ouvrir au max, sans animer : voir setPanelSnap.
+            // Cette branche ne s'exécute que pour Objectifs et Profil (les deux seuls
+            // autres onglets que 'trajet') : 'immersive' plutôt que 'full', la carte
+            // n'ayant aucune valeur informative derrière ces deux écrans.
             if (tab !== 'trajet') {
-                setPanelSnap('full', { immediate: true });
+                setPanelSnap('immersive', { immediate: true });
             }
 
             // Rendre le contenu des objectifs à l'ouverture
@@ -1376,24 +1592,47 @@
             const goalsBtn = document.getElementById('btn-weekly-goals');
             if (goalsBtn) _goalsBtnObserver.observe(goalsBtn, { attributes: true, attributeFilter: ['class'] });
 
+            /* ⚠ CES DEUX APPELS SONT GARDÉS — L'ESCAMOTAGE DU PANNEAU EST LA DERNIÈRE
+               INSTRUCTION DE CE HANDLER (18/08/2026). Une exception levée ici emportait tout
+               ce qui suit, et notamment le `setPanelSnap('hidden')` du bas : l'app s'ouvrait
+               alors sur le panneau Itinéraire déployé, sans le moindre indice de la cause.
+               Même règle que le `try` séparé de `_fitMapToGasScan()` et de
+               `calculateTripPreview()` : **ce qui remplit des champs et ce qui décide de
+               l'écran d'accueil ne partagent pas le même sort**. Le journal reçoit l'échec,
+               l'utilisateur garde son écran de carte.
+               `logAppError` et non `tenterSansBruit` : un échec ici SE VOIT (champs véhicule
+               vides, adresse non restaurée), il n'est donc pas « sans effet observable ». */
             // Initialiser les config du véhicule
-            initializeVehicleConfig();
+            try { initializeVehicleConfig(); }
+            catch (e) { logAppError('boot/initializeVehicleConfig', e); }
 
             // Rétablit l'adresse saisie avant un rechargement (rotation d'écran Android,
             // mise en veille prolongée, retour depuis une autre application).
-            restoreDestinationDraft();
+            try { restoreDestinationDraft(); }
+            catch (e) { logAppError('boot/restoreDestinationDraft', e); }
 
-            /* ARRIVÉE SUR LA CARTE, PAS SUR LE FORMULAIRE. Le panneau Itinéraire démarre
-               escamoté : l'écran d'accueil est la carte, et l'invite hotbox y enseigne le
-               geste qui donne accès à tout le reste. On remonte le panneau en tapant sur
-               l'onglet Itinéraire, ou par la loupe du cercle (openSearchFromHotbox).
-               ⚠ Exception : un brouillon d'adresse restauré ci-dessus doit rester visible.
-               L'escamoter reviendrait à effacer sous les yeux de l'utilisateur ce qu'il
-               avait saisi avant que l'app ne soit rechargée — il le croirait perdu.
-               `immediate` évite de donner à voir le panneau qui se referme au chargement. */
+            /* ARRIVÉE SUR LA CARTE, PAS SUR LE FORMULAIRE. L'écran d'accueil est la carte,
+               et l'invite hotbox y enseigne le geste qui donne accès à tout le reste. On
+               remonte le panneau en tapant sur l'onglet Itinéraire, ou par la loupe du
+               cercle (openSearchFromHotbox).
+               ⚠ LE SENS DE CE TEST A ÉTÉ INVERSÉ (18/08/2026), et c'est tout l'intérêt du
+               changement. Il escamotait le panneau SAUF si un brouillon avait été restauré :
+               l'écran d'accueil correct était donc le RÉSULTAT d'une instruction, et tout ce
+               qui pouvait empêcher cette ligne de s'exécuter — une exception plus haut dans
+               ce handler, ou au top-level du fichier, qui empêcherait jusqu'à son
+               enregistrement — laissait l'app démarrer sur le formulaire. Le panneau part
+               désormais fermé depuis le BALISAGE (`panel-hidden` sur #ui-panel, et
+               `panelSnapState = 'hidden'` en miroir dans js/08) ; il ne reste ici qu'à
+               l'OUVRIR dans le seul cas qui le justifie. Un échec de ce handler donne
+               maintenant le bon écran d'accueil, plus le mauvais.
+               Le cas qui le justifie : un brouillon d'adresse restauré ci-dessus doit rester
+               visible — le laisser caché reviendrait à escamoter sous les yeux de
+               l'utilisateur ce qu'il avait saisi avant que l'app ne soit rechargée, il le
+               croirait perdu.
+               `immediate` évite de donner à voir le panneau qui se déploie au chargement. */
             const draftInput = document.getElementById('end-addr');
-            if (!draftInput || !draftInput.value.trim()) {
-                setPanelSnap('hidden', { immediate: true });
+            if (draftInput && draftInput.value.trim()) {
+                setPanelSnap('full', { immediate: true });
             }
         });
 

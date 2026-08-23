@@ -104,6 +104,10 @@
                     selectGasStation(full);
                 });
 
+                // Respecte un masquage en cours : ce flush est rejoué à chaque sélection ou
+                // changement de carburant, il ne doit pas rendre les stations au passage.
+                if (_stationsHidden) el.style.display = 'none';
+
                 const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
                     .setLngLat([mLng, mLat]).addTo(map);
                 _gasMarkerEls.push({ marker, el, lng: s.lng, lat: s.lat });
@@ -125,6 +129,7 @@
                     dimmed: hasSel && !isSel,
                     accent: 'ev',
                 });
+                if (_stationsHidden) el.style.display = 'none';   // voir _flushGasMarkers
                 const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
                     .setLngLat([s.lng, s.lat]).addTo(map);
                 _evMarkerEls.push({ marker, el, lng: s.lng, lat: s.lat });
@@ -136,9 +141,172 @@
             _flushEVMarkers();
         }
 
+        /* ═══ MASQUAGE DES STATIONS SUR LA CARTE (entrée hotbox) ═══
+
+           Sur un aperçu de trajet urbain, les pastilles de prix se chevauchent au point de
+           recouvrir le tracé et les deux points qui comptent le plus — départ et arrivée.
+           Cette bascule les efface le temps de regarder la carte.
+
+           ⚠ ON MASQUE, ON NE SUPPRIME PAS. `display:none` sur l'élément du marqueur, jamais
+           `marker.remove()` : les marqueurs portent la sélection de station (`selectGasStation`),
+           l'itinéraire dévié vers elle et les écouteurs de clic. Les retirer imposerait de
+           tout reconstruire au réaffichage — et de retrouver un état de sélection que rien
+           n'aurait conservé. Mapbox continue de leur appliquer sa transformation de position
+           pendant le masquage ; ils réapparaissent au bon endroit sans recalcul.
+
+           ⚠ LES TROIS FAMILLES DE MARQUEURS SONT CONCERNÉES, sans quoi la bascule mentirait :
+           carburant de trajet, bornes de trajet (js/18) ET résultats du scan « autour de moi »
+           (`_scanMarkers`, js/11). Un utilisateur ne distingue pas leur provenance — il voit
+           « des stations sur la carte », et « masquer » doit toutes les concerner. */
+        function _allStationMarkerEls() {
+            const els = [];
+            _gasMarkerEls.forEach(m => { if (m.el) els.push(m.el); });
+            _evMarkerEls.forEach(m => { if (m.el) els.push(m.el); });
+            // Le scan ne conserve que les marqueurs, pas leurs éléments : on les redemande.
+            _scanMarkers.forEach(m => {
+                const el = tenterSansBruit(() => m.getElement(), 'stations/getElement');
+                if (el) els.push(el);
+            });
+            return els;
+        }
+
+        /* Appliquée à la fois par la bascule ET à la création de chaque marqueur (voir
+           `_flushGasMarkers`, `_flushEVMarkers`, `_renderGasScanMarkers`) : ces trois
+           fonctions reconstruisent leurs éléments à chaque rafraîchissement — changement de
+           carburant, sélection, nouveau scan. Sans le rappel à la création, un simple
+           changement de prix ferait réapparaître des stations que l'utilisateur a masquées. */
+        function applyStationsVisibility() {
+            _allStationMarkerEls().forEach(el => { el.style.display = _stationsHidden ? 'none' : ''; });
+        }
+
+        function toggleStationsVisibility() {
+            _stationsHidden = !_stationsHidden;
+            applyStationsVisibility();
+        }
+
         // Sauvegarde de l'itinéraire de base (sans station) pour pouvoir y revenir
         let _baseRouteForGas = null; // { osrmData, coords, distKm, durationH }
         let _gasStationsPanelOpen = false; // panneau stations fermé par défaut
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           HYBRIDE : LES DEUX RÉSEAUX DANS LE PANNEAU DU TRAJET   (22/08/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+
+           Le panneau ne connaissait que deux régimes, `type === 'electrique'` ou non :
+           un hybride rechargeable n'y voyait donc QUE des pompes, alors que le scan
+           « autour de moi » (js/11) lui montrait déjà les deux réseaux. Même véhicule,
+           deux réponses différentes selon l'écran — c'est cet écart qu'on referme ici.
+
+           ⚠ LE MODE VIENT DE `_scanVehicleMode()` (js/11), PAS D'UNE SECONDE LECTURE DE
+           LA CONFIG. Les deux écrans doivent répondre « both » au même instant ; deux
+           interprétations du même réglage divergeraient au premier ajout de type.
+
+           ⚠ TROIS RENDUS, PAS UN TROISIÈME RENDERER. « ⛽ » et « ⚡ » rejouent tels quels
+           `buildGasStationsUI()` / `buildEVStationsUI()` ; « Tous » = le rendu carburant,
+           puis les bornes AJOUTÉES dessous par `_appendMixedEvCards()`. Fusionner les deux
+           en une seule liste triée aurait demandé un troisième gabarit de carte et un
+           troisième chemin de détour, là où renderGasCards() se rappelle déjà lui-même
+           (remplacement des stations hors budget) — l'appendice est rejoué à la fin de
+           CHAQUE passage de renderGasCards(), il survit donc à ces re-rendus. */
+        let _gasPanelKind     = 'all';   // 'all' | 'gas' | 'ev' — hybride uniquement
+        let _mixedGasStations = [];      // dernier relevé carburant, en hybride
+        let _mixedEvStations  = [];      // dernier relevé bornes, en hybride
+        // Trois bornes sous les pompes : au-delà, la liste demande de défiler avant
+        // même d'avoir vu la première pompe. Le filtre « ⚡ » donne la liste complète.
+        const MIXED_EV_CARDS  = 3;
+
+        function _panelIsMixed() {
+            return tenterSansBruit(() => _scanVehicleMode() === 'both', 'stations/mode') === true;
+        }
+
+        /* Premier étage de filtre, hybride seulement — même trio que le scan. Injecté
+           au-dessus de `#gas-fuel-selector` plutôt que posé dans index.html : il n'a
+           aucune raison d'exister pour les deux autres types de véhicule, et un bloc
+           masqué en permanence finit toujours par se retrouver visible par accident. */
+        function _renderPanelKindChips() {
+            const selector = document.getElementById('gas-fuel-selector');
+            let box = document.getElementById('gas-kind-selector');
+            if (!_panelIsMixed()) { if (box) box.remove(); return; }
+            if (!selector) return;
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'gas-kind-selector';
+                box.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
+                selector.before(box);
+            }
+            box.innerHTML = '';
+            const chip = (label, kind, extra) => {
+                const b = document.createElement('button');
+                b.className = 'gas-fuel-btn' + (extra ? ' ' + extra : '')
+                            + (_gasPanelKind === kind ? ' active' : '');
+                b.textContent = label;
+                b.onclick = () => setGasPanelKind(kind);
+                return b;
+            };
+            box.appendChild(chip('Tous', 'all'));
+            box.appendChild(chip(`⛽ ${_mixedGasStations.length}`, 'gas'));
+            // `ev` porte le bleu bornes (voir css/styles.css) — deux pastilles orange
+            // côte à côte ne diraient pas de quel réseau elles parlent.
+            box.appendChild(chip(`⚡ ${_mixedEvStations.length}`, 'ev', 'ev'));
+        }
+
+        /* Appelée au changement de type de véhicule (js/15) : le filtre ⛽/⚡ retenu
+           décrivait l'ancien véhicule. Sans ce retour à « Tous », repasser en hybride
+           après un détour par thermique rouvrait le panneau sur les seules bornes. */
+        function resetGasPanelKind() { _gasPanelKind = 'all'; }
+
+        function setGasPanelKind(kind) {
+            _gasPanelKind = kind;
+            /* La sélection tombe avec le filtre : garder une borne sélectionnée en
+               passant sur « ⛽ » laisserait un détour actif vers un point qui n'est plus
+               dans la liste, sans aucun moyen de le désélectionner. */
+            if (selectedGasStation) deselectGasStation();
+            _renderMixedPanel();
+        }
+
+        function _renderMixedPanel() {
+            const titre = document.getElementById('gas-section-title');
+            if (titre) {
+                titre.textContent = _gasPanelKind === 'ev' ? 'Bornes sur le trajet'
+                                  : _gasPanelKind === 'gas' ? 'Stations sur le trajet'
+                                  : 'Stations et bornes';
+            }
+            if (_gasPanelKind === 'ev') {
+                /* buildEVStationsUI() ne nettoie QUE les marqueurs de bornes : sans ce
+                   coup de balai, les pastilles de prix du rendu « Tous » resteraient sur
+                   la carte alors que la liste ne montre plus que des bornes. */
+                clearGasStationMarkers();
+                buildEVStationsUI(_mixedEvStations);
+                _renderPanelKindChips();   // buildEVConnectorSelector a réécrit la ligne du dessous
+                return;
+            }
+            // « Tous » et « ⛽ » passent par le rendu carburant ; l'appendice ⚡ ne se
+            // pose qu'en « Tous », il est décidé dans _appendMixedEvCards().
+            buildGasStationsUI(_mixedGasStations);
+            _renderPanelKindChips();
+        }
+
+        /* Appendice ⚡ du mode « Tous ». Appelé à la FIN de chaque rendu carburant —
+           y compris ses re-rendus internes — et donc jamais recopié dans les appelants. */
+        function _appendMixedEvCards() {
+            if (!_panelIsMixed() || _gasPanelKind !== 'all') return;
+            /* Tri sur une COPIE, dans l'ordre du trajet — le même que celui de
+               buildEVStationsUI(). `parseEVStations()` rend les bornes dans l'ordre
+               d'Overpass, qui n'a aucun sens pour un conducteur : sans ce tri, les trois
+               bornes montrées ici pouvaient être trois bornes de fin de parcours. */
+            const bornes = dedupeEVByCluster(
+                [..._mixedEvStations].sort((a, b) =>
+                    (a.distAlongRoute - b.distAlongRoute) || (a.distToRoute - b.distToRoute))
+            ).slice(0, MIXED_EV_CARDS);
+            if (!bornes.length) return;
+            const list = document.getElementById('gas-stations-list');
+            if (!list) return;
+            const titre = document.createElement('div');
+            titre.style.cssText = 'font-size:11px;font-weight:700;color:#6cb6ff;margin:10px 0 6px;letter-spacing:0.3px;';
+            titre.textContent = `⚡ Bornes de recharge (${_mixedEvStations.length} sur le trajet)`;
+            list.appendChild(titre);
+            renderEVCards(bornes, { append: true });
+        }
 
         function toggleGasStationsPanel() {
             _gasStationsPanelOpen = !_gasStationsPanelOpen;
@@ -150,7 +318,11 @@
             const vCfg = loadVehicleConfig();
             const isElec = vCfg.type === 'electrique';
             const loading = document.getElementById('gas-stations-loading');
-            if (loading) loading.textContent = isElec ? '🔄 Recherche des bornes de recharge...' : '🔄 Recherche des prix en temps réel...';
+            if (loading) {
+                loading.textContent = _panelIsMixed() ? '🔄 Recherche des stations et des bornes...'
+                                    : isElec          ? '🔄 Recherche des bornes de recharge...'
+                                                      : '🔄 Recherche des prix en temps réel...';
+            }
 
             // Premier clic : charger selon le type de véhicule.
             // Si la phase 1 a déjà préchargé (ou est en cours), on n'relance rien —
@@ -183,22 +355,35 @@
                 if (modalPendingRoute) modalPendingRoute.osrmData = _baseRouteForGas.osrmData;
                 // Restaurer les infos trajet d'origine
                 document.getElementById('preview-time').innerText     = formatTime(_baseRouteForGas.durationH);
+                document.getElementById('preview-arrival').innerText  = formatArrivalTime(_baseRouteForGas.durationH);
                 document.getElementById('preview-distance').innerText = _baseRouteForGas.distKm.toFixed(1) + ' km';
                 document.getElementById('preview-points').innerText   = (_baseRouteForGas.distKm * 1000 * POINTS_PER_METER).toFixed(2) + ' pts';
                 const cfg = loadVehicleConfig();
                 const fuelCost = calcEnergyCost(_baseRouteForGas.distKm, cfg);
                 const tollCost = avoidTolls ? 0 : estimateTollCost(_baseRouteForGas.osrmData);
                 document.getElementById('preview-fuel-cost').innerText  = fuelCost.toFixed(2) + ' €';
-                document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : (tollCost > 0 ? '~' + tollCost.toFixed(2) + ' €' : 'Aucun');
+                document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = '~' + (fuelCost + tollCost).toFixed(2) + ' €';
                 const statusEl = document.getElementById('modal-status');
                 if (statusEl) { statusEl.innerText = '✅ Itinéraire sans arrêt station.'; statusEl.style.color = '#28a745'; }
             }
         }
 
+        /* Identité d'une station : ses coordonnées, à la même tolérance que les
+           marqueurs (`_flushGasMarkers`). ⚠ ET NON `_idx`, qui n'est qu'un rang dans la
+           liste affichée : en hybride « Tous », la première pompe et la première borne
+           portent toutes deux `_idx === 0`, et le toggle prenait alors l'une pour
+           l'autre — cliquer la borne juste après la pompe la désélectionnait au lieu de
+           la choisir. */
+        function _sameStation(a, b) {
+            return !!a && !!b
+                && Math.abs(a.lng - b.lng) < 0.0001
+                && Math.abs(a.lat - b.lat) < 0.0001;
+        }
+
         function selectGasStation(station) {
             // Toggle : re-cliquer sur la station déjà sélectionnée la retire du trajet
-            if (station !== null && selectedGasStation && selectedGasStation._idx === station._idx) {
+            if (station !== null && _sameStation(selectedGasStation, station)) {
                 deselectGasStation();
                 return;
             }
@@ -209,7 +394,10 @@
             if (station === null) {
                 deselectGasStation();
             } else {
-                const card = document.getElementById(`gas-card-${station._idx}`);
+                /* `_cardId` est posé par le rendu qui a créé la carte : les bornes
+                   ajoutées sous les pompes (hybride « Tous ») ont un préfixe propre,
+                   `gas-card-${_idx}` ne les aurait jamais trouvées. */
+                const card = document.getElementById(station._cardId || `gas-card-${station._idx}`);
                 if (card) card.classList.add('selected');
                 saveStationToFavorites(station, selectedFuelType); // mémoriser le choix
                 updateRouteWithGasWaypoint(station);
@@ -390,6 +578,7 @@
                 const maxPts    = totalDistanceM * POINTS_PER_METER;
 
                 document.getElementById('preview-time').innerText     = formatTime(durationH);
+                document.getElementById('preview-arrival').innerText  = formatArrivalTime(durationH);
                 document.getElementById('preview-distance').innerText = distKm.toFixed(1) + ' km';
                 document.getElementById('preview-points').innerText   = maxPts.toFixed(2) + ' pts';
 
@@ -397,7 +586,7 @@
                 const fuelCost = calcEnergyCost(distKm, cfg);
                 const tollCost = avoidTolls ? 0 : estimateTollCost(osrmData);
                 document.getElementById('preview-fuel-cost').innerText  = fuelCost.toFixed(2) + ' €';
-                document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : (tollCost > 0 ? '~' + tollCost.toFixed(2) + ' €' : 'Aucun');
+                document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = '~' + (fuelCost + tollCost).toFixed(2) + ' €';
 
                 if (statusEl) { statusEl.innerText = `✅ Itinéraire via ⛽ ${station.name} calculé.`; statusEl.style.color = '#ffa500'; }
@@ -450,9 +639,14 @@
                 btn.onclick = () => {
                     if (btn.classList.contains('active')) {
                         selectedFuelType = null;
-                        document.querySelectorAll('.gas-fuel-btn').forEach(b => b.classList.remove('active'));
+                        // Même portée limitée que setFuelFilter() : les pastilles de type
+                        // de l'hybride ne sont pas des filtres de carburant.
+                        document.querySelectorAll('#gas-fuel-selector .gas-fuel-btn').forEach(b => b.classList.remove('active'));
                         clearGasStationMarkers();
                         document.getElementById('gas-stations-list').innerHTML = '';
+                        // Désélectionner un carburant ne dit rien des bornes : en hybride
+                        // « Tous », elles restent affichées.
+                        _appendMixedEvCards();
                     } else {
                         setFuelFilter(f.key);
                     }
@@ -736,7 +930,11 @@
         function setFuelFilter(fuelType) {
             selectedFuelType = fuelType;
 
-            document.querySelectorAll('.gas-fuel-btn').forEach(btn => {
+            /* ⚠ Portée limitée au sélecteur de carburant, et non `.gas-fuel-btn` partout
+               dans la page : les pastilles de type de l'hybride (#gas-kind-selector)
+               réutilisent la même classe sans porter de `dataset.fuel`, et le balayage
+               global les éteignait toutes au premier changement de carburant. */
+            document.querySelectorAll('#gas-fuel-selector .gas-fuel-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.fuel === fuelType);
             });
 
@@ -795,12 +993,19 @@
 
         function renderGasCards(stations) {
             const list = document.getElementById('gas-stations-list');
+            /* Les pastilles de type sont reposées à chaque rendu carburant, pas seulement
+               par `_renderMixedPanel()` : le scan live (phase 2) rappelle directement
+               cette fonction, et l'hybride perdrait sinon son sélecteur ⛽/⚡ au premier
+               rafraîchissement en roulant — avec des compteurs figés sur le relevé du
+               départ jusque-là. Trois boutons : le coût est nul. */
+            if (_panelIsMixed()) _renderPanelKindChips();
             _gasDetourRun++;   // toute boucle de détour encore en vol devient caduque
             list.innerHTML = '';
             clearGasStationMarkers();
 
             if (!stations || stations.length === 0) {
                 list.innerHTML = `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Aucune station avec ce carburant sur le trajet.</div>`;
+                _appendMixedEvCards();
                 return;
             }
 
@@ -827,6 +1032,7 @@
                 const card = document.createElement('div');
                 card.className = 'gas-station-card';
                 card.id = `gas-card-${i}`;
+                s._cardId = card.id;
 
                 const price = getEffectivePrice(s, selectedFuelType);
                 const effectiveFuelType = getEffectiveFuelType(s, selectedFuelType);
@@ -871,6 +1077,12 @@
                 card.addEventListener('click', () => selectGasStation(s));
                 list.appendChild(card);
             });
+
+            /* Bornes de recharge sous les pompes, en hybride « Tous » seulement (voir
+               _appendMixedEvCards). Posé ICI, à la fin de chaque passage : renderGasCards()
+               se rappelle lui-même quand des stations sortent du budget de détour, et
+               l'appendice doit survivre à ce second rendu. */
+            _appendMixedEvCards();
 
             // Calculer le vrai delta de temps via OSRM — séquentiel pour éviter la saturation API
             if (modalStartCoords && modalEndCoords) {
@@ -1200,6 +1412,9 @@
                 clearGasStationMarkers();
                 document.getElementById('gas-stations-list').innerHTML =
                     `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Aucune station avec prix disponible sur ce trajet.</div>`;
+                // Ce chemin ne passe PAS par renderGasCards : sans ce rappel, un hybride
+                // sur un trajet sans pompe perdrait aussi ses bornes, qui existent.
+                _appendMixedEvCards();
                 return;
             }
 
@@ -1281,6 +1496,43 @@
             }
         }
 
+        /* Tronçon réellement utile au relevé carburant : sur un Paris→Marseille,
+           getGasSearchWindow ne retiendra de toute façon que le début du parcours,
+           scanner les 780 km était du gâchis. On borne au plus large entre la fenêtre
+           de recherche et le rayon vol d'oiseau ; le PARSE, lui, se fait toujours
+           contre le tracé complet pour que `distAlongRoute` reste comparable à la
+           fenêtre. ⚠ Exemplaire unique : ce calcul vivait en double, à l'identique,
+           dans loadGasStationsForRoute() et prefetchGasStationsPhase1(). */
+        function _gasScanCoordsForRoute(routeCoords, etiquette) {
+            const totalKm  = turf.length(turf.lineString(routeCoords), { units: 'kilometers' });
+            const win      = getGasSearchWindow(totalKm);
+            const scanToKm = Math.min(totalKm, Math.max(win.toKm, GAS_PHASE1_RADIUS_KM));
+            const coords   = (totalKm > GAS_PHASE1_RADIUS_KM)
+                ? (sliceRouteSegment(routeCoords, 0, scanToKm) || routeCoords)
+                : routeCoords;
+            if (coords !== routeCoords) {
+                console.log(`[GasAPI/${etiquette}] Scan borné à ${Math.round(scanToKm)} km sur ${Math.round(totalKm)} km`);
+            }
+            return coords;
+        }
+
+        /* Les deux collectes partent EN PARALLÈLE : elles n'ont aucune source commune
+           (data.gouv pour les pompes, Overpass pour les bornes), les sérialiser
+           doublerait l'attente pour rien. Même choix que `runGasScan()` (js/11).
+           Un réseau qui échoue ne fait pas tomber l'autre — un hybride garde alors la
+           moitié de ses options au lieu d'une liste vide. */
+        async function _fetchBothNetworks(routeCoords, etiquette) {
+            const [gas, ev] = await Promise.all([
+                fetchGasStationsAlongRoute(_gasScanCoordsForRoute(routeCoords, etiquette))
+                    .then(raw => parseGasStations(raw, routeCoords))
+                    .catch(e => { console.warn(`[GasAPI/${etiquette}] pompes —`, e.message || e); return []; }),
+                fetchEVStationsAlongRoute(routeCoords)
+                    .then(raw => parseEVStations(raw, routeCoords))
+                    .catch(e => { console.warn(`[EV/${etiquette}] bornes —`, e.message || e); return []; }),
+            ]);
+            return { gas, ev };
+        }
+
         async function loadGasStationsForRoute(routeCoords) {
             if (!navigator.onLine) {
                 const loading = document.getElementById('gas-stations-loading');
@@ -1303,28 +1555,17 @@
             if (titleEl) titleEl.textContent = isElec ? 'Bornes sur le trajet' : 'Stations sur le trajet';
 
             try {
-                if (isElec) {
+                if (_panelIsMixed()) {
+                    const deux = await _fetchBothNetworks(routeCoords, 'Mixte');
+                    _mixedGasStations = deux.gas;
+                    _mixedEvStations  = deux.ev;
+                    _renderMixedPanel();
+                } else if (isElec) {
                     const raw = await fetchEVStationsAlongRoute(routeCoords);
                     const stations = parseEVStations(raw, routeCoords);
                     buildEVStationsUI(stations);
                 } else {
-                    // PHASE 1 — ne scanner que le tronçon utile, pas tout le trajet.
-                    // Sur un Paris→Marseille, getGasSearchWindow ne retiendra de toute
-                    // façon que 5%→40% du parcours : scanner les 780 km était du gâchis.
-                    // On borne au plus large entre la fenêtre de recherche et le rayon
-                    // vol d'oiseau, puis on parse contre le tracé COMPLET pour que
-                    // distAlongRoute reste cohérent avec la fenêtre.
-                    const _fullLine  = turf.lineString(routeCoords);
-                    const _totalKm   = turf.length(_fullLine, { units: 'kilometers' });
-                    const _win       = getGasSearchWindow(_totalKm);
-                    const _scanToKm  = Math.min(_totalKm, Math.max(_win.toKm, GAS_PHASE1_RADIUS_KM));
-                    const _scanCoords = (_totalKm > GAS_PHASE1_RADIUS_KM)
-                        ? (sliceRouteSegment(routeCoords, 0, _scanToKm) || routeCoords)
-                        : routeCoords;
-                    if (_scanCoords !== routeCoords) {
-                        console.log(`[GasAPI/Phase1] Scan borné à ${Math.round(_scanToKm)} km sur ${Math.round(_totalKm)} km`);
-                    }
-                    const raw = await fetchGasStationsAlongRoute(_scanCoords);
+                    const raw = await fetchGasStationsAlongRoute(_gasScanCoordsForRoute(routeCoords, 'Phase1'));
                     const stations = parseGasStations(raw, routeCoords);
                     buildGasStationsUI(stations);
                 }
@@ -1346,13 +1587,36 @@
                des autres stations n'ont plus lieu d'être une fois le choix arrêté. */
             if (_destIsChosenStation()) { clearGasStationMarkers(); return; }
 
-            /* Le préchargement couvre désormais LES TROIS types de véhicule. Il
-               s'arrêtait auparavant sur « électrique », si bien qu'un conducteur
-               d'électrique devait ouvrir le panneau puis attendre, là où un
-               thermique trouvait sa liste déjà prête. Un hybride charge les deux
-               réseaux : il a un besoin réel de chacun. */
+            /* Le préchargement couvre LES TROIS types de véhicule. Il s'arrêtait
+               d'abord sur « électrique », si bien qu'un conducteur d'électrique devait
+               ouvrir le panneau puis attendre, là où un thermique trouvait sa liste
+               déjà prête. ⚠ Il retombait ENSUITE sur la branche carburant pour tout ce
+               qui n'était pas électrique — un hybride ne préchargeait donc que ses
+               pompes, alors qu'il a un besoin réel des deux réseaux : c'est ce que la
+               branche mixte ci-dessous corrige (22/08/2026). */
             const vCfg  = loadVehicleConfig();
             const vType = vCfg.type || 'thermique';
+
+            if (_panelIsMixed()) {
+                _gasPrefetchInFlight = true;
+                _gasPrefetchDone     = false;
+                try {
+                    const deux = await _fetchBothNetworks(routeCoords, 'Mixte/Phase1');
+                    // Même garde que les deux autres branches : le tracé a pu changer
+                    // pendant le relevé (recalcul, étape ajoutée), on n'écrase rien.
+                    if (modalPendingRoute?.osrmData?.routes?.[0]?.geometry?.coordinates === routeCoords) {
+                        _mixedGasStations = deux.gas;
+                        _mixedEvStations  = deux.ev;
+                        _renderMixedPanel();
+                        _gasPrefetchDone = true;
+                    }
+                } catch (e) {
+                    console.warn('[Mixte/Phase1] Préchargement échoué —', e.message || e);
+                } finally {
+                    _gasPrefetchInFlight = false;
+                }
+                return;
+            }
 
             if (vType === 'electrique') {
                 _gasPrefetchInFlight = true;
@@ -1377,16 +1641,7 @@
             _gasPrefetchInFlight = true;
             _gasPrefetchDone     = false;
             try {
-                const line     = turf.lineString(routeCoords);
-                const totalKm  = turf.length(line, { units: 'kilometers' });
-                const win      = getGasSearchWindow(totalKm);
-                const scanToKm = Math.min(totalKm, Math.max(win.toKm, GAS_PHASE1_RADIUS_KM));
-                const scanCoords = (totalKm > GAS_PHASE1_RADIUS_KM)
-                    ? (sliceRouteSegment(routeCoords, 0, scanToKm) || routeCoords)
-                    : routeCoords;
-
-                console.log(`[GasAPI/Phase1] Préchargement auto — ${Math.round(scanToKm)} km scannés sur ${Math.round(totalKm)} km`);
-
+                const scanCoords = _gasScanCoordsForRoute(routeCoords, 'Phase1');
                 const raw      = await fetchGasStationsAlongRoute(scanCoords);
                 const stations = parseGasStations(raw, routeCoords);
 
@@ -1417,6 +1672,36 @@
             _gasLiveLastScanTime = 0;
             _gasLiveLastScanKm   = -Infinity;
             _gasLiveInFlight     = false;
+        }
+
+        /* ⚠⚠ CHANGEMENT D'ITINÉRAIRE EN ROULANT — appelée par `applyRouteResponse()` (js/19),
+           donc aussi bien sur un recalcul de déviation que sur l'adoption d'une proposition
+           d'itinéraire plus rapide. Corrige un défaut présent depuis l'origine (18/08/2026).
+
+           CE QUI CLOCHAIT : le scan live lit `modalPendingRoute.osrmData…coordinates`, un
+           INSTANTANÉ pris dans le modal AVANT le départ — et RIEN ne le réécrivait pendant la
+           navigation (`recalculateRoute()` remplace `currentTurfLine` et `fullRouteLine`, pas
+           celui-là). La fenêtre glissante continuait donc de courir le long du tracé de
+           DÉPART. Invisible sur une déviation de 200 m, où les deux tracés se confondent ;
+           faux d'emblée dès qu'on change vraiment de route, où les stations proposées sont
+           alors celles de l'autoroute qu'on vient de quitter.
+
+           ⚠ `resetGasLiveScan()` SEUL NE SUFFIT PAS, et c'est le piège de ce correctif : il
+           remet `_gasLiveLastScanTime` à 0, donc `firstScan` à vrai — et la garde « premier
+           scan » de `maybeScanGasStationsLive()` refuse alors de scanner tant qu'on n'a pas
+           parcouru une zone morte entière (25 km sur un long trajet). Cette garde a raison AU
+           DÉPART, où la liste de la phase 1 est fraîche ; elle a tort ICI, où cette même liste
+           vient d'être scannée le long d'une route qu'on abandonne. D'où `_gasForceRescan`,
+           consommé une seule fois, par le premier scan qui part réellement. */
+        let _gasForceRescan = false;
+        function notifyRouteChangedForGasScan(osrmData) {
+            if (modalPendingRoute && osrmData) modalPendingRoute.osrmData = osrmData;
+            // Verdicts de détour calculés contre l'ancien tracé : les purger, même geste
+            // qu'au changement d'itinéraire dans le modal (js/04 et js/16).
+            _allGasStations.forEach(s => { s._deltaMin = null; s._distAnchor = null; });
+            _gasSearchWindow = null;
+            resetGasLiveScan();
+            _gasForceRescan = true;
         }
 
         // Appelé depuis la boucle GPS. Ne fait rien tant que les conditions
@@ -1459,20 +1744,25 @@
 
             const now       = Date.now();
             const firstScan = _gasLiveLastScanTime === 0;
-            const timeReady = firstScan || (now - _gasLiveLastScanTime) >= cadence.intervalMs;
+            const timeReady = _gasForceRescan || firstScan || (now - _gasLiveLastScanTime) >= cadence.intervalMs;
             // Zone morte : inutile de rescanner si on n'a pas vraiment avancé
             const movedKm   = currentKm - _gasLiveLastScanKm;
-            const moveReady = firstScan || movedKm >= cadence.deadZoneKm;
+            const moveReady = _gasForceRescan || firstScan || movedKm >= cadence.deadZoneKm;
 
             if (!timeReady || !moveReady) return;
 
             // Le premier scan live n'a d'intérêt qu'une fois vraiment en route :
             // au démarrage, la liste de la phase 1 est encore parfaitement valide.
-            if (firstScan && currentKm < cadence.deadZoneKm) {
+            // ⚠ Sauf après un CHANGEMENT D'ITINÉRAIRE : cette même liste décrit alors une
+            // route qu'on vient de quitter, et attendre la zone morte (jusqu'à 25 km)
+            // laisserait le conducteur avec les stations de l'ancien tracé. Voir
+            // notifyRouteChangedForGasScan().
+            if (firstScan && !_gasForceRescan && currentKm < cadence.deadZoneKm) {
                 return;
             }
 
             _gasLiveInFlight     = true;
+            _gasForceRescan      = false;   // consommé : ce scan-ci est celui qu'il réclamait
             _gasLiveLastScanTime = now;
             _gasLiveLastScanKm   = currentKm;
 
@@ -1563,10 +1853,16 @@
             });
 
             _allGasStations = ahead;
+            /* En hybride, le pool carburant du panneau est celui-ci : sans cette ligne,
+               basculer sur « ⛽ » après une heure de route réafficherait les stations
+               relevées au départ, loin derrière le véhicule. La phase 2 ne rafraîchit
+               que les pompes — les bornes gardent le relevé de la phase 1. */
+            if (_panelIsMixed()) _mixedGasStations = ahead;
 
             // Mise à jour SILENCIEUSE : pas de toast, pas de vocal.
-            // On ne re-rend que si le panneau est effectivement ouvert.
-            if (_gasStationsPanelOpen) {
+            // On ne re-rend que si le panneau est effectivement ouvert, et jamais
+            // par-dessus la liste des bornes qu'un hybride est en train de consulter.
+            if (_gasStationsPanelOpen && !(_panelIsMixed() && _gasPanelKind === 'ev')) {
                 const hasFuel = ahead.some(s => getEffectivePrice(s, selectedFuelType) != null);
                 if (!hasFuel) {
                     const firstAvail = FUEL_DEFS.find(f => ahead.some(s => getEffectivePrice(s, f.key) != null));

@@ -104,10 +104,24 @@
            Destination et fait surgir le clavier, là où on veut présenter l'écran complet
            (contacts, Réel/Simu, Démarrer, Trajet libre). */
         function openSearchFromHotbox() {
+            /* La feuille "stations autour de moi" (body.gas-scan-open) occupe l'écran
+               par-dessus la carte SANS changer l'onglet actif en dessous — switchMainTab()
+               la referme donc bien quand on bascule d'onglet, mais rien ne le fait quand
+               l'onglet Itinéraire était déjà actif : `surTrajet` est alors vrai et on ne
+               touchait qu'au panelSnap, en laissant la feuille de scan affichée par-dessus
+               le panneau qu'on vient pourtant de redéployer. Fermeture explicite ici,
+               sans condition, pour couvrir aussi bien ce cas que le trajet en cours
+               (closeGasScan() ne fait rien si la feuille n'est pas ouverte). */
+            if (document.body.classList.contains('gas-scan-open')) closeGasScan();
             if (isCourseStarted) { openQuickReroute(); return; }
             const surTrajet = document.querySelector('.panel-tab-content.active')?.id === 'panel-tab-trajet';
             if (!surTrajet) switchMainTab('trajet');
             else if (panelSnapState !== 'full') setPanelSnap('full');
+            // Étape 1/3 du tutoriel recherche d'adresse (une seule fois) : flèche sur la
+            // cellule Destination. Délai le temps que le panneau finisse sa transition
+            // (déploiement ou changement d'onglet), sinon la bulle se positionnerait sur
+            // une cible qui n'a pas encore atteint sa place finale.
+            setTimeout(showDestHint, 450);
         }
 
         function closeQuickReroute() {
@@ -312,7 +326,11 @@
             // Les clés étant indexées par la valeur du palier, un retour du GPS en cours de step
             // ne rejoue pas un palier déjà annoncé (300 est commun aux deux jeux).
             const estimated = _positionIsEstimated;
-            const thresholds = estimated ? [500, 300, 150] : [300, 100, 30];
+            /* Mode « moins bavard » : un seul palier par manœuvre au lieu de trois. On garde
+               celui du milieu — assez tôt pour se rabattre, assez tard pour être encore juste.
+               Les rappels à 100 et 30 m ne disent rien de neuf quand on a déjà entendu l'ordre. */
+            let thresholds = estimated ? [500, 300, 150] : [300, 100, 30];
+            if (voiceQuietMode) thresholds = estimated ? [500] : [300];
             thresholds.forEach(th => {
                 const key = currentStepIndex + '_' + th;
                 if (distToManeuver <= th && !announcedThresholds[key]) {
@@ -331,43 +349,423 @@
             } catch (e) { if (DEBUG) console.warn("[checkVoiceGuidanceReal] exception ignorée :", e); }
         }
 
-        async function fetchRestAreasAlongRoute() {
-            restAreas = [];
-            if (!fullRouteLine) return;
-            try {
-                const coords = fullRouteLine.geometry.coordinates;
+        /* ═══ DÉCOUPAGE DU TRAJET POUR LE RELEVÉ DES AIRES ═══
+           Une bbox unique sur tout le parcours couvrait le RECTANGLE Paris–Bruxelles, soit
+           230 × 145 km dont l'essentiel est loin de la route : 16 s de réponse mesurées le
+           21/08/2026, pendant lesquelles l'écran de confirmation reste sans pictos — donc en
+           pratique jamais vus. Des tronçons courts interrogés en parallèle rendent des bbox
+           minuscules ; c'est le motif déjà retenu pour les stations (`buildRouteSegments`,
+           js/17) et les bornes, et la note de mesure d'AGENTS.md (piège n°2) montre que le
+           parallèle bat nettement le séquentiel sur ces miroirs.
+           ⚠ On a cru ensuite que ce parallélisme se retournait contre lui-même sur les longs
+           trajets (11 tronçons = 44 requêtes) : mesuré, c'est faux — voir le pavé
+           « HYPOTHÈSE RÉFUTÉE » ci-dessous avant d'y toucher.
+
+           ⚠ LE BUFFER N'EST PAS CELUI DES STATIONS. `GAS_BUFFER_DEG` vaut 0,15° (~15 km),
+           calibré pour rattraper des stations en ville ; ici les aires sont écartées au-delà
+           de 1,5 km de la route, un tel buffer ne ferait que regrossir la bbox qu'on cherche
+           à réduire. 0,05° laisse ~3,5 km au plus serré (longitude à 50°N), soit le double
+           du filtre — assez pour qu'aucune aire retenue ne tombe hors cadre. */
+        const REST_AREA_SEGMENT_KM = 80;
+        /* ⚠⚠ HYPOTHÈSE TESTÉE ET RÉFUTÉE — NE PAS PLAFONNER LE NOMBRE DE TRONÇONS
+           (essayé puis retiré le 21/08/2026, garder la trace évite de le refaire).
+           Raisonnement de départ, très plausible : Paris–Perpignan (851 km) donne 11
+           tronçons, donc jusqu'à 44 requêtes simultanées vers des miroirs bénévoles — le
+           déclencheur de 429/504 que signale AGENTS.md. J'ai donc plafonné à 6 tronçons de
+           ~142 km, ramenant la charge à 24 requêtes. Mesure sur le MÊME trajet :
+
+             11 tronçons de 80 km   44 requêtes   **2 échecs**   40,1 s   zone 1 à +42,8 km
+              6 tronçons de 142 km  24 requêtes   **2 échecs**   34,9 s   zone 1 à +73,4 km
+
+           ⚠ J'en avais conclu « la concurrence n'est pas la cause ». **Cette conclusion-là
+           était fausse aussi** : trois lancements ultérieurs à 11 tronçons ont donné 1, 2
+           puis 3 échecs. Comparer deux tirages d'une loi qui varie de 1 à 3 ne démontre
+           rien, et l'égalité 2=2 n'était qu'une coïncidence. La charge n'est ni innocentée
+           ni confirmée — elle est **non mesurée**, et le rester demande plusieurs lancements
+           par configuration.
+           Ce qui reste établi, en revanche, et qui suffit à retirer le plafond : il a
+           **aggravé** la seule chose qui compte — le trou laissé par un tronçon perdu vaut
+           sa largeur, donc élargir les tronçons éloigne d'autant la zone 1 du seuil.
+           Et les causes, une fois journalisées, montrent des `Failed to fetch` (transport)
+           et non des 429 (quota) : si la charge jouait, ce n'est pas par le refus serveur
+           qu'on imaginait. (Voir aussi les bornes électriques, js/19 : « plafonner la
+           concurrence » y était déjà faux, mesures à l'appui.)
+           Le vrai correctif est ailleurs : voir le second essai du tronçon décisif, plus bas.
+           ⚠ Quiconque voudra replafonner doit d'abord lire `causes` dans `pause-releve` : si
+           les échecs ne sont pas des 429, la charge n'a rien à voir avec le problème. */
+        const REST_AREA_BUFFER_DEG = 0.05;
+
+        function _buildRestAreaSegments(line) {
+            const totalKm = turf.length(line, { units: 'kilometers' });
+            const nb = Math.max(1, Math.ceil(totalKm / REST_AREA_SEGMENT_KM));
+            const segments = [];
+            for (let i = 0; i < nb; i++) {
+                const fromKm = i * REST_AREA_SEGMENT_KM;
+                const toKm   = Math.min((i + 1) * REST_AREA_SEGMENT_KM, totalKm);
+                if (toKm - fromKm < 0.1) continue;   // reliquat de fin, rien à y chercher
+                const coords = turf.lineSliceAlong(line, fromKm, toKm, { units: 'kilometers' }).geometry.coordinates;
+                if (coords.length < 2) continue;
                 let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
                 coords.forEach(c => {
-                    const lng = c[0], lat = c[1];
-                    if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
-                    if (lng < minLng) minLng = lng; if (lng > maxLng) maxLng = lng;
+                    if (c[1] < minLat) minLat = c[1]; if (c[1] > maxLat) maxLat = c[1];
+                    if (c[0] < minLng) minLng = c[0]; if (c[0] > maxLng) maxLng = c[0];
                 });
-                const pad = 0.05;
-                const bbox = `${minLat - pad},${minLng - pad},${maxLat + pad},${maxLng + pad}`;
-                const query = `[out:json][timeout:25];(node["highway"="services"](${bbox});way["highway"="services"](${bbox});node["highway"="rest_area"](${bbox});way["highway"="rest_area"](${bbox}););out center;`;
+                segments.push({
+                    fromKm, toKm,   // servent à repérer le tronçon qui contient le seuil des 1h50
+                    minLat: minLat - REST_AREA_BUFFER_DEG, maxLat: maxLat + REST_AREA_BUFFER_DEG,
+                    minLng: minLng - REST_AREA_BUFFER_DEG, maxLng: maxLng + REST_AREA_BUFFER_DEG,
+                });
+            }
+            return segments;
+        }
 
-                const res = await fetchResilient('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    body: 'data=' + encodeURIComponent(query)
-                });
-                const data = await res.json();
+        // `totalDurationHours` sert uniquement à décider s'il faut armer le plan de 3 zones
+        // (js/11) et à situer le seuil des 1h50 en kilomètres. Absent, on se contente de
+        // remplir `restAreas` : c'est l'ancien comportement, suggestion simple toutes les 1h50.
+        async function fetchRestAreasAlongRoute(totalDurationHours, ligne) {
+            const line = ligne || fullRouteLine;
+            if (!line) { restAreas = []; clearRestStopPlan(); return; }
 
-                const candidates = [];
-                (data.elements || []).forEach(el => {
-                    const lat = el.type === 'node' ? el.lat : (el.center ? el.center.lat : null);
-                    const lng = el.type === 'node' ? el.lon : (el.center ? el.center.lon : null);
-                    if (lat == null || lng == null) return;
-                    const pt = turf.point([lng, lat]);
-                    const distToRoute = turf.pointToLineDistance(pt, fullRouteLine, { units: 'kilometers' });
-                    if (distToRoute > 1.5) return;
-                    candidates.push({ lat, lng, name: (el.tags && el.tags.name) ? el.tags.name : "Aire de repos" });
-                });
+            /* Même tracé qu'au dernier relevé : les aires n'ont pas bougé, on ne redemande
+               rien à Overpass. On rebâtit seulement le plan — l'aperçu et le lancement
+               partagent ainsi un unique appel réseau. */
+            const sig = _routeSigForRestAreas(line);
+            if (sig && sig === _restAreasRouteSig && restAreas.length > 0) {
+                // Relevé complet et mémorisé (`echecs === 0`) : aucune zone à tronquer.
+                restAreasCoverageKm = Infinity;
+                armRestStopPlan(totalDurationHours, line);
+                return;
+            }
 
-                candidates.forEach(c => {
-                    const tooClose = restAreas.some(r => turf.distance(turf.point([r.lng, r.lat]), turf.point([c.lng, c.lat]), { units: 'kilometers' }) < 1);
-                    if (!tooClose) restAreas.push(c);
+            /* ⚠ Ce relevé devient le seul légitime : tout relevé plus ancien encore en vol
+               s'arrêtera d'écrire à sa prochaine reprise (voir `_restAreasRun`, js/06). */
+            const run = ++_restAreasRun;
+            const perime = () => run !== _restAreasRun;
+
+            /* ⚠⚠ ON NE VIDE `restAreas` QUE SI LE TRACÉ A CHANGÉ (21/08/2026).
+               Le relevé n'est mémorisé (`_restAreasRouteSig`) que sans échec — soit 2 fois
+               sur 8. Le reste du temps, `startCourse()` refait le relevé du MÊME trajet et
+               son premier geste effaçait tout : mesuré au lancement réel,
+               `zones: 3, candidats: 31` retombant à `zones: 1, candidats: 3` — les trois
+               tasses s'effacent sous les yeux du conducteur au moment où il démarre, pour
+               revenir 16 s plus tard aux mêmes kilomètres. Détruire une information juste
+               pour la reconstruire à l'identique n'a aucun sens ; le vidage ne se justifie
+               que si les aires en mémoire appartiennent à un AUTRE tracé.
+               ⚠ En reprise, la troncature est levée d'emblée : les zones déjà affichées
+               reposent sur un relevé antérieur dont on n'a plus le détail de couverture, et
+               les recalculer à couverture nulle les ferait disparaître — précisément ce
+               qu'on corrige ici. Les tronçons qui rentrent ne peuvent plus qu'AJOUTER des
+               aires (dédoublonnage à 1 km), donc affiner le plan vers l'amont, jamais le
+               vider. */
+            const reprise = !!(sig && sig === _restAreasSigCourante && restAreas.length > 0);
+            if (!reprise) {
+                restAreas = [];
+                clearRestStopPlan();
+            }
+            _restAreasSigCourante = sig;
+            const _t0 = Date.now();
+            try {
+                const segments = _buildRestAreaSegments(line);
+
+                /* ⚠⚠ CHAQUE TRONÇON EST EXPLOITÉ DÈS SON ARRIVÉE — NE JAMAIS REVENIR À UN
+                   `await Promise.all` QUI NE TRAITE QU'À LA FIN (mesuré le 21/08/2026).
+                   Première version : découpage en 4 tronçons parallèles, puis traitement
+                   groupé une fois tous revenus. Résultat **31,3 s contre 16 s** pour la bbox
+                   unique qu'on cherchait à améliorer. La raison : attendre tout le monde fait
+                   du temps total celui du PIRE tronçon, et le pire est celui qui échoue —
+                   il épuise l'échelle complète de hedging (4 miroirs, relances à 6 s et 12 s,
+                   timeout de 25 s chacun) avant d'abandonner. Un tronçon mort tenait les
+                   trois autres en otage.
+                   Les aires sont donc fusionnées DÈS L'ARRIVÉE de chaque tronçon, sans rien
+                   devoir aux retardataires — l'armement du plan, lui, obéit à la règle du
+                   tronçon décisif ci-dessous. */
+                /* ═══ TRONÇON DÉCISIF : celui qui contient le seuil des 1h50 ═══
+                   ⚠ NE PAS ARMER LE PLAN SUR LE PREMIER TRONÇON QUI RÉPOND (mesuré le
+                   21/08/2026). L'ordre d'arrivée est celui du réseau, pas celui de la route :
+                   un tronçon tardif revenu en tête faisait bâtir le plan sur les seules aires
+                   qu'il connaissait, toutes situées bien après le seuil. Relevé sur
+                   Paris–Bruxelles : première zone à **km 249,9 pour un seuil à 185,3**, soit
+                   ~40 min de conduite en trop, là où un relevé complet donnait 199,6. Le plan
+                   se corrigeait ensuite tout seul, mais un lancement dans ces 2-3 s partait
+                   avec la version tardive — une imprécision discrète échangée contre une
+                   lenteur visible, mauvais marché pour une alerte fatigue.
+                   On attend donc le tronçon qui couvre le seuil. Les autres continuent d'être
+                   fusionnés pour la détection de pause, et tout tronçon postérieur réarme
+                   (il ne peut qu'affiner : `buildRestStopPlan()` retient les 3 premières
+                   aires APRÈS `departKm`). */
+                let seuilKm = null;
+                if (totalDurationHours > REST_STOP_PLAN_MIN_HOURS) {
+                    const totalKm = turf.length(line, { units: 'kilometers' });
+                    seuilKm = totalKm * (REST_STOP_INTERVAL_HOURS / totalDurationHours);
+                }
+                let iDecisif = -1;
+                if (seuilKm != null) {
+                    iDecisif = segments.findIndex(s => s.toKm > seuilKm);
+                    if (iDecisif === -1) iDecisif = segments.length - 1;
+                }
+                // Aucun plan attendu (trajet court) : rien à retenir, on arme au fil de l'eau.
+                let decisifArrive = (iDecisif === -1);
+
+                /* Couverture continue depuis le tronçon décisif : c'est elle qui décide
+                   combien de zones sont affichables sans risque de les voir reculer
+                   (voir le pavé de `restAreasCoverageKm`, js/06). Un tronçon arrivé
+                   au-delà d'un trou ne fait donc PAS avancer la couverture. */
+                const arrives = new Set();
+                /* ⚠ Une fois la troncature LEVÉE, elle ne se repose jamais : sans ce témoin,
+                   le `majCouverture()` du tronçon suivant recalculerait une couverture finie
+                   et ferait DISPARAÎTRE des tasses déjà affichées. Reculer, c'est déjà mal ;
+                   s'effacer, ce serait pire. */
+                let couvertureLevee = reprise;   // voir le pavé « reprise » ci-dessus
+                const majCouverture = () => {
+                    if (couvertureLevee) { restAreasCoverageKm = Infinity; return; }
+                    if (iDecisif < 0) { restAreasCoverageKm = Infinity; return; }
+                    let j = iDecisif;
+                    while (arrives.has(j)) j++;
+                    // j-1 = dernier tronçon d'une chaîne ininterrompue partant du décisif.
+                    restAreasCoverageKm = (j > iDecisif) ? segments[j - 1].toKm : 0;
+                };
+                majCouverture();
+
+                let echecs = 0, brut = 0;
+                const traiterTroncon = (data, index) => {
+                    /* ⚠ LE POINT D'ÉCRITURE UNIQUE, DONC LE SEUL ENDROIT OÙ LA GARDE COMPTE.
+                       Tout ce qui suit touche `restAreas` et le plan : si un relevé plus
+                       récent a pris la main, ce tronçon-ci arrive d'un trajet qui n'est plus
+                       affiché. L'ignorer entièrement est la seule conduite juste — le fusionner
+                       « puisqu'on l'a » repeuplerait un tableau vidé avec une portion isolée
+                       du parcours, ce qui est exactement le défaut mesuré. */
+                    if (perime()) return;
+                    const elements = (data && data.elements) || [];
+                    brut += elements.length;
+                    const avant = restAreas.length;
+                    elements.forEach(el => {
+                        const lat = el.type === 'node' ? el.lat : (el.center ? el.center.lat : null);
+                        const lng = el.type === 'node' ? el.lon : (el.center ? el.center.lon : null);
+                        if (lat == null || lng == null) return;
+                        const pt = turf.point([lng, lat]);
+                        if (turf.pointToLineDistance(pt, line, { units: 'kilometers' }) > 1.5) return;
+                        /* Dédoublonnage à 1 km, plus nécessaire encore qu'avec une bbox
+                           unique : les tronçons voisins se recouvrent par leur buffer, une
+                           aire posée à la jonction revient donc deux fois. */
+                        const dejaLa = restAreas.some(r =>
+                            turf.distance(turf.point([r.lng, r.lat]), pt, { units: 'kilometers' }) < 1);
+                        if (!dejaLa) {
+                            restAreas.push({ lat, lng, name: (el.tags && el.tags.name) ? el.tags.name : "Aire de repos" });
+                        }
+                    });
+                    /* ⚠ Réarmement progressif UNIQUEMENT tant que rien n'a été proposé.
+                       `buildRestStopPlan()` remet à zéro `restStopPlanIndex` et
+                       `restStopBonusLost` : un tronçon arrivant en retard, alors que le
+                       conducteur a déjà dépassé la zone 1, lui rendrait ses occasions
+                       perdues et fausserait tout le compte. */
+                    if (index === iDecisif) decisifArrive = true;
+                    arrives.add(index);
+                    majCouverture();
+                    if (restAreas.length !== avant && decisifArrive && !restStopProposed) {
+                        armRestStopPlan(totalDurationHours, line);
+                    }
+                };
+
+                /* Requête d'un tronçon, extraite pour que le second essai du tronçon décisif
+                   (plus bas) réemploie EXACTEMENT la même — une divergence entre les deux
+                   ferait comparer deux choses différentes. */
+                const requeteTroncon = (seg) => {
+                    const bbox = `${seg.minLat.toFixed(4)},${seg.minLng.toFixed(4)},` +
+                                 `${seg.maxLat.toFixed(4)},${seg.maxLng.toFixed(4)}`;
+                    /* ⚠ DEUX ÉGALITÉS EXACTES, JAMAIS UNE REGEX SUR `highway` (21/08/2026).
+                       `["highway"~"^(services|rest_area)$"]` paraît plus compact et c'est un
+                       piège : `highway` est la clé la plus répandue d'OSM — chaque route la
+                       porte. L'égalité tape dans l'index clé/valeur et rend quelques
+                       dizaines d'objets ; la regex oblige Overpass à parcourir TOUS les
+                       objets `highway` de la bbox. Mesuré : timeout sur les quatre miroirs.
+                       `nwr` couvre node+way+relation en une passe, ça c'est gratuit. */
+                    return `[out:json][timeout:60];` +
+                           `(nwr["highway"="services"](${bbox});nwr["highway"="rest_area"](${bbox}););` +
+                           `out center tags;`;
+                    /* ⚠⚠ NE JAMAIS REVENIR À `overpass-api.de` ICI (corrigé le 21/08/2026).
+                       C'est ce que cette fonction appelait depuis l'origine — l'instance
+                       officielle **répond 406 à tout navigateur** (voir le pavé de
+                       `_fetchOverpassHedged`, js/19) : `User-Agent` étant un en-tête interdit
+                       à `fetch`, l'app ne peut structurellement pas émettre une requête
+                       qu'elle accepte. Le relevé échouait donc à tous les coups, en silence,
+                       et la mécanique de pause n'a jamais eu la moindre aire à proposer. */
+                };
+
+                /* ⚠ LES CAUSES D'ÉCHEC SONT RETENUES, PAS SEULEMENT COMPTÉES (21/08/2026).
+                   `echecs++` seul a coûté un correctif entier posé à l'aveugle : j'avais
+                   attribué les pertes à la concurrence (44 requêtes simultanées) et plafonné
+                   le nombre de tronçons, en concluant de « 2 échecs avant, 2 après » que
+                   l'hypothèse était fausse — conclusion elle-même invalide, la suite ayant
+                   montré que le compte varie de 1 à 3 à découpage identique.
+                   `_fetchOverpassHedged` agrège pourtant la cause de CHAQUE miroir dans son
+                   `Error` ; on la jetait. Elle dit `Failed to fetch`, pas 429 ni 504.
+                   504 (bbox trop lourde), 429 (quota) et `Failed to fetch` (réseau/CORS) ont
+                   des remèdes opposés : sans les distinguer, tout correctif est une devinette. */
+                const causes = [];
+                const perdus = [];
+                await Promise.all(segments.map(async (seg, i) => {
+                    /* ⚠ Le tronçon est traité DANS le `then`, pas après le `Promise.all` :
+                       c'est tout l'objet du correctif ci-dessus. */
+                    try { traiterTroncon(await _fetchOverpassHedged(requeteTroncon(seg)), i); }
+                    catch (e) {
+                        causes.push(`T${i}${i === iDecisif ? '*' : ''}:${(e && e.message) || e}`);
+                        /* ⚠⚠ LE TRONÇON DÉCISIF EST REJOUÉ IMMÉDIATEMENT, PAS À LA FIN
+                           (mesuré le 21/08/2026 : 6 tronçons perdus d'un coup, dont lui).
+                           Tant qu'il manque, la couverture vaut 0 et la carte reste NUE.
+                           Le rattrapage de fin le récupérait bien, mais seulement après le
+                           `Promise.all` complet : relevé du jour — trajet calculé à 00:47:44,
+                           `zones: 0` à 00:48:07, première tasse à **00:48:32**. Près de
+                           50 secondes d'écran vide alors que la requête qui débloquait tout
+                           durait 25 s et pouvait tourner PENDANT que les autres finissaient.
+                           On le rejoue donc ici, en recouvrement du reste du relevé. Une
+                           requête de plus, sur le seul tronçon dont l'absence se voit.
+                           ⚠ S'il tombe une seconde fois, on ne le retente PAS une troisième :
+                           on lève la troncature sur-le-champ (`couvertureLevee`) et le plan
+                           s'affiche dégradé. Deux échecs consécutifs sur le même tronçon ne
+                           promettent rien de bon, et 25 s de plus d'écran nu se paieraient
+                           cash — le conducteur serait parti. */
+                        if (i === iDecisif) {
+                            try {
+                                traiterTroncon(await _fetchOverpassHedged(requeteTroncon(seg)), i);
+                                causes.push(`T${i}*bis:ok`);
+                                return;   // récupéré : ni échec, ni rattrapage de fin
+                            } catch (e2) {
+                                causes.push(`T${i}*bis:${(e2 && e2.message) || e2}`);
+                                /* Le verrou tombe ET la troncature avec : sans cela le plan
+                                   serait armé sur une couverture nulle, donc vide. */
+                                decisifArrive = true;
+                                couvertureLevee = true;
+                                restAreasCoverageKm = Infinity;
+                                if (!restStopProposed) armRestStopPlan(totalDurationHours, line);
+                            }
+                        }
+                        echecs++;
+                        perdus.push(i);
+                    }
+                }));
+
+                if (echecs === segments.length) throw new Error(`aucun tronçon relevé (${echecs}/${segments.length})`);
+
+                /* ═══ SECOND ESSAI DES TRONÇONS PERDUS, EN SÉQUENTIEL ═══
+                   ⚠ CE QUE DISENT LES CAUSES (relevées le 21/08/2026, enfin journalisées) :
+                     T5, T3, T1 → « private.coffee: Failed to fetch | kumi: Failed to fetch |
+                                    openstreetmap.ru: Failed to fetch | mail.ru: timeout »
+                   **Jamais de 429**, en revanche : aucun refus de quota, sur aucun relevé.
+                   ⚠ J'avais aussi écrit « ni 504 » — **c'était prématuré, sur trois relevés**.
+                   Un lancement dégradé (6 tronçons perdus d'un coup) a montré
+                   `maps.mail.ru → 504` sur cinq d'entre eux, les trois autres miroirs restant
+                   en `Failed to fetch`. Lecture corrigée : mail.ru est le miroir de tête et
+                   **sature** (504 = son propre timeout de traitement) quand on l'arrose de
+                   11 requêtes ; les trois autres échouent au niveau transport. Les deux
+                   pannes coexistent, et aucune n'est un quota.
+                   Dans les deux cas l'échec est transitoire, donc ça se rejoue — c'est ce qui
+                   compte ici.
+                   ⚠ ET LA VARIANCE INTERDIT DE CONCLURE SUR UNE MESURE UNIQUE : à découpage
+                   identique (11 tronçons), trois lancements ont donné **1, 2 puis 3 échecs**.
+                   C'est ce qui a invalidé ma comparaison « 11 tronçons → 2 échecs / 6 tronçons
+                   → 2 échecs » : deux tirages d'une loi qui varie de 1 à 3, donc rigoureusement
+                   rien. Toute conclusion ici demande plusieurs lancements.
+                   ⚠ POURQUOI ON REJOUE MAINTENANT TOUS LES PERDUS, et plus seulement le
+                   décisif : depuis la troncature à la couverture continue
+                   (`restAreasCoverageKm`), un trou n'importe où AVANT la zone 3 masque les
+                   zones suivantes. Mesuré : T3 perdu ⇒ `couvKm: 240` ⇒ **une seule tasse
+                   affichée** au lieu de trois. Chaque tronçon perdu coûte donc désormais une
+                   zone visible, et le tri « décisif vs confort » n'a plus lieu d'être.
+                   ⚠ EN SÉQUENTIEL, ET C'EST LE POINT : les rejouer d'un `Promise.all` les
+                   remettrait dans les conditions mêmes qui viennent d'échouer. Un à un, la
+                   charge est nulle. Le coût est borné — au pire quelques secondes, et
+                   seulement quand il y a eu des pertes. */
+                let rattrapage = null;
+                /* ⚠ Le tronçon décisif est EXCLU d'office : il a déjà eu son second essai en
+                   recouvrement, immédiatement après son échec (voir plus haut). S'il est
+                   encore dans `perdus`, c'est qu'il a échoué DEUX fois — une troisième
+                   tentative coûterait 25 s de plus pour un tronçon qui n'a rien rendu, alors
+                   que la troncature est déjà levée et le plan déjà affiché. */
+                const aRejouer = perdus.filter(i => i !== iDecisif);
+                if (aRejouer.length) {
+                    let repris = 0;
+                    for (const i of aRejouer) {
+                        /* ⚠ On n'achète pas 90 s de réseau pour un trajet qui n'est plus à
+                           l'écran : un relevé périmé abandonne ses rattrapages sur-le-champ. */
+                        if (perime()) break;
+                        try {
+                            traiterTroncon(await _fetchOverpassHedged(requeteTroncon(segments[i])), i);
+                            echecs--; repris++;
+                        } catch (e) {
+                            causes.push(`T${i}bis:${(e && e.message) || e}`);
+                        }
+                    }
+                    rattrapage = `${repris}/${aRejouer.length}`;
+                    /* Le plan bâti pendant le `Promise.all` l'a été sur un relevé troué : il
+                       faut le refaire, pas l'affiner. `traiterTroncon` a déjà réarmé au fil
+                       de l'eau, mais seulement tant que la couverture le permettait. */
+                    if (!restStopProposed) armRestStopPlan(totalDurationHours, line);
+                    /* ⚠ Un tronçon définitivement perdu laisse la couverture en deçà des
+                       zones 2-3, qui resteraient invisibles pour toujours. On lève alors la
+                       troncature : elle sert à empêcher les pictos de SAUTER pendant que le
+                       relevé rentre, or ici plus rien ne rentrera. Un plan complet dont une
+                       zone est peut-être en retard vaut mieux qu'une seule tasse — même
+                       arbitrage que le verrou `decisifArrive`. */
+                    if (echecs > 0) {
+                        couvertureLevee = true;
+                        restAreasCoverageKm = Infinity;
+                        if (!restStopProposed) armRestStopPlan(totalDurationHours, line);
+                    }
+                }
+
+                /* ⚠⚠ FILET : LE RELEVÉ NE SE TERMINE JAMAIS SUR UNE COUVERTURE NULLE.
+                   `couvKm: 0` signifie « rien n'est fiable », et la troncature le traduit
+                   par zéro tasse — état observé le 21/08/2026 (`zones: 0, candidats: 17`) :
+                   17 aires connues, aucune montrée. Le pire des deux mondes, et une
+                   régression franche sur le comportement d'origine qui, lui, affichait un
+                   plan approximatif. La troncature est un outil ANTI-SAUT valable pendant
+                   que les tronçons rentrent ; une fois le relevé fini, plus rien ne peut
+                   sauter et elle n'a plus de raison d'être. */
+                /* ⚠ Dernier contrôle avant les gestes définitifs : mémoriser la signature
+                   d'un relevé périmé ferait passer pour « à jour » un tableau `restAreas`
+                   qui appartient au relevé suivant, et le prochain aperçu du même tracé
+                   sauterait l'appel réseau en se croyant complet. */
+                if (perime()) return;
+
+                if (restAreasCoverageKm === 0) {
+                    couvertureLevee = true;
+                    restAreasCoverageKm = Infinity;
+                    if (!restStopProposed) armRestStopPlan(totalDurationHours, line);
+                }
+
+                /* Conservé après mise au point : `ms` est la mesure qui compte — c'est la
+                   seule chose qui distingue « ça ne marche pas » de « ça n'a pas encore
+                   répondu », confusion qui a coûté quatre allers-retours de diagnostic le
+                   21/08/2026. ⚠ DIAG_LOG_MAX vaut 12 : ne pas rajouter de points de mesure
+                   ici sans en retirer, ils chasseraient `peages` et `fit`. */
+                logDiag('pause-releve', {
+                    aires: restAreas.length,
+                    brut,
+                    segments: segments.length,
+                    echecs,
+                    /* `T3*:kumi → 504` se lit d'un coup d'œil : quel tronçon, était-ce le
+                       décisif (`*`), et surtout POURQUOI. Sans ce champ on ne peut que
+                       deviner — ce qui a déjà coûté un correctif pour rien. */
+                    causes: causes.length ? causes.join(' | ') : null,
+                    rattrapage,
+                    dureeH: totalDurationHours != null ? +totalDurationHours.toFixed(2) : null,
+                    ms: Date.now() - _t0
                 });
-            } catch (e) { console.error("Erreur récupération aires de repos :", e); restAreas = []; }
+                /* ⚠ La signature n'est mémorisée que si TOUS les tronçons sont revenus.
+                   Un relevé partiel (`echecs > 0`) laisse un trou sur une portion du
+                   parcours ; le marquer comme définitif ferait sauter le second essai au
+                   lancement, et les aires manquantes le resteraient pour tout le trajet.
+                   À une aire près, le trou tombe pile là où il faudrait s'arrêter. */
+                if (echecs === 0) _restAreasRouteSig = sig;
+                // Même garde que dans `traiterTroncon` : ne pas rebâtir un plan déjà entamé.
+                if (!restStopProposed) armRestStopPlan(totalDurationHours, line);
+            } catch (e) {
+                /* ⚠ `logAppError` et non `console.error` : l'échec partait dans la console,
+                   donc PAS dans `gps_error_log`. C'est ce silence qui a fait passer un relevé
+                   cassé depuis toujours pour un « pas d'aire sur ce trajet ». */
+                logAppError('fetchRestAreasAlongRoute', e);
+                restAreas = []; _restAreasRouteSig = null; restAreasCoverageKm = Infinity;
+            }
         }
 
         // === LIMITE DE VITESSE RÉELLE (OpenStreetMap via Overpass API) ===

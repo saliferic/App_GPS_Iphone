@@ -8,6 +8,8 @@
             'gps_km_history',
             'gps_last_km_goal',
             'gps_favorites',
+            'gps_home',
+            'gps_work',
             'gps_trip_history',
             // Véhicule
             'gps_vehicle_type',
@@ -20,6 +22,7 @@
             'gps_elec_price',
             // Préférences
             'gps_voice_enabled',
+            'gps_voice_quiet',
             'gps_avoid_tolls',
             'gps_map_theme',
             'gps_map_traffic',
@@ -201,6 +204,12 @@
                     });
 
                     // Recharger l'UI
+                    /* Domicile et travail sont relus depuis le localStorage fraîchement
+                       écrit, sinon `_places` (js/20) garderait en mémoire les adresses de
+                       l'ancien profil : les boutons afficheraient les bonnes adresses
+                       importées seulement au prochain lancement, et emmèneraient entre-temps
+                       aux anciennes. */
+                    tenterSansBruit(() => loadPlacesFromStorage(), 'import/lieuxFixes');
                     renderDriversUI();
                     renderBadgeCategoryCard();
                     renderWeeklyGoalsPanel();
@@ -224,6 +233,12 @@
                     const voiceToggle = document.getElementById('voice-guidance-toggle');
                     if (voiceToggle) voiceToggle.checked = voiceEnabled;
                     voiceGuidanceEnabled = voiceEnabled;
+
+                    // Même règle opt-in qu'au chargement : un profil exporté avant
+                    // l'introduction de la clé garde la voix complète.
+                    voiceQuietMode = localStorage.getItem('gps_voice_quiet') === '1';
+                    const quietToggle = document.getElementById('voice-quiet-toggle');
+                    if (quietToggle) quietToggle.checked = voiceQuietMode;
 
                     // Feedback
                     statusEl.style.display = 'block';

@@ -98,6 +98,12 @@
             // Garde de dernier recours : la hotbox retire déjà l'entrée dans ce cas,
             // mais openGasScan() doit rester sûr quel que soit l'appelant.
             if (_gasScanBlocked()) return;
+            /* Demander un scan alors que les stations sont masquées est contradictoire : la
+               feuille afficherait une liste dont RIEN n'apparaît sur la carte, et la zone
+               radar balaierait un vide. On lève donc le masquage — c'est le seul endroit où
+               l'app le fait d'elle-même, et il est justifié par le geste de l'utilisateur,
+               qui vient explicitement de réclamer ces stations. */
+            if (_stationsHidden) { _stationsHidden = false; applyStationsVisibility(); }
             // Mesurer le panneau AVANT de le masquer : _syncGasScanHeight() s'en sert
             // comme référence de hauteur, et un élément masqué mesure zéro.
             _syncGasScanHeight();
@@ -555,16 +561,23 @@
             }
 
             _scanBusy = true;
-            // L'ancre est relue à chaque scan : le conducteur a pu avancer depuis
-            // l'ouverture de la feuille. La zone suit, sinon le cercle resterait
-            // sur la position d'il y a deux minutes.
-            _scanAnchor = _gasScanAnchorPoint();
-            _gasScanZoneUpdate(_scanAnchor, _scanRadiusKm);
-            status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
-            list.innerHTML = '';
-            _clearGasScanMarkers();
-
+            /* ⚠ LA PRÉPARATION EST DANS LE `try`, PAS DEVANT LUI. `_scanBusy` n'est relâché
+               que par le `finally` : toute exception levée AVANT l'entrée dans le bloc
+               laissait le verrou posé pour le reste de la session, et `runGasScan()` sortait
+               alors en silence dès sa première ligne — plus aucun scan, plus aucun rendu et
+               donc plus aucun `_fitMapToGasScan()`, la feuille continuant d'afficher la liste
+               du tour précédent. Un verrou doit couvrir exactement ce que son `finally`
+               libère ; ces cinq lignes touchent la carte et le DOM, elles peuvent lever. */
             try {
+                // L'ancre est relue à chaque scan : le conducteur a pu avancer depuis
+                // l'ouverture de la feuille. La zone suit, sinon le cercle resterait
+                // sur la position d'il y a deux minutes.
+                _scanAnchor = _gasScanAnchorPoint();
+                _gasScanZoneUpdate(_scanAnchor, _scanRadiusKm);
+                status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
+                list.innerHTML = '';
+                _clearGasScanMarkers();
+
                 const mode = _scanVehicleMode();
                 // Les deux collectes partent en parallèle en mode hybride : elles
                 // n'ont aucune source commune, les sérialiser doublerait l'attente.
@@ -900,6 +913,9 @@
                     focusGasScanStation(i);
                 });
                 _attachStationLongPress(el, s);
+                // Respecte un masquage en cours (entrée hotbox « Masquer stations », js/18) :
+                // cette fonction est rejouée à chaque rendu de la liste.
+                if (_stationsHidden) el.style.display = 'none';
                 const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
                     .setLngLat([s.lng, s.lat]).addTo(map);
                 _scanMarkers.push(marker);
@@ -945,9 +961,12 @@
         }
 
         function _stationHotboxItems(s) {
-            // startAngle -180 place la 1ʳᵉ entrée à gauche et la 2ᵉ à droite :
-            // un choix binaire se lit à l'horizontale, refuser à gauche, accepter
-            // à droite, dans le sens de lecture.
+            /* Ordre = sens de lecture : refuser d'abord, accepter ensuite. Depuis que la
+               hotbox est un arc horizontal (16/08/2026), c'est acquis par construction —
+               il fallait auparavant un `startAngle: -180` pour forcer un choix binaire à
+               l'horizontale dans un cercle. « Ne pas go » est donc au centre à l'ouverture,
+               ce qui ne présélectionne rien : tant que le doigt n'a pas glissé, rien n'est
+               armé et le relâchement referme. */
             return [
                 { id: 'nogo', cls: 'hb-nogo', label: 'Ne pas go',
                   html: '<span class="hb-glyph">NON</span>',
@@ -960,7 +979,6 @@
 
         function openStationChoice(x, y, s) {
             openHotbox(x, y, _stationHotboxItems(s), {
-                startAngle: -180,
                 title: s.name || s.addr || 'Station'
             });
         }
@@ -1101,6 +1119,25 @@
                 logAppError('_fitMapToGasScan/détachement caméra', e);
             }
 
+            /* ═══ REMISE À ZÉRO DU PADDING CAMÉRA — SANS ELLE, RIEN NE BOUGE ═══
+               ⚠ `fitBounds` ADDITIONNE le padding qu'on lui passe à celui déjà mémorisé dans
+               l'état caméra de la carte ; il ne le remplace pas. Or `updateDynamicZoom()`
+               en pose un à CHAQUE fix GPS (`map.jumpTo({ …, padding: getMapFollowPadding() })`),
+               et depuis la règle 50/50 il vaut plusieurs centaines de pixels. La somme des
+               deux dépassait la hauteur du canevas : Mapbox renonce alors au cadrage par un
+               simple `warnOnce` en console — **aucune exception**, donc rien dans
+               `gps_error_log`, et la caméra ne bouge pas d'un pixel. Le scan paraissait
+               fonctionner en tout point sauf celui-là.
+               C'est aussi pourquoi le SIMULATEUR ne pouvait pas le montrer : sans fix GPS,
+               `updateDynamicZoom()` ne tourne jamais et le padding rémanent reste à zéro.
+               ⚠ NE PAS « corriger » en réduisant `_gasScanPadding()` : le calcul y est juste,
+               c'est le padding résiduel qui n'a rien à y faire. Même diagnostic et même
+               remède que `fitMapToModalRoute()` (js/15), relevé sur appareil à
+               `padCam: {bottom: 461}` — le scan ⛽ était le dernier cadrage à ne pas l'avoir.
+               La boucle de suivi repose le sien dès que `closeGasScan()` rend la main. */
+            tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
+                            '_fitMapToGasScan/resetPadding');
+
             // On cadre sur le CERCLE, pas sur les stations trouvées : le zoom suit
             // ainsi la distance demandée, et non le hasard des résultats. Un rayon
             // de 10 km ne renvoyant qu'une station voisine cadrerait sinon serré,
@@ -1115,11 +1152,213 @@
             }
         }
 
-        function checkRestStopSuggestion(d, distAlongKm) {
-            if (!d || d.timeHours < nextRestThresholdHours) return;
-            nextRestThresholdHours += REST_STOP_INTERVAL_HOURS;
-            if (restAreas.length === 0 || !fullRouteLine) return;
+        /* ═══════════════════════════════════════════════════════════════════
+           PLAN DE PAUSE EN 3 ZONES — construction
+           ═══════════════════════════════════════════════════════════════════
+           Appelé une fois les aires récupérées (js/09), puis re-appelé après chaque pause
+           validée pour armer le cycle suivant sur un trajet très long.
 
+           `departKm` est le point à partir duquel on cherche : au premier armement c'est
+           l'équivalent kilométrique des 1h50, ensuite c'est la position courante. */
+        /* ⚠ `ligne` est PASSÉE, pas lue dans `fullRouteLine` : le plan est armé dès l'aperçu
+           de trajet, où seul `currentTurfLine` existe — `fullRouteLine` n'est renseignée
+           qu'au lancement. Retomber sur la globale par défaut garde les appels d'origine
+           (startCourse) inchangés. */
+        function buildRestStopPlan(departKm, ligne) {
+            const line = ligne || fullRouteLine;
+            restStopPlan = [];
+            restStopPlanIndex = 0;
+            restStopBonusLost = false;
+            if (!line || restAreas.length === 0) { refreshRestAreaMarkers(); return; }
+
+            const candidats = [];
+            restAreas.forEach(area => {
+                try {
+                    const snapped = turf.nearestPointOnLine(line, turf.point([area.lng, area.lat]), { units: 'kilometers' });
+                    const distAlongKm = snapped.properties.location;
+                    if (distAlongKm > departKm) {
+                        candidats.push({ name: area.name, lat: area.lat, lng: area.lng, distAlongKm });
+                    }
+                } catch (e) { if (DEBUG) console.warn("[buildRestStopPlan] aire ignorée :", e); }
+            });
+            candidats.sort((a, b) => a.distAlongKm - b.distAlongKm);
+
+            for (const c of candidats) {
+                if (restStopPlan.length >= REST_STOP_PLAN_SIZE) break;
+                /* ⚠ ON N'AFFICHE PAS UNE ZONE AU-DELÀ DE CE QUI EST RELEVÉ EN CONTINU.
+                   Sans ce garde-fou, les zones 2 et 3 se posaient sur les aires les plus
+                   lointaines connues à l'instant t, puis reculaient à chaque tronçon qui
+                   rentrait : mesuré sur Paris–Perpignan, 403/430 km → 336/350 → 245/278,
+                   soit des pictos qui sautent de 160 km sous les yeux du conducteur.
+                   Au-delà de `restAreasCoverageKm`, un tronçon manquant peut encore
+                   apporter une aire ANTÉRIEURE : la zone n'est donc pas une information,
+                   c'est une conjecture. On s'arrête là et le plan se complétera. */
+                if (c.distAlongKm > restAreasCoverageKm) break;
+                const precedente = restStopPlan[restStopPlan.length - 1];
+                if (precedente && (c.distAlongKm - precedente.distAlongKm) < REST_STOP_PLAN_MIN_GAP_KM) continue;
+                restStopPlan.push(c);
+            }
+            /* ⚠ Journalisé SEULEMENT si le plan a réellement changé. Le relevé réarme à
+               chaque tronçon qui rentre (js/09) : sur un trajet à 4 tronçons, quatre lignes
+               identiques occupaient un tiers de `DIAG_LOG_MAX` (12) et chassaient `peages`
+               et `fit`. Ce qui mérite une trace, c'est le plan qui BOUGE — c'est-à-dire
+               qu'un tronçon tardif a apporté une aire plus pertinente. */
+            const _signaturePlan = restStopPlan.map(z => z.distAlongKm.toFixed(1)).join('|');
+            if (_signaturePlan !== _dernierPlanJournalise) {
+                _dernierPlanJournalise = _signaturePlan;
+                logDiag('pause-plan', {
+                    zones: restStopPlan.length,
+                    candidats: candidats.length,
+                    departKm: +departKm.toFixed(1),
+                    // Explique un plan à 1 ou 2 zones : ce n'est pas une pénurie d'aires,
+                    // c'est un relevé encore incomplet au-delà de ce kilomètre.
+                    couvKm: Number.isFinite(restAreasCoverageKm) ? +restAreasCoverageKm.toFixed(0) : null,
+                    km: restStopPlan.map(z => +z.distAlongKm.toFixed(1))
+                });
+            }
+            refreshRestAreaMarkers();
+        }
+
+        /* Pictos « repos » sur la carte. La zone en cours de proposition est mise en avant ;
+           celles déjà dépassées restent visibles mais éteintes — le conducteur doit pouvoir
+           constater qu'il en a laissé passer une, c'est ce qui rend la 3e crédible. */
+        function refreshRestAreaMarkers() {
+            restStopMarkers.forEach(m => { try { m.remove(); } catch (e) { /* carte déjà détruite */ } });
+            restStopMarkers = [];
+            if (typeof map === 'undefined' || !map) return;
+            restStopPlan.forEach((zone, i) => {
+                const el = document.createElement('div');
+                el.className = 'rest-area-marker';
+                if (i < restStopPlanIndex) el.classList.add('passed');
+                else if (i === restStopPlanIndex) el.classList.add('current');
+                el.innerHTML = `<span class="rest-area-icon">☕</span><span class="rest-area-num">${i + 1}</span>`;
+                el.title = `${zone.name} — zone de pause ${i + 1}/${restStopPlan.length}`;
+                try {
+                    restStopMarkers.push(new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+                        .setLngLat([zone.lng, zone.lat]).addTo(map));
+                } catch (e) { logAppError('refreshRestAreaMarkers', e); }
+            });
+        }
+
+        // Remis à zéro par `clearRestStopPlan()` : un nouveau trajet doit rejournaliser son
+        // plan, même s'il tombe par hasard sur les mêmes kilomètres que le précédent.
+        let _dernierPlanJournalise = null;
+
+        function clearRestStopPlan() {
+            _dernierPlanJournalise = null;
+            restStopIntervalKm = null;
+            restStopPlan = [];
+            restStopPlanIndex = 0;
+            restStopProposed = false;
+            restStopBonusLost = false;
+            refreshRestAreaMarkers();
+        }
+
+        /* Identité d'un tracé, assez fine pour distinguer deux itinéraires alternatifs
+           (nombre de points + extrémités) et assez grossière pour rester stable face aux
+           micro-écarts de Mapbox — même approche que la signature de contexte des détours
+           station (js/18). */
+        function _routeSigForRestAreas(line) {
+            try {
+                const c = line.geometry.coordinates;
+                return c.length + '|' + c[0].join(',') + '|' + c[c.length - 1].join(',');
+            } catch (e) { return null; }
+        }
+
+        // Convertit le seuil des 1h50 en kilomètres et arme le plan. Sans effet sous
+        // REST_STOP_PLAN_MIN_HOURS : c'est ce qui laisse les trajets courts au régime d'origine.
+        function armRestStopPlan(totalDurationHours, ligne) {
+            const line = ligne || fullRouteLine;
+            /* Journalisé : c'est ICI que la chaîne s'arrête le plus souvent en silence
+               (aucune aire relevée, ou durée sous le seuil), et un abandon muet se lit
+               « les pictos ne marchent pas » sans dire lequel des deux verrous a joué. */
+            if (!line || restAreas.length === 0 || !(totalDurationHours > REST_STOP_PLAN_MIN_HOURS)) {
+                logDiag('pause-arme', {
+                    arme: false,
+                    ligne: !!line,
+                    aires: restAreas.length,
+                    dureeH: totalDurationHours != null ? +totalDurationHours.toFixed(2) : null,
+                    seuilH: REST_STOP_PLAN_MIN_HOURS
+                });
+                return;
+            }
+            try {
+                const totalKm = turf.length(line, { units: 'kilometers' });
+                // Mémorisé pour le réarmement après pause : c'est la même distance qu'on
+                // remettra devant le conducteur à chaque cycle.
+                restStopIntervalKm = totalKm * (REST_STOP_INTERVAL_HOURS / totalDurationHours);
+                buildRestStopPlan(restStopIntervalKm, line);
+            } catch (e) { if (DEBUG) console.warn('[Pause] armement du plan impossible :', e); }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           SUGGESTION DE PAUSE — deux régimes
+           ═══════════════════════════════════════════════════════════════════
+           • Plan actif (trajet > 2h et aires trouvées) : une proposition au seuil des
+             1h50, puis une nouvelle à CHAQUE zone dépassée sans s'arrêter. Après la
+             troisième, le bonus est perdu — mais la détection de pause continue de
+             tourner : s'arrêter reste possible, ça ne rapporte simplement plus rien.
+           • Sinon : comportement d'origine, l'aire suivante annoncée toutes les 1h50. */
+        function checkRestStopSuggestion(d, distAlongKm) {
+            if (!d || !fullRouteLine) return;
+            if (restStopTracking.validated) return;   // pause en cours de validation
+
+            if (restStopPlan.length === 0) { _suggestNextRestAreaLegacy(d, distAlongKm); return; }
+
+            if (!restStopProposed) {
+                if (d.timeHours < nextRestThresholdHours) return;
+                restStopProposed = true;
+                /* ⚠ Les zones ont été placées à partir d'une ESTIMATION proportionnelle du
+                   point des 1h50 (js/09). Rouler plus vite que la moyenne annoncée met donc
+                   une ou plusieurs zones DERRIÈRE nous au moment où le seuil tombe. Les
+                   laisser dans le plan ferait cascader l'escalade sur la frame suivante —
+                   trois zones « ratées » d'un coup et bonus perdu sans avoir rien vu.
+                   Elles ne sont pas ratées, elles n'ont simplement jamais été proposées :
+                   on les écarte, et si le plan se vide on le reconstruit d'ici. */
+                while (restStopPlanIndex < restStopPlan.length &&
+                       distAlongKm > restStopPlan[restStopPlanIndex].distAlongKm) {
+                    restStopPlanIndex++;
+                }
+                if (restStopPlanIndex >= restStopPlan.length) {
+                    buildRestStopPlan(distAlongKm);
+                    if (restStopPlan.length === 0) { _suggestNextRestAreaLegacy(d, distAlongKm); return; }
+                }
+                refreshRestAreaMarkers();
+                _proposeRestZone(d, distAlongKm);
+                return;
+            }
+            if (restStopBonusLost || restStopPlanIndex >= restStopPlan.length) return;
+
+            const zone = restStopPlan[restStopPlanIndex];
+            if (distAlongKm <= zone.distAlongKm + REST_STOP_PASSED_MARGIN_KM) return;
+
+            // Zone franchie sans s'y arrêter.
+            restStopPlanIndex++;
+            if (restStopPlanIndex >= restStopPlan.length) {
+                restStopBonusLost = true;
+                refreshRestAreaMarkers();
+                showRestStopLostBanner();
+            } else {
+                refreshRestAreaMarkers();
+                _proposeRestZone(d, distAlongKm);
+            }
+        }
+
+        function _proposeRestZone(d, distAlongKm) {
+            const zone = restStopPlan[restStopPlanIndex];
+            if (!zone) return;
+            const restantesApres = restStopPlan.length - restStopPlanIndex - 1;
+            showRestStopBanner(zone.name, zone.distAlongKm - distAlongKm, _avgSpeedKmh(d), {
+                rang: restStopPlanIndex + 1,
+                total: restStopPlan.length,
+                derniere: restantesApres === 0
+            });
+        }
+
+        function _suggestNextRestAreaLegacy(d, distAlongKm) {
+            if (d.timeHours < nextRestThresholdHours) return;
+            nextRestThresholdHours += REST_STOP_INTERVAL_HOURS;
+            if (restAreas.length === 0) return;
             let best = null;
             restAreas.forEach(area => {
                 try {
@@ -1131,7 +1370,15 @@
                 } catch (e) { if (DEBUG) console.warn("[checkRestStopSuggestion] exception ignorée :", e); }
             });
             if (!best) return;
-            showRestStopBanner(best.name, best.distAlongKm - distAlongKm);
+            showRestStopBanner(best.name, best.distAlongKm - distAlongKm, _avgSpeedKmh(d), null);
+        }
+
+        /* Vitesse moyenne DEPUIS LE DÉPART plutôt que vitesse instantanée : sur autoroute
+           les deux se rejoignent, mais la moyenne ne fait pas sauter le « dans 12 min »
+           à « dans 45 min » parce qu'on ralentit deux secondes derrière un camion. */
+        function _avgSpeedKmh(d) {
+            if (!d || !d.timeHours || d.timeHours <= 0 || !d.dist) return 0;
+            return d.dist / d.timeHours;
         }
 
         function checkRestStopReal(d, lng, lat) {
@@ -1142,18 +1389,56 @@
             } catch (e) { if (DEBUG) console.warn("[checkRestStopReal] exception ignorée :", e); }
         }
 
-        function showRestStopBanner(name, distKm) {
+        function showRestStopBanner(name, distKm, avgSpeedKmh, plan) {
+            const banner = document.getElementById('rest-stop-banner');
+            banner.classList.remove('validated', 'lost');
+            document.getElementById('rest-stop-icon').innerText = '☕';
+            document.getElementById('rest-stop-title').innerText = plan
+                ? (plan.derniere ? `Pause conseillée · dernière zone (${plan.rang}/${plan.total})`
+                                 : `Pause conseillée · zone ${plan.rang}/${plan.total}`)
+                : 'Pause conseillée';
+
+            /* Le temps prime sur la distance : « dans 8 min » se décide tout de suite,
+               « dans 14 km » demande une conversion mentale au volant. La distance reste
+               en second, elle seule permet de reconnaître le panneau au bord de la route. */
+            const distLabel = distKm < 1 ? Math.round(distKm * 1000) + " m" : distKm.toFixed(1) + " km";
+            let quand = distLabel;
+            if (avgSpeedKmh > 5 && distKm > 0) {
+                const minutes = Math.round((distKm / avgSpeedKmh) * 60);
+                quand = (minutes < 1 ? "moins d'1 min" : `${minutes} min`) + ` · ${distLabel}`;
+            }
+            document.getElementById('rest-stop-detail').innerText = `${name} · dans ${quand}`;
+            _showRestStopBannerFor(REST_STOP_BANNER_MS);
+            // 'bavard' : suggestion de confort/bonus, la bannière suffit à la porter.
+            playAudioSequence(['attention.ogg', 'time.ogg'], 0, 'bavard');
+        }
+
+        // Les 3 zones sont passées : on le dit une fois, franchement, plutôt que de laisser
+        // le conducteur croire que le bonus l'attend encore quelque part.
+        function showRestStopLostBanner() {
             const banner = document.getElementById('rest-stop-banner');
             banner.classList.remove('validated');
-            document.getElementById('rest-stop-icon').innerText = '☕';
-            document.getElementById('rest-stop-title').innerText = 'Pause conseillée';
-            const distLabel = distKm < 1 ? Math.round(distKm * 1000) + " m" : distKm.toFixed(1) + " km";
-            document.getElementById('rest-stop-detail').innerText = `${name} · dans ${distLabel}`;
+            banner.classList.add('lost');
+            document.getElementById('rest-stop-icon').innerText = '⚠️';
+            document.getElementById('rest-stop-title').innerText = 'Bonus pause perdu';
+            document.getElementById('rest-stop-detail').innerText =
+                'Les 3 zones sont passées. Arrêtez-vous dès que vous le pouvez.';
+            _showRestStopBannerFor(REST_STOP_BANNER_MS);
+            playAudioSequence(['attention.ogg', 'time.ogg'], 0, 'bavard');
+        }
+
+        /* Auto-effacement : une bannière qui reste à l'écran finit par masquer la carte au
+           moment où on cherche justement la sortie. Le minuteur précédent est toujours
+           annulé — sans quoi celui de la zone 1 refermerait la bannière de la zone 2. */
+        function _showRestStopBannerFor(ms) {
+            const banner = document.getElementById('rest-stop-banner');
+            if (_restStopBannerTimer) { clearTimeout(_restStopBannerTimer); _restStopBannerTimer = null; }
             banner.classList.add('visible');
-            playAudioSequence(['attention.ogg', 'time.ogg']);
+            _restStopBannerTimer = setTimeout(() => { _restStopBannerTimer = null; dismissRestStopBanner(); }, ms);
         }
 
         function dismissRestStopBanner() {
+            if (_restStopBannerTimer) { clearTimeout(_restStopBannerTimer); _restStopBannerTimer = null; }
             document.getElementById('rest-stop-banner').classList.remove('visible');
         }
 
@@ -1171,28 +1456,78 @@
 
             if (nearArea && isStationary) {
                 if (!restStopTracking.active || restStopTracking.areaName !== nearArea.name) {
-                    restStopTracking = { active: true, areaName: nearArea.name, enteredAt: Date.now(), validated: false };
+                    // lng/lat retenus : `validateRestStop()` en a besoin pour réarmer le
+                    // plan à partir du point où la pause a réellement eu lieu.
+                    restStopTracking = { active: true, areaName: nearArea.name, enteredAt: Date.now(),
+                                         validated: false, lng: nearArea.lng, lat: nearArea.lat };
                 }
                 const elapsedMin = (Date.now() - restStopTracking.enteredAt) / 60000;
                 if (elapsedMin >= requiredMinutes && !restStopTracking.validated) {
                     restStopTracking.validated = true;
-                    validateRestStop(restStopTracking.areaName, elapsedMin, requiredMinutesOverride != null);
+                    // `d` transmis : le réarmement en a besoin pour recaler le seuil des
+                    // 1h50 sur l'instant de la pause (`d.timeHours`).
+                    validateRestStop(restStopTracking.areaName, elapsedMin, requiredMinutesOverride != null, d);
                 }
             } else {
                 restStopTracking = { active: false, areaName: null, enteredAt: null, validated: false };
             }
         }
 
-        function validateRestStop(name, elapsedMin, isTest) {
-            addPointsToActiveProfile(REST_STOP_BONUS_POINTS);
+        function validateRestStop(name, elapsedMin, isTest, d) {
+            /* ⚠ Le bonus est perdu, PAS la détection. S'arrêter après les 3 zones reste
+               reconnu et affiché — c'est le comportement qu'on veut encourager, même
+               tardif. Seuls les points ne suivent plus : sinon les 3 zones ne voudraient
+               rien dire et autant ne pas les proposer. */
+            const bonus = restStopBonusLost ? 0 : REST_STOP_BONUS_POINTS;
+            if (bonus > 0) addPointsToActiveProfile(bonus);
+
             const banner = document.getElementById('rest-stop-banner');
+            banner.classList.remove('lost');
             banner.classList.add('validated');
             document.getElementById('rest-stop-icon').innerText = '✅';
-            document.getElementById('rest-stop-title').innerText = isTest ? 'Pause validée (test) !' : 'Pause validée !';
-            const detail = isTest ? `${name} · +${REST_STOP_BONUS_POINTS} pts` : `${name} · ${Math.round(elapsedMin)} min · +${REST_STOP_BONUS_POINTS} pts`;
-            document.getElementById('rest-stop-detail').innerText = detail;
-            banner.classList.add('visible');
-            setTimeout(() => { if (banner.classList.contains('validated')) dismissRestStopBanner(); }, 6000);
+            document.getElementById('rest-stop-title').innerText =
+                isTest ? 'Pause validée (test) !' : (bonus > 0 ? 'Pause validée !' : 'Pause prise');
+            const duree = isTest ? '' : `${Math.round(elapsedMin)} min · `;
+            const points = bonus > 0 ? `+${bonus} pts` : 'hors zones — pas de bonus';
+            document.getElementById('rest-stop-detail').innerText = `${name} · ${duree}${points}`;
+            _showRestStopBannerFor(6000);
+
+            /* Trajet très long : une fois la pause prise, on réarme un cycle complet pour
+               les 1h50 suivantes. Sans cela le plan restait consommé et plus aucune
+               suggestion n'arrivait sur un Paris–Marseille.
+
+               ⚠ LE CYCLE REPART DU POINT D'ARRÊT **PLUS** L'ÉQUIVALENT DES 1h50, pas du
+               point d'arrêt. Passer la position brute posait les trois tasses sur les
+               aires immédiatement suivantes — parfois 5 km plus loin : on venait de
+               s'arrêter et l'app proposait déjà la pause d'après. Elles étaient ensuite
+               toutes écartées d'un coup quand le seuil tombait réellement 1h50 plus tard
+               (voir checkRestStopSuggestion), et le plan se reconstruisait : des pictos
+               qui sautent de 150 km, exactement ce que `restAreasCoverageKm` interdit
+               ailleurs. Le rythme voulu est : départ, 1h50, pause, 1h50, pause…
+
+               Et le seuil horaire est RECALÉ sur l'instant de la pause, pas incrémenté :
+               `+= REST_STOP_INTERVAL_HOURS` partait du seuil précédent, donc les 15 min
+               d'arrêt étaient décomptées des 1h50 suivantes. Ce sont 1h50 de ROUTE après
+               la pause qui doivent être offertes. */
+            try {
+                if (restStopPlan.length > 0 && fullRouteLine && restStopTracking.lng != null) {
+                    nextRestThresholdHours = (d && d.timeHours > 0)
+                        ? d.timeHours + REST_STOP_INTERVAL_HOURS
+                        : nextRestThresholdHours + REST_STOP_INTERVAL_HOURS;
+                    restStopProposed = false;
+                    const snapped = turf.nearestPointOnLine(
+                        fullRouteLine,
+                        turf.point([restStopTracking.lng, restStopTracking.lat]),
+                        { units: 'kilometers' });
+                    /* Repli si le plan n'a pas été armé par `armRestStopPlan()` (donc sans
+                       durée totale connue) : la vitesse moyenne réellement tenue depuis le
+                       départ est la meilleure conversion disponible des 1h50 en kilomètres. */
+                    const intervalKm = (restStopIntervalKm != null && restStopIntervalKm > 0)
+                        ? restStopIntervalKm
+                        : _avgSpeedKmh(d) * REST_STOP_INTERVAL_HOURS;
+                    buildRestStopPlan(snapped.properties.location + intervalKm);
+                }
+            } catch (e) { if (DEBUG) console.warn('[Pause] réarmement du plan impossible :', e); }
         }
 
         let pendingLootScore = 0;
