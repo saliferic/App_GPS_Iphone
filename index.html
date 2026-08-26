@@ -8,10 +8,16 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
    <link rel="stylesheet" href="css/styles.css" />
 
-
+    <!-- Surcouche de refonte UI. DOIT rester APRÈS styles.css : elle gagne par
+         la cascade. Inverser les deux lignes désactive la moitié du thème sans
+         rien casser de visible — donc sans que l'erreur se remarque. -->
+    <link rel="stylesheet" href="css/theme-crepuscule.css" />
 
 </head>
-<body>
+<!-- La classe est posée en dur : le thème Crépuscule EST l'interface, pas une
+     option. Pour revenir à l'ancienne apparence, retirer ce seul attribut —
+     `theme-crepuscule.css` est entièrement scopé dessus et redevient inerte. -->
+<body class="theme-crepuscule">
 
     <!-- ═══════════════════════════════════════════════════════════════════
          INTRO ANIMÉE — BLOC 2/3 (HTML)
@@ -120,7 +126,7 @@
                 <div class="intro-badge">🎖️</div>
                 <div class="intro-badge">⭐</div>
             </div>
-            <div class="intro-head">Coffres, badges, trophées</div>
+            <div class="intro-head">Badges et trophées</div>
         </div>
 
         <!-- ── 25 s — Objectifs et clôture ── -->
@@ -310,7 +316,7 @@
 
     <div id="badge-video-modal">
         <video id="badge-video-el" playsinline webkit-playsinline></video>
-        <button id="badge-video-skip" onclick="skipBadgeVideo()">Passer ›</button>
+        <button id="badge-video-skip" onclick="passerVideo()">Passer ›</button>
     </div>
 
     <!-- Modal Badge Débloqué (affiché après fermeture du coffre) -->
@@ -406,11 +412,13 @@
     </div>
 
     <!-- Modale du classement en ligne. Le corps (#classement-body) est construit par
-         clRender() : formulaire de connexion OU tableau, selon la session. -->
+         clRender() : le TABLEAU seul (23/08/2026). Le formulaire pseudo/mot de passe et
+         les actions de compte ont déménagé dans « créer un profil » (onglet Profil) :
+         l'identité se gère à un seul endroit, cet écran ne fait plus qu'afficher. -->
     <div id="classement-overlay" onclick="if(event.target===this)closeClassementModal()">
         <div id="classement-modal">
             <div id="classement-header">
-                <span>🏆 CLASSEMENT DE LA SEMAINE</span>
+                <span>CLASSEMENT — ANIMAUX SAUVÉS</span>
                 <button onclick="closeClassementModal()">✕</button>
             </div>
             <div id="classement-status" class="cl-status"></div>
@@ -467,28 +475,11 @@
         <div id="reroute-banner-countdown"></div>
     </div>
 
-    <!-- Modale Coffre de Récompense -->
-    <div id="loot-modal-overlay">
-        <div id="loot-modal">
-            <div id="loot-chest-view">
-                <h3>CONDUITE PARFAITE !</h3>
-                <p class="loot-subtitle">Ouvrez votre coffre de récompense.</p>
-                <div id="loot-chest-icon" onclick="onChestClick()">🎁</div>
-            </div>
-            <div id="loot-reward-view" style="display:none;">
-                <!-- MODIFICATION : Ajout de la balise image -->
-                <img id="loot-reward-image" src="" alt="Chevalier">
-                
-                <div id="loot-rarity-banner"></div>
-                <div id="loot-reward-pill"></div>
-                <div id="loot-stats-box">
-                    <div class="loot-stat-label">Score du trajet : <span id="loot-base-score"></span> pts</div>
-                    <div class="loot-stat-total">Total reçu : <span id="loot-total-received"></span> pts</div>
-                </div>
-                <button onclick="closeLootModal()">Récupérer</button>
-            </div>
-        </div>
-    </div>
+    <!-- ⚠ LA MODALE DU COFFRE À BUTIN A ÉTÉ SUPPRIMÉE LE 25/08/2026, avec tout le
+         système de bonus de conduite parfaite (js/12, CSS, images de rareté). Une
+         conduite parfaite ne donne plus de récompense à part : elle épargne la vie du
+         compagnon, ce qui est devenu l'enjeu du trajet. Il n'y a donc plus qu'UNE
+         fenêtre de fin de trajet, celle d'arrivée, et plus rien à enchaîner derrière. -->
 
     <!-- Panneau visuel du prochain virage -->
     <div id="next-turn-panel">
@@ -659,19 +650,46 @@
     </div>
 
     <!-- === FENÊTRE D'ARRIVÉE ===
-         Ouverte à la fin d'un trajet ARRIVÉ dont la conduite n'a pas été parfaite. Une
-         conduite parfaite ouvre le coffre à butin comme avant — les deux ne s'affichent
-         jamais ensemble, voir `showArrivalSummary()` (js/12).
-         Volontairement dépouillée : le nombre de points gagnés, rien d'autre. Distance
-         restante, temps restant et bouton « Terminer Trajet » n'ont plus aucun sens une
-         fois arrivé, et les afficher ici rejouerait le panneau de navigation devant
-         quelqu'un dont le trajet est fini. -->
+         Ouverte à la fin d'un trajet ARRIVÉ. Une conduite parfaite y enchaîne le coffre
+         à butin — les deux ne s'affichent jamais ensemble, voir `showArrivalSummary()`
+         (js/12).
+         ⚠ ELLE NE COMPTE PLUS DE POINTS (25/08/2026). Elle dit COMMENT VA L'ANIMAL au
+         bout de la route, avec son portrait dans l'état que lui laisse sa vie restante.
+         Un chiffre de points n'avait plus de sens dès lors que le classement compte des
+         animaux sauvés et que l'enjeu du trajet est la barre de vie.
+         Elle reste dépouillée pour autant : distance restante, temps restant et
+         « Terminer Trajet » n'ont plus aucun sens une fois arrivé, et les afficher ici
+         rejouerait le panneau de navigation devant quelqu'un dont le trajet est fini. -->
+    <!-- CHOIX DU COMPAGNON — ouverte par le portrait de rang (onglet Profil).
+         La grille est remplie par js/23-choix-compagnon.js à chaque ouverture :
+         le compagnon actif change, la coche doit suivre. -->
+    <div id="compagnon-modal-overlay">
+        <div id="compagnon-modal" role="dialog" aria-modal="true" aria-labelledby="cpx-titre">
+            <div id="cpx-entete">
+                <div>
+                    <div id="cpx-surtitre">Ton compagnon</div>
+                    <!-- 25/08/2026 : « Qui t'accompagne ? » ne tenait plus. Le
+                         compagnon n'accompagne pas, il attend d'être sorti de
+                         sa cage — c'est le parcours en trois étapes (js/22). -->
+                    <div id="cpx-titre">Qui sauvons-nous&nbsp;?</div>
+                </div>
+                <button type="button" class="cpx-fermer" aria-label="Fermer">✕</button>
+            </div>
+            <div id="compagnon-grille"></div>
+            <div id="cpx-note">Trois missions tenues, et l'animal est libre. Chaque animal sauvé en ouvre un nouveau.</div>
+        </div>
+    </div>
+
     <div id="arrival-modal-overlay" onclick="if(event.target===this)closeArrivalSummary()">
         <div id="arrival-modal">
             <div id="arrival-modal-icon">🏁</div>
             <div id="arrival-modal-title">Arrivée à destination</div>
-            <div id="arrival-modal-points"></div>
+            <!-- Le portrait du compagnon, dans l'état que lui laisse sa vie restante.
+                 Rempli par `showArrivalSummary()` : le SVG vient de js/22, l'état du
+                 noyau (`etatSanteVie`). Vide dans le HTML, comme #vie-compagnon. -->
+            <div id="arrival-modal-compagnon"></div>
             <div id="arrival-modal-sub"></div>
+            <div id="arrival-modal-note"></div>
             <button id="arrival-modal-close" onclick="closeArrivalSummary()">Terminé</button>
         </div>
     </div>
@@ -695,7 +713,21 @@
 
         <!-- ═══ ONGLET TRAJET ═══ -->
         <div class="panel-tab-content active" id="panel-tab-trajet">
-        <h2 class="itin-title" id="ui-panel-title">Itinéraire</h2>
+        <!-- ═══ EN-TÊTE D'ACCUEIL ═══
+             Remplace le bandeau collant « Itinéraire » (24/08/2026) : l'écran
+             d'accueil pose une question, il n'annonce pas une rubrique.
+             ⚠ #compagnon-bulle et #compagnon-dessin sont ICI dans le balisage,
+             ils ne sont plus injectés par js/22-compagnon.js : leur place dans
+             le hero est une décision de mise en page, elle ne doit pas dépendre
+             du JS. Le module les remplit s'il se charge ; s'il échoue, il reste
+             l'accroche seule au lieu d'un en-tête absent. -->
+        <div class="itin-hero" id="itin-hero">
+            <div class="itin-hero-text">
+                <div id="compagnon-bulle" aria-live="polite"></div>
+                <h2 class="itin-title" id="ui-panel-title">Où allons-nous&nbsp;?</h2>
+            </div>
+            <div id="compagnon-dessin"></div>
+        </div>
 
         <div class="form-group itin-section" id="itin-destination-section">
             <label>Destination</label>
@@ -906,26 +938,54 @@
 
         <!-- ═══ ONGLET PROFIL ═══ -->
         <div class="panel-tab-content" id="panel-tab-profil">
-        <h2 class="itin-title" id="profil-itin-title">Profil</h2>
+        <!-- ═══ EN-TÊTE « MOI » ═══
+             Même principe que les onglets Itinéraire et Objectifs (24/08/2026) : le
+             titre enveloppé n'est plus enfant direct de .panel-tab-content, il échappe
+             donc au bandeau collant noir.
+             ⚠ Le bouton « + » est CELUI de la ligne « Profil sélectionné », déplacé ici
+             — même id, même onclick. showCreateProfileInline() / hideCreateProfileInline()
+             (js/13) le montrent et le masquent par cet id : le déplacer ne change rien
+             pour elles, le DUPLIQUER aurait laissé un deuxième « + » actif pendant la
+             création d'un compte. -->
+        <div class="profil-hero" id="profil-hero">
+            <h2 class="itin-title" id="profil-itin-title">Moi</h2>
+            <button class="profil-hero-add" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+        </div>
 
-            <!-- === MA CATÉGORIE, EN TÊTE DE PAGE (22/08/2026, demande utilisateur) ===
-                 Le titre disait « Mon profil » et ne coiffait que ce qui suivait la ligne
-                 de sélection ; la page s'ouvre désormais sur la catégorie et sa médaille,
-                 le sélecteur de profil passant en dessous.
+            <!-- === LE RANG, EN TÊTE DE PAGE ===
+                 (22/08/2026 : la catégorie est passée au-dessus du sélecteur de profil.
+                 24/08/2026 : c'est le compagnon qui la porte, médaille au cou.)
                  ⚠ L'id `profil-section-title-monprofil` NE CHANGE PAS malgré le nouveau
                  libellé : il est cité dans `_PROFIL_MASK_IDS` (js/13), qui efface tout
-                 sauf la ligne de sélection pendant la saisie d'un prénom. Le renommer
-                 obligerait à toucher cette liste pour un gain nul. -->
+                 sauf la ligne de sélection pendant la création d'un compte. Le renommer
+                 obligerait à toucher cette liste pour un gain nul. Le titre de section
+                 lui-même est masqué en CSS : la carte se présente toute seule. -->
             <div class="profil-section-title" id="profil-section-title-monprofil">Ma catégorie</div>
 
             <div id="badge-category-card">
-                <!-- Le titre interne « 🏅 MA CATÉGORIE » a été retiré : le titre de
-                     section juste au-dessus dit déjà la même chose depuis que le cadre
-                     est passé en tête d'onglet. Ses règles CSS (#badge-category-title)
-                     sont conservées, aucune autre vue ne s'en sert. -->
                 <div id="badge-category-main">
-                    <div id="badge-category-icon">🥉</div>
+                    <!-- Le portrait est dessiné par Compagnon.rang() ; le picto de la
+                         catégorie (`#badge-category-icon`) est posé par
+                         renderBadgeCategoryCard(). Les deux vivent en JS parce qu'ils
+                         changent de couleur avec la catégorie atteinte. -->
+                    <!-- Cliquable : c'est l'entrée vers la fiche de CET animal — d'où il
+                         vient, pourquoi il est en cage, où en est son parcours
+                         (js/26-identite-compagnon.js). Toucher un animal montre l'animal.
+
+                         ⚠ IL OUVRAIT LA FENÊTRE DE CHOIX jusqu'au 26/08/2026. Celle-ci a
+                         maintenant sa propre ligne, « Animaux que vous pouvez sauver » :
+                         personne ne devinait qu'un portrait ouvrait une liste, et se faire
+                         remplacer son compagnon en le touchant disait le contraire du
+                         geste. Ne pas rebrancher le choix ici. -->
+                    <div id="badge-category-portrait" role="button" tabindex="0"
+                         aria-label="Voir qui est mon compagnon"></div>
                     <div id="badge-category-info">
+                        <div id="badge-category-kicker">
+                            <span id="badge-category-icon"></span>
+                            <span id="badge-category-kicker-txt">Mon rang</span>
+                        </div>
                         <div id="badge-category-name" style="color:#cd7f32;">Bronze</div>
                         <div id="badge-category-sub">0 badge obtenu</div>
                     </div>
@@ -933,13 +993,39 @@
                          (js/12), masqué tant qu'aucun profil n'est sélectionné. -->
                     <div id="badge-category-profile" style="display:none;"></div>
                 </div>
-                <div id="badge-count-row">
-                    <div id="badge-count-icons"></div>
-                </div>
                 <div id="badge-progress-bar-wrap">
                     <div id="badge-progress-bar-fill" style="width:0%;background:#cd7f32;"></div>
                 </div>
-                <div id="badge-progress-label">0 / 3 badges pour Argent</div>
+                <div id="badge-count-row">
+                    <div id="badge-count-icons"></div>
+                    <div id="badge-progress-label">0 / 3 badges</div>
+                </div>
+            </div>
+
+            <!-- === QUI EST L'ANIMAL QU'ON A CHOISI ===
+                 HÔTE MASQUÉ, SANS LIGNE À LUI, et c'est voulu : cette page s'ouvre en
+                 touchant le portrait ci-dessus, pas depuis la liste. Le corps doit tout
+                 de même vivre DANS le panneau Profil parce qu'openProfilSheet le DÉPLACE
+                 vers la page pleine puis le remet ici — il lui faut une place où
+                 revenir. Voir js/26-identite-compagnon.js. -->
+            <div id="compagnon-identite-section" style="display:none;">
+                <div id="compagnon-identite-body"></div>
+            </div>
+
+            <!-- Le chiffre qui résume le profil. Rempli par renderBadgeCategoryCard() —
+                 donc rafraîchi par tous les chemins qui changent de profil.
+
+                 ⚠ LA TUILE « POINTS AU TOTAL » A ÉTÉ RETIRÉE (26/08/2026). Elle affichait
+                 le cumul brut de l'ancien système de score ; le même nombre reste lisible
+                 entre parenthèses dans le sélecteur de profil juste en dessous, et la
+                 progression se raconte désormais en animaux sortis de cage.
+                 ⚠ #profil-stat-points N'EXISTE DONC PLUS : renderBadgeCategoryCard()
+                 teste sa présence avant d'écrire dedans. -->
+            <div class="profil-stats profil-stats-solo" id="profil-stats">
+                <div class="profil-stat eco">
+                    <div class="profil-stat-val" id="profil-stat-eco">—</div>
+                    <div class="profil-stat-lab">score éco</div>
+                </div>
             </div>
 
             <!-- === PROFIL SÉLECTIONNÉ === -->
@@ -957,17 +1043,16 @@
                          déclencheur personnalisé ci-dessous, seul moyen d'offrir une
                          suppression PAR LIGNE quand la liste est déroulée. -->
                     <select id="profile-dropdown" onchange="selectProfile(this.value)" style="display:none;">
-                        <option value="">👤 Aucun profil créé</option>
+                        <option value="">Aucun profil créé</option>
                     </select>
                     <button type="button" id="profile-dropdown-trigger" class="itin-select-fake" onclick="toggleProfileDropdownMenu()">
-                        <span id="profile-dropdown-trigger-label">👤 Aucun profil créé</span>
+                        <span id="profile-dropdown-trigger-label">Aucun profil créé</span>
                     </button>
                     <span class="itin-select-chevron" id="profile-dropdown-chevron">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </span>
-                    <button class="itin-icon-btn itin-add-btn" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </button>
+                    <!-- Le « + » de création vit maintenant dans l'en-tête « Moi »
+                         (voir le haut de l'onglet) : un seul bouton, pas deux. -->
                     <!-- Le trash externe qui vivait ici a été retiré (22/08/2026, demande
                          utilisateur) : chaque ligne du menu déroulant porte désormais sa
                          propre suppression, un doublon à côté du sélecteur n'avait plus sa
@@ -975,21 +1060,16 @@
                          suppression, appelée uniquement depuis l'icône par ligne. -->
                     <div class="addr-suggestions" id="profile-dropdown-menu"></div>
                 </div>
-                <!-- Formulaire inline création profil (caché par défaut) -->
+                <!-- Formulaire inline création profil (caché par défaut).
+                     ⚠ Le champ « Prénom » a disparu le 23/08/2026 : créer un profil, c'est
+                     désormais créer (ou retrouver) un COMPTE, et le pseudo du compte donne
+                     son nom au profil local. Une seule identité au lieu de deux.
+                     Le contenu est construit par renderProfilCompteBloc() (js/21) et non
+                     écrit en dur ici : il dépend de la session Supabase, qui n'existe pas
+                     encore au moment où cette page est analysée. -->
                 <div id="create-profile-inline" style="display:none;margin-top:8px;">
-                    <div class="itin-input-row">
-                        <span class="itin-icon-leading">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
-                        </span>
-                        <input type="text" id="new-profile-name" placeholder="Prénom (nouveau profil)"
-                               onkeydown="if(event.key==='Enter') createProfile();">
-                        <button class="itin-icon-btn" onclick="createProfile()" title="Créer le profil">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        </button>
-                        <button class="itin-icon-btn" onclick="hideCreateProfileInline()" title="Annuler" style="color:#ff6b6b;">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                    </div>
+                    <div id="profil-compte-statut" class="cl-status"></div>
+                    <div id="profil-compte-bloc"></div>
                 </div>
                 <div id="profile-summary" style="display:none;"></div>
             </div>
@@ -997,62 +1077,100 @@
             <!-- Le cadre « Ma catégorie » a été remonté en tête de l'onglet, au-dessus du
                  sélecteur de profil — voir le bloc en haut de #panel-tab-profil. -->
 
+            <!-- === ANIMAUX QUE VOUS POUVEZ SAUVER ===
+                 Entrée vers la fenêtre de choix (js/23-choix-compagnon.js), qui ne liste
+                 que les animaux encore en cage.
+
+                 ⚠ CETTE FENÊTRE S'OUVRAIT EN TOUCHANT LE PORTRAIT de la carte de rang,
+                 jusqu'au 26/08/2026. Le portrait ouvre maintenant la fiche de l'animal
+                 EN COURS (js/26). Deux raisons de séparer : personne ne devine qu'un
+                 dessin ouvre une liste, et toucher l'animal qu'on est en train de sauver
+                 pour se le faire remplacer par une grille disait le contraire du geste.
+
+                 Contrairement aux lignes suivantes, elle ne passe pas par openProfilSheet :
+                 la fenêtre de choix est autonome (overlay à elle), son contenu n'existe
+                 pas dans ce panneau. -->
+            <div id="animaux-a-sauver-section" class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openCompagnonPicker()">
+                    <span class="profil-row-ico" style="color:#FFB35C;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16"/><path d="M4 20h16"/><path d="M7 4v16M12 4v16M17 4v16"/></svg></span>
+                    <span class="profil-row-label">Animaux que vous pouvez sauver</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
+            </div>
+
+            <!-- === ANIMAUX SAUVÉS ===
+                 A REMPLACÉ « Galerie des trophées » le 26/08/2026. Celle-ci montrait huit
+                 catégories de badges — le décompte de l'ancien système, celui d'avant les
+                 parcours d'animaux. La vitrine de la progression, c'est désormais la
+                 troupe qu'on a sortie de cage.
+
+                 ⚠ SEUL ENDROIT OÙ L'ON REVOIT UN ANIMAL SAUVÉ : la fenêtre « Qui
+                 sauvons-nous ? » ne montre plus que ce qui est encore en cage. Voir
+                 js/25-animaux-sauves.js.
+
+                 Le corps est masqué ici et révélé par .in-profil-sheet — même règle que
+                 #trip-history-body plus bas. -->
+            <div id="animaux-sauves-section" class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openProfilSheet('animaux')">
+                    <span class="profil-row-ico" style="color:#6FE3A0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5c-3.4 0-5.5-2-5.5-4.2 0-2 1.9-3.1 3-4.3 1-1.1 1.3-2.5 2.5-2.5s1.5 1.4 2.5 2.5c1.1 1.2 3 2.3 3 4.3 0 2.2-2.1 4.2-5.5 4.2Z"/><circle cx="5.6" cy="10.4" r="2.1"/><circle cx="18.4" cy="10.4" r="2.1"/><circle cx="9.4" cy="5.6" r="2.1"/><circle cx="14.6" cy="5.6" r="2.1"/></svg></span>
+                    <span class="profil-row-label">Animaux sauvés</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
+                <div id="animaux-sauves-body">
+                    <div id="animaux-sauves-grille"></div>
+                    <div id="animaux-sauves-fiche" style="display:none;"></div>
+                    <p id="animaux-sauves-vide">
+                        Personne n'est encore sorti de sa cage.<br>
+                        Trois missions tenues avec un animal, et il est libre — il apparaîtra ici.
+                    </p>
+                </div>
+            </div>
+
             <!-- === CLASSEMENT EN LIGNE ===
                  Seule entrée vers js/21-classement.js. Sa modale est autonome (comme
                  openStatsModal), elle ne passe pas par openProfilSheet : son contenu
                  vient du réseau et n'existe pas dans le panneau. -->
-            <div class="profil-row">
+            <div id="classement-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openClassementModal()">
-                    <span class="profil-row-label">🏆 Classement de la semaine</span>
+                    <span class="profil-row-ico" style="color:#7FD8E8;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11M16 21V7M12 21V3"/></svg></span>
+                    <span class="profil-row-label">Classement des animaux sauvés</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
             </div>
 
-            <!-- === MES STATISTIQUES ===
-                 Même format que les lignes suivantes (.profil-row / .profil-row-btn).
-                 Elle ouvre sa propre modale historique (openStatsModal) et non
-                 openProfilSheet : son contenu n'existe pas dans le panneau, il est
-                 construit à la volée par renderStatsModal(). -->
-            <div class="profil-row">
-                <button type="button" class="profil-row-btn" onclick="openStatsModal()">
-                    <span class="profil-row-label">Mes statistiques</span>
-                    <span class="profil-row-arrow">›</span>
-                </button>
-            </div>
+            <!-- === MES STATISTIQUES — LIGNE RETIRÉE (26/08/2026) ===
+                 Elle ouvrait `openStatsModal()` : score par trajet, score éco, km
+                 parcouris. Une synthèse chiffrée héritée du système de badges, quand
+                 la progression se mesurait en points ; elle se mesure aujourd'hui en
+                 animaux sortis de cage, et « Animaux sauvés » juste au-dessus le montre.
+                 Le relevé trajet par trajet reste, lui, dans « Historique des trajets ».
+
+                 ⚠ LA MODALE ET SON CODE N'ONT PAS ÉTÉ SUPPRIMÉS — #stats-modal-overlay
+                 est toujours dans cette page et `renderStatsModal()` dans js/13. Seule
+                 l'ENTRÉE disparaît : plus rien n'appelle `openStatsModal()`, la modale
+                 est donc inatteignable. C'est délibérément réversible — remettre six
+                 lignes de bouton la rend au joueur. Le jour où la décision est ferme,
+                 c'est tout le bloc qu'il faut retirer, pas seulement ce commentaire. -->
 
             <!-- === HISTORIQUE DES TRAJETS ===
-                 Contrairement à « Mes statistiques » juste au-dessus, cette section passe
-                 par openProfilSheet : son corps existe DANS le panneau (ci-dessous) et y
-                 est déplacé/remis par le mécanisme de page pleine. Les deux sont voisines
-                 parce qu'elles lisent la même source (gps_trip_history) : la synthèse
-                 chiffrée d'un côté, le relevé trajet par trajet de l'autre.
+                 Cette section passe par openProfilSheet : son corps existe DANS le panneau
+                 (ci-dessous) et y est déplacé/remis par le mécanisme de page pleine.
+                 Elle lisait la même source que « Mes statistiques » (gps_trip_history),
+                 sa voisine d'alors : la synthèse chiffrée d'un côté, le relevé trajet par
+                 trajet de l'autre. « Mes statistiques » est partie le 26/08/2026 ; ce
+                 relevé est donc le dernier lecteur de cet historique dans le Profil.
                  #trip-history-body est masqué ici et révélé par .in-profil-sheet — même
-                 règle que #trophy-gallery-body, voir le CSS. -->
+                 règle que #animaux-sauves-body, voir le CSS. -->
             <div id="trip-history-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('trips')">
                     <!-- Le compteur de trajets qui vivait ici a été retiré (22/08/2026) :
                          il n'apprenait rien qu'on ne lise en ouvrant la page. -->
+                    <span class="profil-row-ico" style="color:#6FE3A0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v4M6 21v-4M6 7c6 0 6 10 12 10"/><circle cx="6" cy="9" r="2.3"/><circle cx="18" cy="17" r="2.3"/></svg></span>
                     <span class="profil-row-label">Historique des trajets</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
                 <div id="trip-history-body">
                     <div id="trip-history-list"></div>
-                </div>
-            </div>
-
-            <!-- === GALERIE DES TROPHÉES === -->
-            <div id="trophy-gallery-section" class="profil-row">
-                <button id="trophy-gallery-toggle" class="profil-row-btn" onclick="openProfilSheet('trophy')">
-                    <!-- Compteur « x / 8 » retiré le 22/08/2026, comme celui de
-                         l'historique juste au-dessus. -->
-                    <span class="tg-left" style="color:#8892b0;">Galerie des trophées</span>
-                    <span class="tg-arrow">›</span>
-                </button>
-                <div id="trophy-gallery-body">
-                    <div id="trophy-grid"></div>
-                    <div id="trophy-gallery-hint" style="text-align:center;font-size:11px;color:#4a5568;margin-top:12px;line-height:1.5;display:none;">
-                        🎬 Appuie sur un trophée débloqué pour revoir sa vidéo
-                    </div>
                 </div>
             </div>
 
@@ -1064,6 +1182,7 @@
                  est inchangé : les classes portent exactement les mêmes valeurs. -->
             <div id="vehicle-panel-section" class="profil-row">
                 <button type="button" onclick="openProfilSheet('vehicle')" id="vehicle-panel-toggle" class="profil-row-btn">
+                    <span class="profil-row-ico" style="color:#A88BFF;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5 4.7 9a2 2 0 0 1 1.9-1.4h10.8A2 2 0 0 1 19.3 9L21 14.5v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M6.5 14h.01M17.5 14h.01"/></svg></span>
                     <span class="profil-row-label">Mon véhicule</span>
                     <span id="vehicle-panel-chevron" class="profil-row-arrow">›</span>
                 </button>
@@ -1148,6 +1267,7 @@
             <!-- === AIDE À LA CONDUITE === -->
             <div id="aide-conduite-section" class="profil-row">
                 <button type="button" id="aide-conduite-toggle" class="profil-row-btn" onclick="openProfilSheet('aide')">
+                    <span class="profil-row-ico" style="color:#B9A9D8;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8V3.5M9.3 14.3 5.2 18M14.7 14.3 18.8 18"/></svg></span>
                     <span>Aide à la conduite</span>
                     <span class="ac-arrow">›</span>
                 </button>
@@ -1225,6 +1345,7 @@
                  `transition` inline : toggleBackupSection() lui pose un `transform`. -->
             <div id="backup-section" class="profil-row">
                 <button type="button" onclick="toggleBackupSection()" class="profil-row-btn">
+                    <span class="profil-row-ico" style="color:#B9A9D8;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6"/><path d="M12 3v11M8 10.5l4 4 4-4"/></svg></span>
                     <span class="profil-row-label">Sauvegarde profil</span>
                     <span id="backup-chevron" class="profil-row-arrow" style="transition:transform 0.3s ease;">▼</span>
                 </button>
@@ -1283,11 +1404,22 @@
                     🧪 Tester la pause aire (mode Simu)
                 </label>
                 <div class="trip-option-hint">En Simu Salif : arrêt auto sur la 1ère zone de repos du plan, pause réduite à 20 sec réelles</div>
-                <label class="trip-option-row" style="margin-top:10px;">
-                    <input type="checkbox" id="buildings-3d-toggle" checked onchange="toggleBuildings3D()">
-                    🏢 Bâtiments 3D
-                </label>
-                <div class="trip-option-hint">Désactiver pour une meilleure visibilité en ville</div>
+                <!-- ═══ BÂTIMENTS 3D — RÉGLAGE MASQUÉ (23/08/2026, demande utilisateur) ═══
+                     Fonctionnalité conservée, réglage retiré de l'interface : il ne servait
+                     pas. La case reste DANS le DOM, et cochée : `toggleBuildings3D()` et la
+                     réapplication du style (js/03, ligne ~450) lisent son `.checked`, et un
+                     simple `display:none` les laisse fonctionner sans garde supplémentaire.
+                     ⚠ Ne pas la supprimer : `buildings3DEnabled` retomberait à `false` au
+                     premier changement de style de carte, et les bâtiments disparaîtraient
+                     — l'inverse de ce qui est voulu ici.
+                     Pour réafficher le réglage : retirer le `display:none` ci-dessous. -->
+                <div style="display:none;">
+                    <label class="trip-option-row" style="margin-top:10px;">
+                        <input type="checkbox" id="buildings-3d-toggle" checked onchange="toggleBuildings3D()">
+                        🏢 Bâtiments 3D
+                    </label>
+                    <div class="trip-option-hint">Désactiver pour une meilleure visibilité en ville</div>
+                </div>
             </div>
 
 
@@ -1296,16 +1428,41 @@
 
         <!-- ═══ ONGLET OBJECTIFS ═══ -->
         <div class="panel-tab-content" id="panel-tab-objectifs">
-        <h2 class="itin-title">Objectifs</h2>
-
-            <div class="profil-section-title">Objectifs de la semaine</div>
-
+        <!-- ═══ EN-TÊTE DU CARNET ═══
+             Comme sur l'onglet Itinéraire (24/08/2026) : le titre est enveloppé, il
+             n'est donc plus enfant direct de .panel-tab-content et échappe au bandeau
+             collant noir. Le compte à rebours passe à droite du titre — c'est la seule
+             information périssable de l'écran, elle mérite le haut de page.
+             Le nom du compagnon est écrit par le JS (Compagnon.nom()) : changer de
+             compagnon ne doit rien faire retoucher dans le balisage. -->
+        <div class="carnet-hero">
+            <div class="carnet-hero-text">
+                <div class="carnet-kicker" id="carnet-kicker">Le carnet</div>
+                <h2 class="itin-title">Mes objectifs cette semaine</h2>
+            </div>
             <!-- Styles sortis en CSS (`#weekly-goals-timer-panel` et `.wg-timer-*`) : posés
                  en inline ici, ils l'emportaient sur la feuille de style et figeaient la
                  marge en px, hors du système responsive en clamp() du projet. -->
             <div id="weekly-goals-timer-panel"></div>
+        </div>
+
+            <!-- Le mot du compagnon sur la semaine : rempli par renderWeeklyGoalsPanel. -->
+            <div id="carnet-mot"></div>
 
             <div id="weekly-goals-list-panel"></div>
+
+            <!-- Le parcours : où en est l'histoire du compagnon (Le Sauvetage,
+                 La Grande Échappée, Le Grand Envol), et les étapes à venir en
+                 vignettes verrouillées. Rempli par renderParcoursPanel() (js/12),
+                 dessiné par Compagnon.parcours() (js/22).
+                 ⚠ Pas de classe `clairiere` ici : le bloc contient la planche ET
+                 la bande des étapes suivantes, il ne peut pas être le cadre. -->
+            <div id="parcours-panel"></div>
+
+            <!-- ⚠ 25/08/2026 — #clairiere-panel a été RETIRÉ d'ici : le parcours
+                 ci-dessus montre déjà le même décor, et à la libération l'animal
+                 s'affichait deux fois sur le même écran. Le décor est devenu la
+                 fiche d'un animal sauvé, dans « Qui sauvons-nous ? ». -->
 
             <div id="weekly-goals-bonus-panel" style="margin-top:16px;text-align:center;"></div>
 
@@ -1314,8 +1471,14 @@
                 <button onclick="_debugFillGoals95()" style="background:rgba(255,100,0,0.15);border:1px dashed rgba(255,100,0,0.5);color:#ff9500;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
                     ⚡ DEBUG — Objectifs 95%
                 </button>
+                <button onclick="_debugObjectifsLegers()" style="background:rgba(80,220,140,0.15);border:1px dashed rgba(80,220,140,0.5);color:#50dc8c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    🎯 DEBUG — Objectifs légers (20 km / 5 km / 30 pts)
+                </button>
                 <button onclick="_debugLoadTestContacts()" style="background:rgba(88,200,255,0.15);border:1px dashed rgba(88,200,255,0.5);color:#58c8ff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
                     🎤 DEBUG — Charger contacts vocal
+                </button>
+                <button onclick="_debugRemettreEnCage()" style="background:rgba(168,139,255,0.15);border:1px dashed rgba(168,139,255,0.5);color:#a88bff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    🔒 DEBUG — Remettre la troupe en cage
                 </button>
             </div>
 
@@ -1351,19 +1514,27 @@
     <div id="speed-limit-debug"></div>
 
     <div id="nav-bottom-bar">
+        <!-- La vie du compagnon. Contenu injecté par js/24-vie-compagnon.js : le cœur
+             pixel, la piste et la valeur. Volontairement AU-DESSUS des trois compteurs
+             — c'est l'enjeu du trajet, les chiffres n'en sont que le détail. -->
+        <div id="vie-compagnon" role="img" aria-label="Vie du compagnon"></div>
         <div class="nav-stats-row">
             <button id="nav-google-close" onclick="stopCourse()" title="Terminer la navigation">✕</button>
+            <!-- Les points du trajet ont quitté cette place le 25/08/2026 : la barre de
+                 vie du compagnon porte désormais l'enjeu du trajet, et deux compteurs de
+                 la même chose se contredisaient plus qu'ils n'informaient. Le score reste
+                 calculé et visible dans le widget d'info (`#info-points`). -->
             <div class="nav-stat-box">
-                <div class="nav-stat-label">POINTS DU TRAJET</div>
-                <div class="nav-stat-value" id="nav-points">+0 pts</div>
+                <div class="nav-stat-label">ARRIVÉE</div>
+                <div class="nav-stat-value" id="nav-arrivee">--</div>
             </div>
+            <!-- Le MULTIPLICATEUR a quitté cette barre le 25/08/2026, en même temps que
+                 la règle qui le produisait (x1.5 sur les quinze premiers kilomètres) :
+                 elle servait un jeu où l'on cumulait des points, ce n'est plus celui-ci.
+                 Voir `handleRealMovement()` (js/19). -->
             <div class="nav-stat-box" id="nav-eta-box">
                 <div class="nav-stat-label">TEMPS RESTANT</div>
                 <div class="nav-stat-value" id="nav-eta">--</div>
-            </div>
-            <div class="nav-stat-box">
-                <div class="nav-stat-label">MULTIPLICATEUR</div>
-                <div class="nav-stat-value" id="nav-multiplier">x1.5</div>
             </div>
         </div>
         <!-- Compteur éco live (visible si option activée) -->
@@ -1589,6 +1760,11 @@
                 </div>
                 <div id="trip-info-details" class="trip-info-details">
                     <div class="trip-preview-item"><span>• Temps estimé</span><span id="preview-time">--</span></div>
+                    <!-- Ordre de grandeur de ce qu'un excès de vitesse ferait gagner, sur
+                         le modèle de vitesses de la simulation (voir dureeAvecExces, js/00).
+                         « Heure d'arrivée » reste calculée sur le temps estimé, pas sur
+                         celui-ci. Les trois lignes sont écrites par majPreviewTemps (js/01). -->
+                    <div class="trip-preview-item"><span id="preview-time-fast-label">• Temps avec excès de vitesse</span><span id="preview-time-fast">--</span></div>
                     <div class="trip-preview-item"><span>• Heure d'arrivée</span><span id="preview-arrival">--</span></div>
                     <div class="trip-preview-item"><span>• Distance</span><span id="preview-distance">--</span></div>
                     <div class="trip-preview-item"><span>• Points max (sans excès)</span><span id="preview-points">--</span></div>
@@ -1680,6 +1856,24 @@
          définirait aucun global et resterait silencieusement inutilisable ici. -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="js/21-classement.js"></script>
+    <!-- Le compagnon. Après 21 mais AVANT </body> : il s'accroche à
+         #ui-panel-title, qui doit déjà exister. Ne dépend de rien d'autre —
+         si le titre manque, il ne monte pas et l'app fonctionne à l'identique. -->
+    <script src="js/22-compagnon.js"></script>
+    <script src="js/23-choix-compagnon.js"></script>
+    <!-- Après js/22 : la jauge interroge `Compagnon.cle()` pour savoir de quel animal
+         elle affiche la vie. L'appel a lieu à l'exécution, mais garder l'ordre évite
+         d'avoir à s'en remettre à ce détail. -->
+    <script src="js/24-vie-compagnon.js"></script>
+    <!-- Après js/22 (catalogue, vignettes, fiche) et js/12 (qui est sauvé) : la page
+         « Animaux sauvés » ne fait que les interroger. Les appels ont lieu à
+         l'exécution, mais garder l'ordre évite d'avoir à s'en remettre à ce détail. -->
+    <script src="js/25-animaux-sauves.js"></script>
+    <!-- Après js/22 (dessin, nom, histoire) et js/12 (où en est le parcours) : la fiche
+         « qui est cet animal » ne fait que les interroger. Elle s'accroche à
+         #badge-category-portrait au DOMContentLoaded — si le portrait manque, elle ne
+         monte pas et le reste de l'app est identique. -->
+    <script src="js/26-identite-compagnon.js"></script>
 
 </body>
 </html>

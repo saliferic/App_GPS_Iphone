@@ -1,0 +1,169 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Zola — jeune et adulte</title>
+<style>
+  body { margin:0; padding:26px; background:#241C3C; font-family:system-ui,sans-serif; color:#EDE6FF; }
+  h3 { color:#C3AEFF; font-size:12.5px; font-weight:800; letter-spacing:.06em;
+       text-transform:uppercase; margin:0 0 12px; }
+  section { margin-bottom:30px; }
+  .l { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; }
+  .c { flex:0 0 180px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.07);
+       border-radius:18px; padding:12px; text-align:center; }
+  .c.gd { flex:0 0 250px; }
+  .c svg { width:100%; height:auto; display:block; }
+  .c b { display:block; margin-top:6px; font-size:13px; }
+  .c i { display:block; font-size:11px; color:#A897C9; font-style:normal; }
+  .t104 { width:104px } .t38 { width:38px }
+</style>
+<body>
+
+<section><h3>Côte à côte</h3><div class="l" id="duo"></div></section>
+<section><h3>L'adulte, ses quatre états</h3><div class="l" id="etats"></div></section>
+<section><h3>Aux tailles de l'app</h3><div class="l" id="tailles"></div></section>
+
+<script src="trois-troupe.js"></script>
+<script>
+/* ============================================================================
+   ZOLA ADULTE — proposition de forme évoluée.
+
+   Le principe : on ne redessine pas un autre animal, on fait VIEILLIR celui-ci.
+   Tout ce qui l'identifie reste identique — palette, masque facial clair,
+   double mufle crème, museau triangulaire, couleur d'œil. Ne changent que les
+   marqueurs d'âge.
+
+   Trois leviers, et un seul est vraiment décisif :
+
+   1. LA CRINIÈRE, qui passe d'une couronne simple à DEUX anneaux imbriqués.
+      C'est le levier canonique : sa fiche de troupe dit « Rang · crinière qui
+      s'épaissit ». L'évolution était déjà écrite dans le personnage.
+   2. LES PROPORTIONS. Le petit a une grosse tête sur un corps minuscule ; chez
+      l'adulte le rapport s'inverse — tête plus petite, poitrail large, pattes
+      avant droites et non écartées.
+   3. LES YEUX, plus petits et surtout à PAUPIÈRE BASSE. C'est ce qui donne le
+      calme : « le calme du fort, rien à prouver ». Un lion adulte aux yeux
+      grands ouverts se lit comme inquiet, pas comme posé.
+
+   ⚠ Ce qu'on ne fait PAS : pas de rictus, pas de sourcils froncés, pas de
+   crocs. Zola n'a rien à prouver — un adulte menaçant trahirait sa fiche.
+   ============================================================================ */
+let _adu = 0;
+
+function zolaAdulte(etat) {
+    const u = '-za' + (++_adu);
+    const T = '#33203A';
+
+    /* Deux anneaux imbriqués. Le second n'est pas décoratif : c'est lui qui
+       fait la MASSE. Un seul anneau plus large donnerait un tournesol. */
+    const anneau = (n, rayon, r, id) => Array.from({ length: n }, (_, i) => {
+        const a = (Math.PI * 2 * i) / n - Math.PI / 2 + (id === 2 ? Math.PI / n : 0);
+        return `<circle cx="${(160 + rayon * Math.cos(a)).toFixed(1)}" cy="${(162 + rayon * Math.sin(a)).toFixed(1)}" r="${r}" fill="url(#aCrin${id}${u})"/>`;
+    }).join('');
+
+    let yeux, paupiere = '';
+    if (etat === 'ravi') {
+        yeux = `<path d="M126 156 C132 143 146 143 152 156" fill="none" stroke="${T}" stroke-width="7" stroke-linecap="round"/>
+                <path d="M168 156 C174 143 188 143 194 156" fill="none" stroke="${T}" stroke-width="7" stroke-linecap="round"/>`;
+    } else if (etat === 'assoupi') {
+        yeux = `<path d="M126 150 C132 163 146 163 152 150" fill="none" stroke="${T}" stroke-width="7" stroke-linecap="round"/>
+                <path d="M168 150 C174 163 188 163 194 150" fill="none" stroke="${T}" stroke-width="7" stroke-linecap="round"/>`;
+    } else {
+        const oeil = (cx) => `
+            <ellipse cx="${cx}" cy="${152}" rx="13" ry="13" fill="${T}"/>
+            <ellipse cx="${cx}" cy="${154}" rx="8.6" ry="9" fill="#4C3550"/>
+            <ellipse cx="${cx - 4}" cy="${147}" rx="4.6" ry="4.8" fill="#FFF"/>
+            <circle cx="${cx + 5}" cy="${158}" r="2.4" fill="#FFF"/>`;
+        yeux = `<g class="cp-eyes">${oeil(139)}${oeil(181)}</g>`;
+        /* La paupière basse : une calotte de la couleur du masque posée sur le
+           haut de l'œil. C'est elle, et rien d'autre, qui fait la différence
+           entre « posé » et « inquiet ». */
+        paupiere = etat === 'secoue' ? '' : `
+            <path d="M126 152 A13 13 0 0 1 152 152 L152 148 L126 148 Z" fill="url(#aMasque${u})"/>
+            <path d="M168 152 A13 13 0 0 1 194 152 L194 148 L168 148 Z" fill="url(#aMasque${u})"/>`;
+    }
+    const sourcils = etat === 'secoue'
+        ? `<path d="M124 138 C130 130 140 126 152 125"  fill="none" stroke="#8A5A3A" stroke-width="4.5" stroke-linecap="round"/>
+           <path d="M196 138 C190 130 180 126 168 125" fill="none" stroke="#8A5A3A" stroke-width="4.5" stroke-linecap="round"/>`
+        : `<path d="M126 134 Q139 127 152 133"  fill="none" stroke="#A9702E" stroke-width="4" stroke-linecap="round" opacity="0.75"/>
+           <path d="M194 134 Q181 127 168 133" fill="none" stroke="#A9702E" stroke-width="4" stroke-linecap="round" opacity="0.75"/>`;
+
+    const B = { repos: 7, ravi: 13, secoue: -6, assoupi: 3 }[etat] || 7;
+    let signe = '';
+    if (etat === 'assoupi') signe = zzz(262, 104, '#F2C489');
+    else if (etat === 'secoue') signe = larme(124, 172);
+    else if (etat === 'ravi') signe = etoiles([[54, 84, 12], [266, 76, 10]]);
+
+    return `<svg viewBox="6 42 308 330" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+            <radialGradient id="aCrin1${u}" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#C87C2C"/><stop offset="1" stop-color="#8E4E14"/></radialGradient>
+            <radialGradient id="aCrin2${u}" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#E09A45"/><stop offset="1" stop-color="#AC6620"/></radialGradient>
+            <radialGradient id="aTete${u}" cx="36%" cy="26%" r="82%"><stop offset="0" stop-color="#C87E31"/><stop offset="1" stop-color="#96591D"/></radialGradient>
+            <radialGradient id="aMasque${u}" cx="42%" cy="24%" r="80%"><stop offset="0" stop-color="#F8D3A2"/><stop offset="1" stop-color="#E2B57A"/></radialGradient>
+            <radialGradient id="aCorps${u}" cx="42%" cy="20%" r="84%"><stop offset="0" stop-color="#C88034"/><stop offset="1" stop-color="#8C5119"/></radialGradient>
+            <radialGradient id="aPoitrail${u}" cx="50%" cy="30%" r="70%">
+                <stop offset="0" stop-color="#F0C48A" stop-opacity="0.9"/><stop offset="1" stop-color="#F0C48A" stop-opacity="0.1"/></radialGradient>
+            <radialGradient id="aReflet${u}"><stop offset="0" stop-color="#FFF" stop-opacity="0.14"/><stop offset="0.55" stop-color="#FFF" stop-opacity="0.05"/><stop offset="1" stop-color="#FFF" stop-opacity="0"/></radialGradient>
+            <filter id="aFlou${u}" x="-40%" y="-60%" width="180%" height="220%"><feGaussianBlur stdDeviation="9"/></filter>
+        </defs>
+
+        <ellipse cx="160" cy="356" rx="88" ry="13" fill="#0d0a22" opacity="0.5"/>
+
+        <g class="cp-body">
+          <!-- La queue est plus longue et plus haute que chez le petit : elle
+               sort du cadre du corps au lieu de s'y coller. -->
+          <g class="cp-tail">
+            <path d="M226 314 C272 306 296 274 288 240" fill="none" stroke="#9A5C22" stroke-width="11" stroke-linecap="round"/>
+            <ellipse cx="286" cy="230" rx="14" ry="18" fill="#7E4718"/>
+          </g>
+
+          <ellipse cx="160" cy="302" rx="74" ry="56" fill="url(#aCorps${u})"/>
+          <!-- Pattes avant DROITES, posées devant le poitrail : c'est la posture
+               assise de l'adulte. Écartées en biais, on retombe sur le petit. -->
+          <rect x="106" y="256" width="32" height="92" rx="16" fill="url(#aCorps${u})"/>
+          <rect x="182" y="256" width="32" height="92" rx="16" fill="url(#aCorps${u})"/>
+          <ellipse cx="160" cy="300" rx="46" ry="40" fill="url(#aPoitrail${u})"/>
+          <ellipse cx="122" cy="346" rx="25" ry="17" fill="url(#aCorps${u})"/>
+          <ellipse cx="198" cy="346" rx="25" ry="17" fill="url(#aCorps${u})"/>
+          <ellipse cx="110" cy="350" rx="4.4" ry="5.6" fill="#FFF2DE"/><ellipse cx="122" cy="352" rx="4.4" ry="5.6" fill="#FFF2DE"/><ellipse cx="134" cy="350" rx="4.4" ry="5.6" fill="#FFF2DE"/>
+          <ellipse cx="186" cy="350" rx="4.4" ry="5.6" fill="#FFF2DE"/><ellipse cx="198" cy="352" rx="4.4" ry="5.6" fill="#FFF2DE"/><ellipse cx="210" cy="350" rx="4.4" ry="5.6" fill="#FFF2DE"/>
+
+          <ellipse cx="160" cy="252" rx="78" ry="18" fill="#3A2A16" opacity="0.42" filter="url(#aFlou${u})"/>
+
+          <!-- Les oreilles passent SOUS la crinière : chez un lion adulte elles
+               s'y enfoncent, et c'est un marqueur d'âge à part entière. -->
+          <circle cx="118" cy="110" r="17" fill="url(#aMasque${u})"/><circle cx="202" cy="110" r="17" fill="url(#aMasque${u})"/>
+
+          ${anneau(12, 82, 34, 1)}
+          ${anneau(9, 58, 26, 2)}
+
+          <circle cx="160" cy="162" r="62" fill="url(#aTete${u})"/>
+          <circle cx="160" cy="158" r="53" fill="url(#aMasque${u})"/>
+          <ellipse cx="138" cy="128" rx="26" ry="16" fill="url(#aReflet${u})"/>
+
+          ${sourcils}
+          ${yeux}
+          ${paupiere}
+
+          <ellipse cx="144" cy="186" rx="22" ry="18" fill="#FFF2DE"/><ellipse cx="176" cy="186" rx="22" ry="18" fill="#FFF2DE"/>
+          <path d="M151 172 L169 172 L160 181 Z" fill="#8A5A3A"/>
+          <path d="M160 181 C160 ${188 + B} 148 ${190 + B} 143 ${185 + B} M160 181 C160 ${188 + B} 172 ${190 + B} 177 ${185 + B}"
+                stroke="#8A5A3A" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        </g>
+        ${signe}</svg>`;
+}
+
+const jeune = (e) => `<svg viewBox="6 42 308 330">${TROIS[0].fn(e)}</svg>`;
+
+document.getElementById('duo').innerHTML =
+    `<div class="c gd">${jeune('repos')}<b>Zola</b><i>forme actuelle</i></div>
+     <div class="c gd">${zolaAdulte('repos')}<b>Zola adulte</b><i>proposition</i></div>`;
+
+document.getElementById('etats').innerHTML =
+    [['repos','Au repos'],['ravi','Ravi'],['secoue','Triste'],['assoupi','Assoupi']]
+    .map(([k,t]) => `<div class="c">${zolaAdulte(k)}<b>${t}</b></div>`).join('');
+
+document.getElementById('tailles').innerHTML =
+    `<div class="c"><div class="t104">${jeune('repos')}</div><b>104 px</b><i>jeune</i></div>
+     <div class="c"><div class="t104">${zolaAdulte('repos')}</div><b>104 px</b><i>adulte</i></div>
+     <div class="c"><div class="t38">${zolaAdulte('repos')}</div><b>38 px</b><i>adulte</i></div>`;
+</script>
+</body>

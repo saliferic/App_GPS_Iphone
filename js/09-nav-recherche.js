@@ -47,19 +47,19 @@
            accumulés disparaissaient sans que le conducteur comprenne pourquoi. On pose
            donc la question AVANT d'ouvrir la recherche, en annonçant ce qui sera encaissé,
            puis on laisse `stopCourse()` faire son travail habituel : crédit des points,
-           coffre bonus si le trajet est sans faute, badges, objectifs, retour au panneau
-           Itinéraire d'où l'utilisateur saisira sa nouvelle destination. */
+           badges, objectifs, retour au panneau Itinéraire d'où l'utilisateur saisira sa
+           nouvelle destination.
+           ⚠ ELLE N'ANNONCE PLUS DE COFFRE BONUS sur un trajet sans faute (25/08/2026) :
+           le coffre à butin a été supprimé (voir js/12). Le sans-faute n'est plus détecté
+           ici du tout — c'était le seul usage qu'en faisait cette fenêtre. */
         function openFreeCourseEnd() {
             const d = drivers[0];
             const gains  = clampTripScore(d ? d.score : 0);
-            const parfait = !!d && !d.hasSpeeded && d.dist > 0.1;
             const gainEl = document.getElementById('freecourse-end-gain');
 
             if (gains > 0) {
                 gainEl.classList.remove('neutre');
-                gainEl.innerHTML = parfait
-                    ? `Vous encaissez <b>${gains.toFixed(2)} pts</b> sur ${d.dist.toFixed(1)} km.<br>Trajet sans faute : le coffre bonus vous attend 🏆`
-                    : `Vous encaissez <b>${gains.toFixed(2)} pts</b> sur ${d.dist.toFixed(1)} km.`;
+                gainEl.innerHTML = `Vous encaissez <b>${gains.toFixed(2)} pts</b> sur ${d.dist.toFixed(1)} km.`;
             } else {
                 gainEl.classList.add('neutre');
                 gainEl.innerHTML = `Aucun point à encaisser sur ce trajet.<br>Votre total reste intact 🛡️`;

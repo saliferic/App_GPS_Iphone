@@ -300,7 +300,15 @@
                 let cum = 0;
                 for (let i = 0; i < coords.length; i++) {
                     if (i > 0) {
-                        const segKm = turf.distance(turf.point(coords[i - 1]), turf.point(coords[i]), { units: 'kilometers' });
+                        /* ⚠ `_ecartMetres()` (js/00) A REMPLACÉ `turf.distance(turf.point(…), …)`
+                           LE 23/08/2026, pour le coût d'allocation, pas pour le calcul :
+                           Paris → Nice compte 14 822 points, soit près de 30 000 objets turf
+                           créés puis jetés pour additionner des distances. L'écart de
+                           précision est nul à cette échelle — projection équirectangulaire
+                           contre haversine sur des segments de 60 m — et ces kilomètres ne
+                           servent qu'à situer une entrée de ZFE sur le trajet. */
+                        const brut = _ecartMetres(coords[i - 1], coords[i]) / 1000;
+                        const segKm = Number.isFinite(brut) ? brut : 0;
                         const steps = Math.min(20, Math.max(1, Math.ceil(segKm / 0.25)));
                         for (let s = 1; s < steps; s++) {
                             const t = s / steps;
@@ -315,12 +323,39 @@
                     samples.push({ lng: coords[i][0], lat: coords[i][1], km: cum });
                 }
 
+                /* ⚠⚠ LE PRÉ-FILTRE PAR BBOX N'EST PAS UNE MICRO-OPTIMISATION — c'est lui
+                   qui rend cette fonction utilisable sur un long trajet (23/08/2026).
+                   Mesuré sur Paris → Nice : 14 822 points de tracé, densifiés à 30 053
+                   échantillons, croisés avec 15 zones retenues par la bbox de la ROUTE
+                   (une bbox de 5° × 5,5° attrape presque toutes les ZFE du sud-est) —
+                   soit 450 795 appels à `turf.booleanPointInPolygon` et **781 millions de
+                   sommets de polygone balayés**. L'app gelait plusieurs secondes à
+                   l'aperçu du trajet, et de nouveau à chaque changement d'itinéraire
+                   alternatif, `selectAlternativeRoute()` (js/04) rappelant cette fonction.
+
+                   Un rectangle rejette 95,8 % des points en quatre comparaisons — 617
+                   points sur 14 822 tombent dans la bbox d'une zone. Le test de polygone,
+                   lui, est intégralement conservé : le pré-filtre ne peut produire aucun
+                   faux négatif, une bbox contenant par construction son polygone. Le
+                   résultat est donc identique, au sommet près.
+
+                   ⚠ NE PAS « SIMPLIFIER » EN FILTRANT LES ZONES CANDIDATES PLUS FINEMENT
+                   EN AMONT : c'est le croisement point × zone qui coûte, pas le nombre de
+                   zones. Restreindre la liste candidate ferait manquer une ZFE traversée.
+
+                   Le chemin TEMPS RÉEL faisait déjà exactement ce test (`checkZFELive`,
+                   plus bas : `if (lng < z.bbox[0] || …) continue;`). Seule l'analyse de
+                   trajet l'avait oublié — et c'est là qu'il compte le plus, puisqu'elle
+                   traite des dizaines de milliers de points d'un coup au lieu d'un seul
+                   toutes les 12 secondes. */
                 const crossings = [];
                 candidates.forEach(zone => {
                     const evalRes = zfeEvaluateZone(zone);
+                    const [bx0, by0, bx1, by1] = zone.bbox;
                     let inside = false, entryKm = 0, lastKm = 0;
                     samples.forEach(pt => {
-                        const isIn = _zfePointInZone(zone, pt.lng, pt.lat);
+                        const isIn = pt.lng >= bx0 && pt.lng <= bx1 && pt.lat >= by0 && pt.lat <= by1
+                            && _zfePointInZone(zone, pt.lng, pt.lat);
                         if (isIn && !inside) { inside = true; entryKm = pt.km; }
                         if (isIn) lastKm = pt.km;
                         if (!isIn && inside) {
@@ -761,8 +796,7 @@
                                 'calculateTripPreview/airesDeRepos');
 
                 // Afficher les résultats
-                document.getElementById('preview-time').innerText = formatTime(totalDurationHours);
-                document.getElementById('preview-arrival').innerText = formatArrivalTime(totalDurationHours);
+                majPreviewTemps(totalDurationHours, distanceKm);
                 document.getElementById('preview-distance').innerText = distanceKm.toFixed(1) + " km";
                 document.getElementById('preview-points').innerText = maxPoints.toFixed(2) + " pts";
 
@@ -779,7 +813,13 @@
 
                 document.getElementById('trip-preview').style.display = 'flex';
 
-                // Analyse ZFE / Crit'Air sur l'itinéraire retenu (asynchrone, ne bloque pas l'aperçu)
+                /* Analyse ZFE / Crit'Air sur l'itinéraire retenu. ⚠ « asynchrone » NE VEUT PAS
+                   DIRE « ne bloque pas » — c'est ce que prétendait ce commentaire, à tort :
+                   `analyzeZFEForRoute()` n'attend le réseau que pour charger les zones, puis
+                   croise les points du tracé avec elles dans une boucle SYNCHRONE qui gelait
+                   l'écran plusieurs secondes sur un Paris → Nice. Corrigé le 23/08/2026 par
+                   un pré-filtre de bbox (voir la fonction). Un `async` sans `await` dans la
+                   partie coûteuse ne rend jamais la main au navigateur. */
                 analyzeZFEForRoute(route.geometry.coordinates);
 
                 // Construire le sélecteur d'itinéraires alternatifs

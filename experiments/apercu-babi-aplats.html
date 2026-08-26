@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Babi en aplats — archive du 24/08/2026</title>
+<!-- Les quatre états de l'ANCIEN Babi, celui en aplats. Cette page lit
+     `babi-aplats-archive.js` et non le module vivant : elle continuera d'afficher
+     l'ancien dessin même une fois `js/22-compagnon.js` passé au style kawaii. -->
+<link rel="stylesheet" href="../css/theme-crepuscule.css">
+<style>
+  body { margin:0; padding:36px; background:#241C3C; font-family:system-ui,sans-serif; }
+  .bandeau { color:#C3AEFF; font-size:13px; font-weight:700; letter-spacing:.04em;
+             text-transform:uppercase; margin:0 0 20px; }
+  .bandeau span { color:#A897C9; font-weight:600; text-transform:none; letter-spacing:0; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; }
+  .card { flex:1 1 210px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.07);
+          border-radius:20px; padding:22px 18px; text-align:center; }
+  .card svg { width:170px; height:auto; }
+  h3 { margin:10px 0 3px; font-size:15px; }
+  p  { margin:0; font-size:12.5px; color:#A897C9; }
+  .t-repos h3{color:#EDE6FF} .t-ravi h3{color:#6FE3A0} .t-secoue h3{color:#FFB35C} .t-assoupi h3{color:#A88BFF}
+</style>
+<body class="theme-crepuscule">
+<p class="bandeau">Archive — <span>Babi en aplats, gelé au 24/08/2026. Pour le dessin en cours, voir apercu-babi.html.</span></p>
+<div class="row" id="row"></div>
+<script src="babi-aplats-archive.js"></script>
+<script>
+  const L = [['repos','Au repos','Écran d’accueil'],
+             ['ravi','Ravi','Défi validé, badge gagné'],
+             ['secoue','Secoué','Bilan de trajet brusque'],
+             ['assoupi','Assoupi','App ouverte, moteur coupé']];
+  document.getElementById('row').innerHTML = L.map(([k,t,s]) =>
+    `<div class="card t-${k}">${BabiAplats.dessin(k)}<h3>${t}</h3><p>${s}</p></div>`).join('');
+</script>
+</body>

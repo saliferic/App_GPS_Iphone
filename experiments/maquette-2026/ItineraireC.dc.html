@@ -1,0 +1,230 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Nunito', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #FFB35C; } a:hover { color: #FFCB8E; }
+    .disp { font-family: 'Baloo 2', 'Nunito', sans-serif; }
+    .glass { background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.10); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.11); }
+    .num { font-variant-numeric: tabular-nums; }
+    @keyframes breathe { 0%,100% { transform: scale(1) } 50% { transform: scale(1.035) } }
+    @keyframes sway { 0%,100% { transform: rotate(-5deg) } 50% { transform: rotate(5deg) } }
+    @keyframes blink { 0%,90%,100% { transform: scaleY(1) } 95% { transform: scaleY(0.08) } }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,179,92,0.40), 0 12px 34px rgba(255,140,60,0.30) } 50% { box-shadow: 0 0 0 14px rgba(255,179,92,0), 0 12px 34px rgba(255,140,60,0.42) } }
+    @keyframes drift { 0% { transform: translate(0,0); opacity: 0 } 25% { opacity: 0.9 } 100% { transform: translate(-70px,46px); opacity: 0 } }
+    @keyframes twinkle { 0%,100% { opacity: 0.25 } 50% { opacity: 1 } }
+    @keyframes trace { to { stroke-dashoffset: 0 } }
+    .rk-body { animation: breathe 3.4s ease-in-out infinite; transform-origin: 60px 100px }
+    .rk-tail { animation: sway 4.2s ease-in-out infinite; transform-origin: 30px 104px }
+    .rk-eyes { animation: blink 5.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    .cta { animation: pulse 2.8s ease-in-out infinite }
+    .ff { animation: drift 7s linear infinite }
+    .st { animation: twinkle 3s ease-in-out infinite }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #1B1633; color: #F4EFFF; display: flex; flex-direction: column; overflow: hidden; position: relative">
+
+  <!-- ============ CIEL + CARTE ============ -->
+  <div style="height: 336px; position: relative; flex-shrink: 0; overflow: hidden">
+    <svg width="390" height="366" viewBox="0 0 390 366" style="position: absolute; top: 0; left: 0; display: block">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0" stop-color="#20193F"/><stop offset="0.5" stop-color="#3A2A5C"/><stop offset="1" stop-color="#6A3F62"/>
+        </linearGradient>
+        <radialGradient id="sun" cx="0.78" cy="0.16" r="0.5">
+          <stop offset="0" stop-color="#FFB35C" stop-opacity="0.55"/><stop offset="1" stop-color="#FFB35C" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="soft" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
+      </defs>
+      <rect width="390" height="366" fill="url(#sky)"/>
+      <rect width="390" height="366" fill="url(#sun)"/>
+
+      <!-- étoiles -->
+      <g fill="#FFF0DC">
+        <circle class="st" cx="42" cy="38" r="1.5" style="animation-delay:0s"/>
+        <circle class="st" cx="128" cy="22" r="1.2" style="animation-delay:.7s"/>
+        <circle class="st" cx="196" cy="52" r="1.6" style="animation-delay:1.4s"/>
+        <circle class="st" cx="292" cy="30" r="1.2" style="animation-delay:2.1s"/>
+        <circle class="st" cx="352" cy="66" r="1.4" style="animation-delay:.4s"/>
+        <circle class="st" cx="86" cy="76" r="1.1" style="animation-delay:1.8s"/>
+      </g>
+
+      <!-- relief / parc / eau -->
+      <path d="M0 232 L110 258 L206 234 L306 262 L390 242 L390 366 L0 366 Z" fill="#2C3A4A" opacity="0.55"/>
+      <path d="M262 0 L302 84 L266 160 L308 228 L280 366" stroke="#2A3E63" stroke-width="26" fill="none" opacity="0.7"/>
+
+      <!-- rues -->
+      <g stroke="#FFF0DC" stroke-opacity="0.10" stroke-width="10" fill="none" stroke-linecap="round">
+        <path d="M-10 104 L410 80"/><path d="M-10 192 L410 212"/>
+        <path d="M84 -10 L108 376"/><path d="M214 -10 L198 376"/><path d="M332 -10 L348 376"/>
+      </g>
+      <g stroke="#FFF0DC" stroke-opacity="0.05" stroke-width="4" fill="none" stroke-linecap="round">
+        <path d="M0 46 L390 32"/><path d="M0 146 L390 158"/><path d="M0 284 L390 294"/>
+        <path d="M40 -10 L54 376"/><path d="M150 -10 L142 376"/><path d="M274 -10 L284 376"/>
+      </g>
+
+      <!-- itinéraire lumineux -->
+      <path d="M100 292 L106 212 L156 154 L154 84 L222 46" stroke="#FFB35C" stroke-width="11" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" filter="url(#soft)"/>
+      <path d="M100 292 L106 212 L156 154 L154 84 L222 46" stroke="#FFD9A8" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"
+            stroke-dasharray="420" stroke-dashoffset="420" style="animation: trace 2.6s ease-out forwards"/>
+      <circle cx="100" cy="292" r="9" fill="#1B1633" stroke="#FFD9A8" stroke-width="3"/>
+      <circle cx="222" cy="46" r="7" fill="#FF8FA3"/>
+      <circle cx="222" cy="46" r="14" fill="#FF8FA3" opacity="0.28" filter="url(#soft)"/>
+
+      <!-- lucioles -->
+      <g fill="#FFE9B8">
+        <circle class="ff" cx="330" cy="150" r="2" style="animation-delay:0s"/>
+        <circle class="ff" cx="300" cy="196" r="1.6" style="animation-delay:2.3s"/>
+        <circle class="ff" cx="356" cy="122" r="1.8" style="animation-delay:4.6s"/>
+      </g>
+    </svg>
+
+    <!-- météo -->
+    <div class="glass" style="position: absolute; top: 18px; left: 18px; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-radius: 18px; backdrop-filter: blur(14px)">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFD9A8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 0-9 6 6 0 0 0-11.4 1.6A3.7 3.7 0 0 0 6.8 19Z"/></svg>
+      <div class="num disp" style="font-size: 16px; font-weight: 700">31°</div>
+    </div>
+
+    <!-- recentrer -->
+    <div class="glass" style="position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border-radius: 16px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(14px)">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFD9A8" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </div>
+  </div>
+
+  <!-- ============ FEUILLE ============ -->
+  <div style="flex-grow: 1; background: linear-gradient(180deg, rgba(43,32,72,0.94), rgba(27,22,51,0.98)); backdrop-filter: blur(22px); border-top: 1px solid rgba(255,255,255,0.12); border-radius: 32px 32px 0 0; margin-top: -32px; position: relative; z-index: 2; padding: 20px 18px 0; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 -24px 60px rgba(10,6,24,0.6)">
+
+    <!-- salutation -->
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding-right: 96px">
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #B9A9D8">Bonsoir</div>
+        <div class="disp" style="font-size: 29px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15">On t'emmène où&nbsp;?</div>
+      </div>
+    </div>
+
+    <!-- recherche -->
+    <div class="glass" style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 58px; border-radius: 20px; border-color: rgba(255,179,92,0.28)">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFB35C" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <div style="flex-grow: 1; font-size: 15.5px; font-weight: 600; color: #8B7BAE">Une adresse, un lieu…</div>
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#B9A9D8" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </div>
+
+    <!-- raccourcis -->
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px">
+      <div class="glass" style="display: flex; align-items: center; gap: 11px; padding: 12px 13px; border-radius: 20px">
+        <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 13px; background: rgba(127,216,232,0.16); display: flex; align-items: center; justify-content: center">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7FD8E8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M9.5 21v-6h5v6"/></svg>
+        </div>
+        <div style="min-width: 0">
+          <div style="font-size: 14px; font-weight: 800; line-height: 1.2">Maison</div>
+          <div style="font-size: 11px; font-weight: 600; color: #8B7BAE; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">56 rue de Colombes</div>
+        </div>
+      </div>
+      <div class="glass" style="display: flex; align-items: center; gap: 11px; padding: 12px 13px; border-radius: 20px">
+        <div style="flex-shrink: 0; width: 36px; height: 36px; border-radius: 13px; border: 1.5px dashed rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8B7BAE" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        <div style="min-width: 0">
+          <div style="font-size: 14px; font-weight: 800; line-height: 1.2; color: #8B7BAE">Travail</div>
+          <div style="font-size: 11px; font-weight: 600; color: #6E5F91">À ajouter</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- réel / simu -->
+    <div style="display: flex; gap: 4px; background: rgba(0,0,0,0.22); border-radius: 18px; padding: 4px; height: 50px; box-sizing: border-box">
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; background: rgba(255,255,255,0.09); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB35C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+        <span style="font-size: 14px; font-weight: 800">Réel</span>
+      </div>
+      <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 14px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E5F91" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5 4.7 9a2 2 0 0 1 1.9-1.4h10.8A2 2 0 0 1 19.3 9L21 14.5v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/></svg>
+        <span style="font-size: 14px; font-weight: 800; color: #6E5F91">Simu</span>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta" style="display: flex; align-items: center; justify-content: center; gap: 10px; height: 60px; border-radius: 22px; background: linear-gradient(135deg, #FFC578, #FF8F5C); color: #2A1226">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#2A1226" stroke="none"><path d="M8 5v14l11-7Z"/></svg>
+      <span class="disp" style="font-size: 20px; font-weight: 800; letter-spacing: -0.01em">En route</span>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 9px; height: 46px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.10)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B9A9D8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19a9 9 0 1 1 15 0"/><path d="m12 14 4-4.5"/></svg>
+      <span style="font-size: 14px; font-weight: 700; color: #B9A9D8">Rouler sans but</span>
+    </div>
+  </div>
+
+  <!-- ============ ROUKI, ASSIS SUR LE BORD ============ -->
+  <div style="position: absolute; top: 250px; right: 14px; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px">
+    <div style="background: rgba(255,240,220,0.95); color: #3A1F35; font-size: 11.5px; font-weight: 800; padding: 7px 11px; border-radius: 13px 13px 13px 4px; box-shadow: 0 6px 18px rgba(10,6,24,0.45); white-space: nowrap">Prêt quand tu veux !</div>
+    <svg width="92" height="92" viewBox="0 0 120 120" style="overflow: visible">
+      <ellipse cx="60" cy="116" rx="30" ry="5" fill="#0F0A20" opacity="0.45"/>
+      <!-- queue -->
+      <g class="rk-tail">
+        <path d="M32 104 C6 100 4 70 20 56 C28 49 38 52 38 62 C38 72 24 74 24 86 C24 96 32 98 36 98 Z" fill="#E8763C"/>
+        <path d="M20 58 C26 51 34 53 36 60 L26 68 Z" fill="#FFF0DC" opacity="0.85"/>
+        <path d="M14 78 C14 70 18 64 22 61 L28 68 C24 71 21 76 21 82 Z" fill="#B9502A" opacity="0.55"/>
+      </g>
+      <!-- corps -->
+      <g class="rk-body">
+        <ellipse cx="60" cy="96" rx="27" ry="21" fill="#E8763C"/>
+        <ellipse cx="60" cy="100" rx="16" ry="14" fill="#FFF0DC"/>
+        <!-- oreilles -->
+        <circle cx="36" cy="36" r="13" fill="#E8763C"/><circle cx="36" cy="37" r="7" fill="#FFF0DC"/>
+        <circle cx="84" cy="36" r="13" fill="#E8763C"/><circle cx="84" cy="37" r="7" fill="#FFF0DC"/>
+        <!-- tête -->
+        <circle cx="60" cy="56" r="30" fill="#E8763C"/>
+        <!-- masque -->
+        <path d="M60 40 C44 40 33 50 33 62 C33 74 45 82 60 82 C75 82 87 74 87 62 C87 50 76 40 60 40 Z" fill="#FFF0DC"/>
+        <ellipse cx="46" cy="43" rx="9" ry="6" fill="#FFF0DC"/>
+        <ellipse cx="74" cy="43" rx="9" ry="6" fill="#FFF0DC"/>
+        <!-- larmes rousses -->
+        <path d="M46 62 C44 70 45 76 48 79" stroke="#D9602C" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5"/>
+        <path d="M74 62 C76 70 75 76 72 79" stroke="#D9602C" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.5"/>
+        <!-- yeux -->
+        <g class="rk-eyes">
+          <ellipse cx="48" cy="55" rx="5" ry="6" fill="#33203A"/>
+          <ellipse cx="72" cy="55" rx="5" ry="6" fill="#33203A"/>
+          <circle cx="50" cy="52.5" r="1.8" fill="#FFFFFF"/>
+          <circle cx="74" cy="52.5" r="1.8" fill="#FFFFFF"/>
+        </g>
+        <!-- joues -->
+        <ellipse cx="39" cy="65" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.5"/>
+        <ellipse cx="81" cy="65" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.5"/>
+        <!-- museau -->
+        <path d="M56.5 66 L63.5 66 L60 70 Z" fill="#33203A"/>
+        <path d="M60 70 C60 73.5 56.5 74.5 55 72.5 M60 70 C60 73.5 63.5 74.5 65 72.5" stroke="#33203A" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ============ NAV FLOTTANTE ============ -->
+  <div style="position: absolute; left: 18px; right: 18px; bottom: 20px; z-index: 6; height: 66px; border-radius: 24px; background: rgba(38,28,64,0.88); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.11); box-shadow: 0 14px 38px rgba(10,6,24,0.55); display: flex; align-items: center; justify-content: space-around; padding: 0 8px">
+    <div style="display: flex; align-items: center; gap: 8px; background: linear-gradient(135deg, rgba(255,197,120,0.22), rgba(255,143,92,0.16)); border: 1px solid rgba(255,179,92,0.35); border-radius: 17px; padding: 9px 14px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB35C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+      <span style="font-size: 13.5px; font-weight: 800; color: #FFD9A8">Route</span>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 16px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C6C9E" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v14"/><path d="M6 17h12v3H6a2 2 0 0 1 0-3Z"/></svg>
+      <span style="font-size: 10px; font-weight: 700; color: #7C6C9E">Carnet</span>
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 16px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C6C9E" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>
+      <span style="font-size: 10px; font-weight: 700; color: #7C6C9E">Moi</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -25,3 +25,7 @@ node_modules/
 # Captures produites par tests/app.e2e.js à chaque exécution. Utiles pour lire un
 # échec, sans intérêt dans l'historique — elles changent à chaque lancement.
 tests/*.png
+# === Sources Photoshop ===
+# Fichiers de travail, pas des fichiers de l'app. Animaux.psd fait 13 Mo et git
+# garderait CHAQUE version pour toujours. Les PNG exportes, eux, sont suivis.
+*.psd

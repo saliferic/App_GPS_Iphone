@@ -1,0 +1,114 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>La troupe — planche de contrôle</title>
+<!-- Planche de contrôle des compagnons. Elle charge le VRAI module
+     (js/22-compagnon.js) et exerce ses trois sorties : les quatre états, le
+     portrait de rang et la clairière. C'est ici qu'on vérifie un changement de
+     dessin avant de lancer l'app entière.
+     ⚠ ELLE COUVRE TOUTE LA TROUPE depuis le 25/08/2026 (arrivée de Sam la
+     renarde). Elle ne montrait que le compagnon courant, c'est-à-dire Babi tant
+     qu'on n'avait rien choisi : un animal ajouté au module pouvait donc être
+     livré sans que personne ne l'ait jamais vu sur cette planche. Le sélecteur
+     du haut repeint tout — états, gabarits, clairière — pour l'animal choisi.
+     Pour l'ancien dessin en aplats, voir apercu-babi-aplats.html. -->
+<link rel="stylesheet" href="../css/theme-crepuscule.css">
+<style>
+  body { margin:0; padding:32px; background:#241C3C; font-family:system-ui,sans-serif; }
+  h2 { color:#C3AEFF; font-size:12.5px; font-weight:800; letter-spacing:.06em;
+       text-transform:uppercase; margin:0 0 14px; }
+  section { margin-bottom:34px; }
+  .row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .card { flex:0 0 190px; background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.07);
+          border-radius:20px; padding:18px 14px 14px; text-align:center; }
+  .card .slot { width:150px; height:161px; margin:0 auto; }
+  h3 { margin:8px 0 3px; font-size:14px; }
+  p  { margin:0; font-size:12px; color:#A897C9; }
+  .t-repos h3{color:#EDE6FF} .t-ravi h3{color:#6FE3A0} .t-secoue h3{color:#FFB35C} .t-assoupi h3{color:#A88BFF}
+  /* Les deux gabarits réels de l'app, pour vérifier que le dessin tient dans
+     ses emplacements et pas seulement en grand. */
+  .slot-hero   { width:104px; height:112px; }
+  .slot-carnet { width:38px;  height:42px; }
+  .slot-rang   { width:108px; height:116px; }
+  .gabarits { display:flex; gap:26px; align-items:flex-end; }
+  .gabarits figcaption { font-size:11px; color:#A897C9; margin-top:6px; text-align:center; }
+  .clairiere-hote { max-width:420px; }
+  /* Le sélecteur de la troupe. Chaque pastille porte l'accent de son animal :
+     c'est le moyen le plus court de voir d'un coup si deux accents se
+     ressemblent trop, ce qui est un vrai risque avec deux roux dans la troupe
+     (Raya la tigresse et Sam la renarde). */
+  .troupe { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 26px; }
+  .troupe button { font:inherit; font-size:13px; font-weight:700; cursor:pointer;
+                   padding:8px 14px 8px 10px; border-radius:999px; color:#EDE6FF;
+                   background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);
+                   display:flex; align-items:center; gap:8px; }
+  .troupe button[aria-pressed="true"] { background:rgba(255,255,255,.14); border-color:#EDE6FF; }
+  .troupe .pastille { width:12px; height:12px; border-radius:50%; }
+  .troupe .esp { font-weight:500; color:#A897C9; font-size:11.5px; }
+</style>
+<body class="theme-crepuscule">
+
+<div class="troupe" id="troupe"></div>
+
+<section>
+  <h2>Les quatre états</h2>
+  <div class="row" id="etats"></div>
+</section>
+
+<section>
+  <h2>Aux tailles réelles de l'app</h2>
+  <div class="gabarits">
+    <figure style="margin:0"><div class="slot-hero"   id="g-hero"></div><figcaption>hero 104px</figcaption></figure>
+    <figure style="margin:0"><div class="slot-rang"   id="g-rang"></div><figcaption>rang 108px</figcaption></figure>
+    <figure style="margin:0"><div class="slot-carnet" id="g-carnet"></div><figcaption>carnet 38px</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>La clairière</h2>
+  <div class="clairiere-hote"><div id="clairiere"></div></div>
+</section>
+
+<script src="../js/22-compagnon.js"></script>
+<script>
+  const L = [['repos','Au repos','Écran d’accueil'],
+             ['ravi','Ravi','Défi validé, badge gagné'],
+             ['secoue','Secoué','Bilan de trajet brusque'],
+             ['assoupi','Assoupi','App ouverte, moteur coupé']];
+
+  /* Seuls les animaux DESSINÉS : `catalogue()` rend aussi les silhouettes grises
+     des compagnons annoncés (Nima, Pilou), qui n'ont pas d'états à montrer. */
+  const troupe = Compagnon.catalogue().filter(c => c.debloque);
+
+  function peindre() {
+    document.getElementById('etats').innerHTML = L.map(([k,t,s]) =>
+      `<div class="card t-${k}"><div class="slot">${Compagnon.dessin(k)}</div><h3>${t}</h3><p>${s}</p></div>`).join('');
+    document.getElementById('g-hero').innerHTML   = Compagnon.dessin('repos');
+    document.getElementById('g-carnet').innerHTML = Compagnon.dessin('repos');
+    /* L'accent de l'animal courant, et non une couleur en dur : la médaille de
+       rang la prend dans l'app, la planche doit montrer la même. */
+    const accent = (troupe.find(c => c.cle === Compagnon.cle()) || {}).accent;
+    Compagnon.rang('g-rang', { couleur: accent, chiffre: 12 });
+    Compagnon.clairiere('clairiere', { pousses: 3, total: 6, eco: 82 });
+    document.querySelectorAll('#troupe button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.cle === Compagnon.cle())));
+  }
+
+  document.getElementById('troupe').innerHTML = troupe.map(c =>
+    `<button data-cle="${c.cle}" aria-pressed="false">
+       <span class="pastille" style="background:${c.accent}"></span>
+       ${c.nom}<span class="esp">${c.espece}</span>
+     </button>`).join('');
+
+  /* `choisir()` ÉCRIT dans le localStorage — c'est le vrai module, pas une
+     maquette. Regarder la planche change donc le compagnon de l'app sur ce
+     navigateur ; c'est voulu, on veut exercer le vrai chemin. */
+  document.getElementById('troupe').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    Compagnon.choisir(b.dataset.cle);
+    peindre();
+  });
+
+  peindre();
+</script>
+</body>

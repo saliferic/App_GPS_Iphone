@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éléphant Kawaii — v2</title>
+<style>
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0; min-height: 100vh;
+        display: flex; justify-content: center; align-items: center;
+        background: radial-gradient(circle at 50% 20%, #302653 0%, #17132f 70%);
+        font-family: "Segoe UI", sans-serif;
+    }
+
+    .elephant-container { width: 320px; height: 380px; }
+    svg { width: 100%; height: 100%; overflow: visible; }
+
+    .elephant { transform-origin: 50% 88%; animation: breathe 3.4s ease-in-out infinite; }
+    @keyframes breathe {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50%      { transform: translateY(-4px) scale(1.02); }
+    }
+
+    .eye { transform-box: fill-box; transform-origin: center; animation: blink 5.5s infinite; }
+    @keyframes blink {
+        0%, 93%, 100% { transform: scaleY(1); }
+        96%           { transform: scaleY(0.07); }
+    }
+
+    .tail { transform-box: fill-box; transform-origin: left center; animation: tailMove 2.6s ease-in-out infinite; }
+    @keyframes tailMove {
+        0%, 100% { transform: rotate(-4deg); }
+        50%      { transform: rotate(9deg); }
+    }
+
+    /* La trompe se balance depuis sa racine, jamais depuis son centre : ancrée au
+       milieu, le bout ET la racine bougeraient, et la trompe se décollerait du
+       visage à chaque oscillation. */
+    .trunk { transform-box: fill-box; transform-origin: top center; animation: trunkMove 4.4s ease-in-out infinite; }
+    @keyframes trunkMove {
+        0%, 100% { transform: rotate(-3deg); }
+        50%      { transform: rotate(3deg); }
+    }
+
+    .oreilleG { transform-box: fill-box; transform-origin: right center; animation: flapG 5s ease-in-out infinite; }
+    .oreilleD { transform-box: fill-box; transform-origin: left center;  animation: flapD 5s ease-in-out infinite; }
+    @keyframes flapG { 0%, 100% { transform: rotate(0deg); }   50% { transform: rotate(-4deg); } }
+    @keyframes flapD { 0%, 100% { transform: rotate(0deg); }   50% { transform: rotate(4deg); } }
+</style>
+</head>
+<body>
+
+<div class="elephant-container">
+<svg viewBox="0 0 320 380" xmlns="http://www.w3.org/2000/svg" aria-label="Éléphant kawaii">
+
+    <defs>
+        <radialGradient id="gTete" cx="36%" cy="26%" r="82%">
+            <stop offset="0" stop-color="#BCB3F0"/>
+            <stop offset="1" stop-color="#8D84C4"/>
+        </radialGradient>
+        <radialGradient id="gCorps" cx="40%" cy="22%" r="84%">
+            <stop offset="0" stop-color="#ADA4E2"/>
+            <stop offset="1" stop-color="#847BBA"/>
+        </radialGradient>
+        <radialGradient id="gPatte" cx="38%" cy="26%" r="80%">
+            <stop offset="0" stop-color="#A29AD6"/>
+            <stop offset="1" stop-color="#7E75B0"/>
+        </radialGradient>
+        <radialGradient id="gOreille" cx="40%" cy="32%" r="78%">
+            <stop offset="0" stop-color="#ADA4E0"/>
+            <stop offset="1" stop-color="#8A81C2"/>
+        </radialGradient>
+        <radialGradient id="gRose" cx="44%" cy="36%" r="74%">
+            <stop offset="0" stop-color="#F6C0D6"/>
+            <stop offset="1" stop-color="#DE9AB8"/>
+        </radialGradient>
+
+        <!-- `userSpaceOnUse` et non `objectBoundingBox` : la trompe est faite de
+             TROIS traits de largeurs différentes. En bounding-box, chacun aurait
+             sa propre bande de lumière, recalée sur sa propre largeur — trois
+             tronçons éclairés différemment au lieu d'un tube continu. -->
+        <linearGradient id="gTrompe" gradientUnits="userSpaceOnUse" x1="138" y1="0" x2="184" y2="0">
+            <stop offset="0"    stop-color="#8F86C4"/>
+            <stop offset="0.40" stop-color="#B2A9EA"/>
+            <stop offset="0.78" stop-color="#9C93D2"/>
+            <stop offset="1"    stop-color="#8078B2"/>
+        </linearGradient>
+
+        <linearGradient id="gDefense" x1="0" y1="0" x2="0.6" y2="1">
+            <stop offset="0" stop-color="#FFFAE8"/>
+            <stop offset="1" stop-color="#EFDFBC"/>
+        </linearGradient>
+
+        <radialGradient id="gReflet">
+            <stop offset="0"    stop-color="#FFF" stop-opacity="0.17"/>
+            <stop offset="0.55" stop-color="#FFF" stop-opacity="0.07"/>
+            <stop offset="1"    stop-color="#FFF" stop-opacity="0"/>
+        </radialGradient>
+
+        <filter id="flouDoux" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4"/>
+        </filter>
+
+        <filter id="flou" x="-40%" y="-60%" width="180%" height="220%">
+            <feGaussianBlur stdDeviation="9"/>
+        </filter>
+    </defs>
+
+    <!-- OMBRE AU SOL -->
+    <ellipse cx="160" cy="356" rx="80" ry="12" fill="#0d0a22" opacity="0.5"/>
+
+    <g class="elephant">
+
+        <!-- QUEUE — avant le corps, pour qu'elle en sorte au lieu de flotter à côté -->
+        <g class="tail">
+            <path d="M212 300 C238 296 250 314 244 330"
+                  fill="none" stroke="#8078B2" stroke-width="9" stroke-linecap="round"/>
+            <path d="M244 326 C252 329 254 337 248 341 C242 344 237 339 240 333 Z" fill="#948BC6"/>
+        </g>
+
+        <!-- CORPS — volontairement PLUS ÉTROIT que la tête. C'est le rapport
+             tête/corps qui fait le mignon, pas les détails du visage : une tête
+             qui déborde du corps se lit comme un bébé. -->
+        <ellipse cx="160" cy="292" rx="62" ry="58" fill="url(#gCorps)"/>
+
+        <!-- BRAS — deux moignons courts, à peine sortis du corps -->
+        <ellipse cx="100" cy="286" rx="17" ry="22" transform="rotate(-12 100 286)" fill="url(#gPatte)"/>
+        <ellipse cx="220" cy="286" rx="17" ry="22" transform="rotate(12 220 286)"  fill="url(#gPatte)"/>
+
+        <!-- PIEDS -->
+        <ellipse cx="128" cy="334" rx="27" ry="22" fill="url(#gPatte)"/>
+        <ellipse cx="192" cy="334" rx="27" ry="22" fill="url(#gPatte)"/>
+        <ellipse cx="114" cy="340" rx="4.5" ry="6" fill="#FFF6E0"/>
+        <ellipse cx="128" cy="343" rx="4.5" ry="6" fill="#FFF6E0"/>
+        <ellipse cx="142" cy="340" rx="4.5" ry="6" fill="#FFF6E0"/>
+        <ellipse cx="178" cy="340" rx="4.5" ry="6" fill="#FFF6E0"/>
+        <ellipse cx="192" cy="343" rx="4.5" ry="6" fill="#FFF6E0"/>
+        <ellipse cx="206" cy="340" rx="4.5" ry="6" fill="#FFF6E0"/>
+
+        <!-- L'ombre portée de la tête sur le corps. Sans elle la tête est POSÉE
+             sur le corps ; avec, elle y est assise. -->
+        <ellipse cx="160" cy="256" rx="74" ry="18" fill="#3A3168" opacity="0.4" filter="url(#flou)"/>
+
+        <!-- OREILLES — grandes et rondes, battant très légèrement -->
+        <g class="oreilleG">
+            <ellipse cx="58" cy="132" rx="50" ry="56" fill="url(#gOreille)"/>
+            <ellipse cx="55" cy="135" rx="31" ry="37" fill="url(#gRose)"/>
+        </g>
+        <g class="oreilleD">
+            <ellipse cx="262" cy="132" rx="50" ry="56" fill="url(#gOreille)"/>
+            <ellipse cx="265" cy="135" rx="31" ry="37" fill="url(#gRose)"/>
+        </g>
+
+        <!-- TÊTE -->
+        <circle cx="160" cy="150" r="95" fill="url(#gTete)"/>
+        <!-- Reflet du front : une seule source de lumière, en haut à gauche -->
+        <ellipse cx="122" cy="96" rx="48" ry="30" fill="url(#gReflet)"/>
+
+        <!-- Touffe -->
+        <path d="M149 60 C154 50 159 56 161 47 C164 56 169 50 174 60"
+              fill="none" stroke="#8D84C4" stroke-width="6" stroke-linecap="round"/>
+
+        <!-- SOURCILS — courts et hauts, à peine marqués -->
+        <path d="M96 134 Q114 124 132 133"  fill="none" stroke="#7168A2" stroke-width="4.5" stroke-linecap="round" opacity="0.75"/>
+        <path d="M224 134 Q206 124 188 133" fill="none" stroke="#7168A2" stroke-width="4.5" stroke-linecap="round" opacity="0.75"/>
+
+        <!-- YEUX — énormes, BAS sur le visage et très écartés. Des yeux hauts et
+             rapprochés donnent un visage d'adulte ; c'est le placement, plus que
+             la taille, qui fait basculer du côté mignon. -->
+        <g class="eye">
+            <ellipse cx="114" cy="170" rx="25" ry="29" fill="#2A2242"/>
+            <ellipse cx="114" cy="172" rx="17" ry="21" fill="#443A6C"/>
+            <ellipse cx="106" cy="158" rx="9"  ry="11" fill="#FFF"/>
+            <circle  cx="124" cy="184" r="4.5"         fill="#FFF"/>
+            <circle  cx="101" cy="180" r="2.6"         fill="#FFF" opacity="0.8"/>
+
+            <ellipse cx="206" cy="170" rx="25" ry="29" fill="#2A2242"/>
+            <ellipse cx="206" cy="172" rx="17" ry="21" fill="#443A6C"/>
+            <ellipse cx="198" cy="158" rx="9"  ry="11" fill="#FFF"/>
+            <circle  cx="216" cy="184" r="4.5"         fill="#FFF"/>
+            <circle  cx="193" cy="180" r="2.6"         fill="#FFF" opacity="0.8"/>
+        </g>
+
+        <!-- JOUES -->
+        <ellipse cx="99"  cy="200" rx="19" ry="11" fill="#E893B4" opacity="0.85"/>
+        <ellipse cx="221" cy="200" rx="19" ry="11" fill="#E893B4" opacity="0.85"/>
+
+        <!-- DÉFENSES — réduites à deux petits crocs. Des défenses longues sont le
+             détail le plus ANTI-mignon d'un éléphant : elles pointent, et rien
+             de pointu ne se lit comme un bébé. -->
+        <path d="M146 214 C136 221 128 230 126 240 C134 237 140 228 152 220 Z" fill="url(#gDefense)"/>
+        <path d="M174 214 C184 221 192 230 194 240 C186 237 180 228 168 220 Z" fill="url(#gDefense)"/>
+
+        <!-- TROMPE — COURTE, et le bout se retrousse. Une trompe longue rallonge
+             le visage et casse la rondeur ; celle-ci s'arrête au niveau du menton
+             et finit par une petite boucle. Trois traits de largeur décroissante
+             (40 → 26 → 15) : les bouts ronds se recouvrent et forment un cône
+             continu, ce qu'un seul chemin fermé ne sait pas faire. -->
+        <g class="trunk">
+            <g transform="translate(3,5)" opacity="0.42" filter="url(#flouDoux)">
+                <path d="M160 182 C155 206 156 228 161 242" fill="none" stroke="#332B5C" stroke-width="40" stroke-linecap="round"/>
+                <path d="M161 242 C165 256 179 257 182 246" fill="none" stroke="#332B5C" stroke-width="26" stroke-linecap="round"/>
+                <path d="M182 246 C184 238 176 234 174 240" fill="none" stroke="#332B5C" stroke-width="15" stroke-linecap="round"/>
+            </g>
+            <path d="M160 182 C155 206 156 228 161 242" fill="none" stroke="url(#gTrompe)" stroke-width="40" stroke-linecap="round"/>
+            <path d="M161 242 C165 256 179 257 182 246" fill="none" stroke="url(#gTrompe)" stroke-width="26" stroke-linecap="round"/>
+            <path d="M182 246 C184 238 176 234 174 240" fill="none" stroke="url(#gTrompe)" stroke-width="15" stroke-linecap="round"/>
+            <path d="M143 204 Q160 212 177 204" fill="none" stroke="#6E6599" stroke-width="2.4" stroke-linecap="round" opacity="0.26"/>
+            <path d="M147 228 Q161 236 175 228" fill="none" stroke="#6E6599" stroke-width="2.4" stroke-linecap="round" opacity="0.26"/>
+        </g>
+
+    </g>
+</svg>
+</div>
+
+</body>
+</html>

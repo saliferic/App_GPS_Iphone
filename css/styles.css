@@ -170,11 +170,12 @@
 
         /* === VOLET AIDE CONDUITE === */
         /* === LIGNES DE LA PAGE PROFIL — FORMAT PARTAGE ===
-           Un seul jeu de regles pour Mes statistiques, Galerie des trophees, Aide a la
+           Un seul jeu de regles pour Animaux sauves, Historique des trajets, Aide a la
            conduite et toute ligne a venir : meme hauteur, meme fond, meme chevron. Les
-           regles etaient auparavant ecrites DEUX FOIS, a l'identique, sous
-           #trophy-gallery-section et #aide-conduite-section, a 1700 lignes d'ecart — deux
-           copies d'un meme format qui ne pouvaient que diverger au premier reglage.
+           regles etaient auparavant ecrites DEUX FOIS, a l'identique, sous la galerie des
+           trophees (retiree le 26/08/2026) et #aide-conduite-section, a 1700 lignes
+           d'ecart — deux copies d'un meme format qui ne pouvaient que diverger au premier
+           reglage.
 
            Ajouter une ligne ne demande donc plus une ligne de CSS :
              <div class="profil-row">
@@ -185,7 +186,7 @@
              </div>
 
            Les id restent en place sur les sections existantes : d'autres regles les
-           ciblent (corps de section, compteur de trophees) et du JS les lit. */
+           ciblent (corps de section) et du JS les lit. */
         .profil-row {
             width: 100%; box-sizing: border-box;
             margin-top: 8px; margin-bottom: 8px;
@@ -207,7 +208,6 @@
         .profil-row-btn:active { background: rgba(0,140,255,0.08); }
         /* Le chevron ">" annonce une page qui s'ouvre, pas un depliage : pas de rotation. */
         .profil-row-btn .profil-row-arrow,
-        #trophy-gallery-toggle .tg-arrow,
         #aide-conduite-toggle .ac-arrow {
             font-size: 15px; color: #4a5568; flex-shrink: 0;
         }
@@ -1234,6 +1234,111 @@
            le guidage a 400 m induit le conducteur en erreur. Le widget reste donc toujours
            dans son coin. */
 
+        /* === CHOIX DU COMPAGNON ===
+           Même ossature que #arrival-modal (fond, rayon, ombre) : une fenêtre de
+           plus qui invente sa propre boîte se remarque immédiatement. */
+        #compagnon-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 3000;
+            background: rgba(0,0,0,0.75);
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        #compagnon-modal-overlay.open { display: flex; }
+        #compagnon-modal {
+            width: min(92vw, 470px); max-height: 86vh; overflow-y: auto;
+            box-sizing: border-box;
+            background: linear-gradient(170deg, #1c1636, #120e26);
+            border: 1px solid rgba(168,139,255,0.32); border-radius: 20px;
+            padding: 20px 18px 18px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.75);
+        }
+        #cpx-entete { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        #cpx-surtitre {
+            font-size: 10.5px; font-weight: 800; letter-spacing: 2px;
+            text-transform: uppercase; color: #8579AE;
+        }
+        #cpx-titre { margin-top: 3px; font-size: 20px; font-weight: 800; color: #EDE6FF; }
+        .cpx-fermer {
+            flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+            border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05);
+            color: #A897C9; font-size: 14px; font-family: inherit; line-height: 1;
+        }
+        .cpx-fermer:active { background: rgba(255,255,255,0.12); }
+
+        /* TROIS PAR LIGNE, et un nombre FIXE de colonnes : en `auto-fill`, la
+           troupe tombait à deux par ligne sur un téléphone et la fenêtre faisait
+           trois écrans de haut. À trois, chaque dessin reste assez grand pour
+           qu'on voie les barreaux — c'est le sujet de l'écran.
+           `minmax(0, 1fr)` et non `1fr` : sans le 0, un nom un peu long (« hippopotame »)
+           impose sa largeur minimale à sa colonne et fait déborder la grille. */
+        #compagnon-grille {
+            margin-top: 16px;
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px;
+        }
+        .cpx-carte {
+            background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 15px; padding: 10px 7px 11px; text-align: center;
+            transition: border-color .16s ease, background .16s ease;
+            min-width: 0;
+        }
+        .cpx-carte[data-cle] { cursor: pointer; }
+        .cpx-carte[data-cle]:hover { background: rgba(255,255,255,0.08); }
+        .cpx-carte[data-cle]:focus-visible { outline: 2px solid var(--cpx-accent, #A88BFF); outline-offset: 2px; }
+        .cpx-actif { border-color: rgba(168,139,255,0.75); background: rgba(168,139,255,0.12); }
+        /* La vignette suit la colonne au lieu d'imposer 78 px : à trois par ligne,
+           une largeur fixe débordait de sa carte. Le ratio (84/78) est conservé
+           par aspect-ratio, sinon les barreaux de la cage s'étirent. */
+        .cpx-vignette {
+            position: relative; width: 100%; max-width: 82px; aspect-ratio: 78 / 84;
+            margin: 0 auto;
+        }
+        .cpx-vignette svg { width: 100%; height: 100%; display: block; }
+
+        /* Le gris n'est pas une couleur peinte dans le SVG : c'est un filtre
+           posé sur la vignette. Une silhouette verrouillée aujourd'hui devient
+           un vrai dessin demain sans rien changer ici. */
+        .cpx-verrou .cpx-vignette { filter: grayscale(1) brightness(0.75); opacity: 0.55; }
+        .cpx-verrou { opacity: 0.9; }
+        .cpx-cadenas {
+            position: absolute; right: -2px; bottom: 2px; font-size: 15px;
+            filter: none; opacity: 1;
+        }
+        /* Les trois lignes de texte sont coupées net plutôt que renvoyées à la
+           ligne : une carte plus haute que ses voisines casserait l'alignement
+           de la rangée, et c'est l'alignement qui fait lire la troupe d'un bloc. */
+        .cpx-nom, .cpx-espece, .cpx-etat {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .cpx-nom { margin-top: 6px; font-size: 13px; font-weight: 800; color: #EDE6FF; }
+        .cpx-verrou .cpx-nom { color: #8579AE; }
+        /* C'est « hippopotame » qui fixe la taille : au-dessus, il partait en
+           points de suspension. */
+        .cpx-espece { font-size: 10.5px; color: #8579AE; }
+        .cpx-etat {
+            margin-top: 4px; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;
+            text-transform: uppercase; color: #6E668F;
+        }
+        .cpx-actif .cpx-etat { color: #A88BFF; }
+        #cpx-note { margin-top: 14px; font-size: 11.5px; color: #6E668F; text-align: center; }
+
+        /* La fiche d'un animal sauve — son decor et ce qu'il y est devenu.
+           ⚠ ELLE N'EST PLUS DANS CETTE FENETRE (26/08/2026) : #cpx-fiche a ete retire
+           avec les cartes des animaux sauves. Les deux regles ci-dessous restent
+           parce qu'elles servent MAINTENANT a la page « Animaux sauves » — voir
+           #animaux-sauves-fiche, qui reprend le meme cadre arrondi. */
+        .cpx-retour {
+            display: inline-block; margin-bottom: 12px; padding: 7px 12px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 12px; color: #C3AEFF; font-size: 12px; font-weight: 700;
+            cursor: pointer;
+        }
+        .cpx-retour:hover { background: rgba(255,255,255,0.10); }
+        .cpx-retour:focus-visible { outline: 2px solid #A88BFF; outline-offset: 2px; }
+        /* Le texte reste étroit : au-delà, l'œil perd la ligne suivante. */
+        .cpx-fiche-texte {
+            margin: 14px 2px 0; max-width: 46ch;
+            font-size: 13.5px; line-height: 1.6; color: #B9A9D8;
+        }
+
         /* === FENETRE D'ARRIVEE === */
         #arrival-modal-overlay {
             display: none; position: fixed; inset: 0; z-index: 3000;
@@ -1253,10 +1358,29 @@
             margin-top: 10px; font-size: 11px; font-weight: 800; letter-spacing: 2.5px;
             text-transform: uppercase; color: #8892b0;
         }
-        #arrival-modal-points { margin-top: 16px; }
-        .arrival-points-value { font-size: clamp(38px, 11vw, 52px); font-weight: 800; color: #28a745; }
-        .arrival-points-unit  { font-size: 14px; color: #4a5568; margin-left: 6px; }
+        /* Le portrait a REMPLACÉ le chiffre des points (25/08/2026) : la fenêtre dit
+           comment va l'animal, pas ce que le trajet a rapporté. Il occupe la même place
+           et à peu près la même hauteur — le rythme de la fenêtre ne change pas.
+           ⚠ `height` sur le SVG et `width:auto` : le dessin est carré-ish mais son
+           `viewBox` déborde volontairement (ombre au sol), une largeur imposée le
+           déformerait. Cette règle l'emporte sur `body.theme-crepuscule .cp-svg`
+           (100 % / 100 %) par l'id — c'est voulu, la fenêtre n'est pas le hero. */
+        #arrival-modal-compagnon {
+            margin-top: 14px; height: clamp(112px, 32vw, 148px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #arrival-modal-compagnon .cp-svg {
+            width: auto; height: 100%; display: block; overflow: visible;
+        }
         #arrival-modal-sub {
+            margin-top: 10px; font-size: 15px; font-weight: 700; line-height: 1.45;
+            color: #cbd5e0;
+        }
+        /* La couleur de la phrase suit l'état, sans jamais le remplacer : le mot dit
+           déjà tout, la teinte ne fait que le confirmer d'un coup d'œil. */
+        #arrival-modal-compagnon[data-etat="ravi"]   ~ #arrival-modal-sub { color: #3fc35b; }
+        #arrival-modal-compagnon[data-etat="secoue"] ~ #arrival-modal-sub { color: #ff9f2f; }
+        #arrival-modal-note {
             margin-top: 8px; font-size: 12px; color: #4a5568; line-height: 1.5;
         }
         #arrival-modal-close {
@@ -1319,6 +1443,11 @@
         #ui-panel.search-focus #status,
         #ui-panel.search-focus .itin-footer { display: none !important; }
         #ui-panel.search-focus #ui-panel-title { margin-bottom: 12px; }
+        /* Le compagnon est un ornement d'accueil : pendant la saisie il quitte l'écran,
+           sinon ses ~100 px de haut mangent la place laissée aux suggestions au-dessus
+           du clavier. L'accroche, elle, reste : c'est le repère de l'écran. */
+        #ui-panel.search-focus #compagnon-dessin { display: none; }
+        #ui-panel.search-focus .itin-hero { margin-bottom: 12px; }
         #ui-panel.search-focus .form-group { margin-bottom: 2px; }
 
         /* === MODE CRÉATION / ÉDITION DE CONTACT ===
@@ -1846,6 +1975,33 @@
            panneau ne pourrait plus être escamoté sur ces deux onglets. */
         #ui-panel.tab-secondary { min-height: var(--panel-secondary-h, 0px); }
 
+        /* === EN-TÊTE D'ACCUEIL (onglet Itinéraire) ===
+           Le bandeau collant ci-dessus ne s'applique QU'AUX titres enfants directs de
+           .panel-tab-content : depuis que l'onglet Itinéraire enveloppe son titre dans
+           .itin-hero (avec le compagnon), il n'y est plus soumis — c'est voulu, le
+           bandeau noir n'a pas sa place sur l'écran d'accueil. Objectifs et Profil, eux,
+           gardent leur en-tête collant. Ces quelques lignes tiennent la mise en page hors
+           du thème crépuscule, qui l'habille (§ 12 de theme-crepuscule.css). */
+        .profil-hero { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .profil-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+        /* Une seule tuile depuis le retrait de « points au total » (26/08/2026) : sans
+           cette regle elle occupait une demi-largeur, l'autre moitie vide a cote. La
+           classe est posee dans le HTML plutot que dans .profil-stats pour que remettre
+           une deuxieme tuile n'oblige qu'a retirer un mot. */
+        .profil-stats-solo { grid-template-columns: minmax(0, 1fr); }
+        .profil-row-ico { flex-shrink: 0; }
+        .carnet-hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        /* flex-shrink: 0 OBLIGATOIRE. .panel-tab-content est une colonne flex : sans
+           lui, le conteneur est écrasé sous la hauteur de sa planche SVG (156 px au
+           lieu de 197 relevés le 24/08/2026), et la légende — posée en absolu sur son
+           bord bas — remonte en plein milieu du dessin, sur les pousses. */
+        .clairiere { position: relative; flex-shrink: 0; }
+        .cl-svg { display: block; width: 100%; height: auto; }
+        .cl-legende { position: absolute; left: 14px; right: 14px; bottom: 11px; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+        .itin-hero { display: flex; align-items: center; gap: 10px; }
+        .itin-hero-text { flex: 1; min-width: 0; }
+        #compagnon-dessin { flex-shrink: 0; }
+
         /* === MODE CRÉATION DE PROFIL ===
            Même principe que .search-focus sur Itinéraire : pendant la saisie du prénom on
            relâche la hauteur imposée juste au-dessus, pour que le panneau se réduise à son
@@ -1877,11 +2033,97 @@
         .nav-stat-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex: 1; min-width: 0; text-align: center; }
         .nav-stat-label { font-size: 10px; color: #4a5568; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-align: center; width: 100%; }
         .nav-stat-value { font-size: 24px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; text-align: center; }
-        #nav-points { color: #28a745; }
+        /* L'heure d'arrivée est un FAIT, pas un score : ni vert de réussite ni rouge
+           d'alerte, la teinte reste celle du texte courant. Le bleu est déjà pris par
+           le temps restant juste à côté, et deux bleus voisins se seraient confondus. */
+        #nav-arrivee { color: #e2e8f0; }
         #nav-multiplier { color: #f39c12; }
         #nav-eta { color: #58a6ff; font-size: 20px; }
         #nav-eta-box { display: none; }
         #nav-eta-box.visible { display: flex; }
+
+        /* === BARRE DE VIE DU COMPAGNON (25/08/2026) ===
+           Posée en tête de #nav-bottom-bar, au-dessus des trois compteurs. Le rendu
+           reprend la référence pixel-art : un cœur en carreaux, une piste à bords
+           carrés, un remplissage plein sans dégradé de teinte.
+
+           ⚠ `border-radius: 0` PARTOUT, et c'est le sujet : la barre du projet est
+           arrondie de bout en bout, mais un pixel-art arrondi n'est plus du pixel-art.
+           C'est la seule pièce de l'interface à s'écarter de l'arrondi commun, et elle
+           s'en écarte volontairement.
+
+           ⚠ `image-rendering: pixelated` sur le SVG du cœur : sans lui, le navigateur
+           lisse les carreaux à l'agrandissement et la grille disparaît. Le
+           `shape-rendering="crispEdges"` de js/24 s'occupe du tracé, ce réglage-ci de
+           la mise à l'échelle — il faut les deux. */
+        #vie-compagnon {
+            display: flex; align-items: center; gap: 8px;
+            width: 100%; padding: 0 14px; box-sizing: border-box;
+        }
+        /* ⚠ LE CŒUR RESTE ROUGE, TOUJOURS. Il a d'abord suivi la couleur du palier
+           (vert quand la barre était pleine) : un cœur vert ne se lit plus comme un
+           cœur, il devient une pastille d'état de plus. C'est le SYMBOLE de la vie, pas
+           sa mesure — c'est la barre à côté qui mesure. `rendre()` (js/24) ne touche
+           donc plus à cette couleur ; ne la lui rendez pas. */
+        .vie-coeur {
+            flex-shrink: 0; width: 22px; height: 19px; line-height: 0;
+            color: #E5223A;                       /* repris par le fill currentColor du SVG */
+        }
+        .vie-coeur svg { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
+
+        .vie-piste {
+            flex: 1; min-width: 0; height: 14px; position: relative;
+            background: #14181f;
+            border: 2px solid #e8e8e8;            /* le liseré blanc de la référence */
+            border-radius: 0;
+            box-shadow: inset 0 0 0 1px #000;
+        }
+        .vie-remplissage {
+            display: block; height: 100%; width: 100%;
+            background: #3fc35b; border-radius: 0;
+            /* `linear` et non `ease` : la vie descend à vitesse constante tant qu'on
+               roule mal. Une courbe d'accélération donnerait un à-coup à chaque
+               rafraîchissement, alors que ceux-ci se suivent en continu. */
+            transition: width 0.35s linear, background-color 0.4s ease;
+            /* Deux tons dans la longueur, comme la référence : la moitié haute est
+               éclaircie. En `background-image` par-dessus la couleur de fond, pour
+               qu'une seule propriété (`background`) reste à changer en JS. */
+            background-image: linear-gradient(180deg, rgba(255,255,255,0.28) 0 50%, rgba(0,0,0,0.12) 50% 100%);
+        }
+        .vie-valeur {
+            flex-shrink: 0; min-width: 34px; text-align: right;
+            font-size: 11px; font-weight: 800; color: #7b8794;
+            letter-spacing: 0.5px; font-variant-numeric: tabular-nums;
+        }
+
+        /* Le battement du cœur, réservé aux deux derniers paliers. Il ne porte QUE sur
+           le cœur : faire clignoter la barre entière rendrait sa longueur illisible au
+           moment précis où elle compte le plus. */
+        #vie-compagnon[data-niveau="faible"] .vie-coeur   { animation: vie-battement 1.1s ease-in-out infinite; }
+        #vie-compagnon[data-niveau="critique"] .vie-coeur { animation: vie-battement 0.6s ease-in-out infinite; }
+        #vie-compagnon[data-niveau="critique"] .vie-piste { border-color: #ff6b6b; }
+        @keyframes vie-battement {
+            0%, 100% { transform: scale(1); }
+            30%      { transform: scale(1.22); }
+            45%      { transform: scale(1); }
+        }
+
+        /* Le tressaillement quand on encaisse. Court (0,35 s) et de faible amplitude :
+           il doit se voir du coin de l'œil sans jamais demander qu'on quitte la route
+           des yeux pour comprendre ce qui a bougé. */
+        #vie-compagnon.vie-degat .vie-piste { animation: vie-secousse 0.35s ease-out; }
+        @keyframes vie-secousse {
+            0%, 100% { transform: translateX(0); }
+            25%      { transform: translateX(-3px); }
+            75%      { transform: translateX(3px); }
+        }
+
+        /* Accessibilité : ces deux animations sont décoratives, la couleur et la
+           longueur portent déjà toute l'information. */
+        @media (prefers-reduced-motion: reduce) {
+            #vie-compagnon .vie-coeur,
+            #vie-compagnon.vie-degat .vie-piste { animation: none; }
+        }
 
         /* === BOUTONS FERMER / ITINERAIRE ALTERNATIF (sur la ligne des stats) === */
         #nav-google-close, #nav-google-altroute {
@@ -2097,6 +2339,14 @@
             body.nav-active .nav-stats-row { gap: 8px; padding: 0 2px; }
             body.nav-active .nav-stat-label { font-size: 8px; letter-spacing: 0.5px; }
             body.nav-active .nav-stat-value { font-size: 15px; gap: 3px; }
+            /* La barre de vie dans la colonne étroite du paysage : c'est la HAUTEUR qui
+               cède, pas la largeur — une jauge courte ne se lit plus, alors qu'une jauge
+               fine se lit très bien. Le pourcentage chiffré disparaît : la longueur dit
+               déjà tout, et il prenait 34 px sur une colonne qui n'en a pas à donner. */
+            body.nav-active #vie-compagnon { padding: 0 2px; gap: 6px; }
+            body.nav-active .vie-coeur { width: 16px; height: 14px; }
+            body.nav-active .vie-piste { height: 10px; border-width: 1px; }
+            body.nav-active .vie-valeur { display: none; }
             body.nav-active #nav-eta { font-size: 14px; }
             body.nav-active #nav-google-close,
             body.nav-active #nav-google-altroute { width: 30px; height: 30px; font-size: 14px; }
@@ -2495,39 +2745,10 @@
         .wg-note.observation { background: rgba(243,156,18,0.06); border-color: rgba(243,156,18,0.15); }
         .wg-note.observation .wg-note-strong { color: #f39c12; }
 
-        /* Semaine reussie. ⚠ PAS DE POLICE SCRIPT : l'app ne charge aucune police externe
-           (elle tourne en file:// et depuis android_asset), et la WebView Android n'embarque
-           aucune fonte cursive — un `font-family: cursive` y retomberait sur Roboto, donnant
-           un rendu different du navigateur de bureau. L'emphase vient donc de la taille, de
-           l'italique et de l'or, qui rendent pareil partout. */
-        .wg-badge-won {
-            position: relative; overflow: hidden;
-            border-radius: clamp(14px, 3.8vw, 18px);
-            border: 1px solid rgba(212,175,55,0.35);
-            background: linear-gradient(170deg, #16200f, #0b120a);
-            padding: clamp(16px, 4.4vw, 22px) clamp(14px, 4vw, 18px);
-        }
-        /* Halo unique derriere la medaille, a la place du filigrane repete du modele :
-           un texte repete en fond passe derriere le libelle et le rend penible a lire sur
-           un ecran de telephone, pour un gain purement decoratif. */
-        .wg-badge-won::before {
-            content: ''; position: absolute; inset: 0;
-            background: radial-gradient(circle at 50% 22%, rgba(212,175,55,0.18), transparent 62%);
-            pointer-events: none;
-        }
-        .wg-badge-medal {
-            position: relative; font-size: clamp(30px, 8.5vw, 38px); line-height: 1;
-            filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));
-        }
-        .wg-badge-title {
-            position: relative; margin-top: 6px;
-            font-size: clamp(17px, 4.8vw, 21px); font-weight: 800; font-style: italic;
-            letter-spacing: 0.3px; color: #e8c96a;
-        }
-        .wg-badge-sub {
-            position: relative; margin-top: 5px;
-            font-size: clamp(11px, 3vw, 12px); color: #8892b0; line-height: 1.5;
-        }
+        /* 25/08/2026 — les styles de la carte « Badge obtenu ! » (.wg-badge-won,
+           .wg-badge-medal, .wg-badge-title, .wg-badge-sub) ont été retirés avec elle :
+           la récompense de la semaine est désormais l'étape franchie du parcours,
+           montrée juste au-dessus dans le carnet. */
 
         .wg-claim-btn {
             background: linear-gradient(135deg, #00b4d8, #0077b6); color: #fff;
@@ -2544,94 +2765,83 @@
             border-radius: 12px; font-weight: 700; font-size: 13px;
         }
 
-        /* === GALERIE DES TROPHÉES === */
-        /* Geometrie et fond : voir .profil-row / .profil-row-btn (format partage).
-           La pastille « 0 / 8 » qui vivait ici a ete retiree le 22/08/2026, comme celle
-           de l'historique des trajets (.th-count) : elles n'apprenaient rien qu'on ne
-           lise en ouvrant la page. */
-        #trophy-gallery-toggle .tg-left { display: flex; align-items: center; gap: 8px; }
-        #trophy-gallery-toggle .tg-arrow {
-            font-size: 12px; color: #4a5568; transition: transform 0.3s ease;
-        }
+        /* === ANIMAUX SAUVES === */
+        /* A remplace le bloc GALERIE DES TROPHEES le 26/08/2026, et ses regles avec :
+           .trophy-cell, .trophy-icon-wrap, .trophy-name, .trophy-badge-count,
+           .trophy-lock, .trophy-play-hint et l'animation trophyGlow ont ete
+           supprimees en meme temps que le HTML qui les portait. Rien d'autre ne les
+           utilisait — verifie avant retrait.
+
+           Geometrie et fond de la ligne : voir .profil-row / .profil-row-btn. */
 
         /* Le corps reste masque DANS le panneau : il n'est affiche qu'une fois deplace
-           dans la page pleine, ou .in-profil-sheet leve ce display. La regle
-           `.open #trophy-gallery-body` qui l'ouvrait en accordeon a ete retiree avec
-           l'accordeon lui-meme — la classe .open n'est plus jamais posee. */
-        #trophy-gallery-body {
+           dans la page pleine, ou `#profil-sheet-body > .in-profil-sheet` leve ce
+           display. Meme regle que #trip-history-body. */
+        #animaux-sauves-body {
             display: none; padding: 14px 12px 16px;
             background: linear-gradient(170deg, #0a0e17, #080b12);
             border-top: 1px solid rgba(0,140,255,0.08);
         }
 
-        /* Grille 4 colonnes */
-        #trophy-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
+        /* TROIS PAR LIGNE, comme #compagnon-grille : c'est la meme troupe et les memes
+           cartes .cpx-*, un animal doit se presenter pareil des deux cotes. La regle
+           est repetee plutot que mutualisee avec #compagnon-grille parce que les deux
+           grilles vivent dans des ecrans differents et pourront diverger — mais tant
+           qu'elles sont identiques, changer l'une sans l'autre se voit tout de suite.
+           `minmax(0, 1fr)` et non `1fr` : sans le 0, « hippopotame » impose sa largeur
+           minimale a sa colonne et fait deborder la grille. */
+        #animaux-sauves-grille {
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px;
         }
 
-        .trophy-cell {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 5px; cursor: pointer; -webkit-tap-highlight-color: transparent;
-            padding: 10px 4px; border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.04);
-            background: rgba(255,255,255,0.02);
-            transition: background 0.2s, border-color 0.2s, transform 0.15s;
-            position: relative;
-        }
-        .trophy-cell.unlocked { cursor: pointer; }
-        .trophy-cell.locked   { cursor: default; opacity: 0.45; }
-        .trophy-cell.unlocked:active { transform: scale(0.93); }
+        /* Le vert dit « libre » — c'est la seule chose que cette page a a dire de plus
+           que la fenetre de choix, ou les memes cartes sont grises ou violettes. */
+        .cpx-sauve { border-color: rgba(111,227,160,0.35); background: rgba(111,227,160,0.07); }
+        .cpx-sauve .cpx-etat { color: #6FE3A0; }
+        .cpx-sauve[data-cle]:hover { background: rgba(111,227,160,0.13); }
 
-        /* Halo coloré autour du trophée débloqué */
-        .trophy-cell.unlocked .trophy-icon-wrap {
-            filter: drop-shadow(0 0 8px var(--tc-color));
-        }
-        .trophy-cell.locked .trophy-icon-wrap { filter: grayscale(1) brightness(0.5); }
+        #animaux-sauves-fiche { margin-top: 4px; }
+        #animaux-sauves-fiche .clairiere { position: relative; border-radius: 18px; overflow: hidden; }
 
-        .trophy-icon-wrap {
-            font-size: 30px; line-height: 1;
-            display: flex; align-items: center; justify-content: center;
-            width: 46px; height: 46px;
-            transition: filter 0.3s;
-        }
+        /* === QUI EST L'ANIMAL QU'ON A CHOISI (js/26) === */
+        /* Meme mecanique que #animaux-sauves-body : masque dans le panneau, revele une
+           fois deplace dans la page pleine. Son parent #compagnon-identite-section est
+           lui aussi en display:none — il n'a pas de ligne dans la liste, il ne sert que
+           de place ou revenir quand la page se referme. */
+        #compagnon-identite-body { display: none; }
 
-        .trophy-name {
-            font-size: 9px; font-weight: 800; letter-spacing: 1px;
-            text-transform: uppercase; color: #4a5568;
-            text-align: center; line-height: 1.2;
-        }
-        .trophy-cell.unlocked .trophy-name { color: var(--tc-color); }
-
-        /* Badges count sous le nom */
-        .trophy-badge-count {
-            font-size: 9px; font-weight: 700; color: #4a5568;
-            background: rgba(255,255,255,0.05); border-radius: 10px;
-            padding: 1px 6px;
-        }
-        .trophy-cell.unlocked .trophy-badge-count {
-            background: rgba(0,0,0,0.3);
-            color: var(--tc-color);
+        .ci-hero { display: flex; align-items: center; gap: 14px; }
+        /* Largeur fixe et ratio tenu : le SVG du compagnon fait 308x330 dans son viewBox,
+           sans `aspect-ratio` il s'ecrase des que la colonne se resserre. */
+        .ci-portrait { width: 108px; flex-shrink: 0; aspect-ratio: 308 / 330; }
+        .ci-portrait svg { width: 100%; height: 100%; display: block; }
+        .ci-ident { min-width: 0; }
+        .ci-nom { font-size: 26px; font-weight: 800; color: #EDE6FF; line-height: 1.1; }
+        .ci-espece { margin-top: 3px; font-size: 13px; color: #8579AE; }
+        .ci-etat {
+            margin-top: 8px; display: inline-block; padding: 3px 9px; border-radius: 999px;
+            font-size: 10px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase;
+            color: var(--ci-accent, #A88BFF);
+            background: rgba(255,255,255,0.05);
+            border: 1px solid currentColor;
         }
 
-        /* Icône cadenas */
-        .trophy-lock {
-            position: absolute; bottom: 7px; right: 7px;
-            font-size: 11px; color: #4a5568;
-        }
+        .ci-parcours { margin-top: 18px; }
+        .ci-parcours-lab { font-size: 11.5px; color: #8579AE; margin-bottom: 7px; }
+        .ci-jauge { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; }
+        .ci-jauge-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
 
-        /* Icône play pour les trophées avec vidéo */
-        .trophy-play-hint {
-            position: absolute; top: 7px; right: 7px;
-            font-size: 10px; opacity: 0.7;
-        }
+        /* Le texte reste etroit : au-dela, l'oeil perd la ligne suivante. Meme largeur
+           que .cpx-fiche-texte, c'est la meme lecture. */
+        .ci-histoire { margin-top: 18px; max-width: 46ch; }
+        .ci-para { margin: 0 0 12px; font-size: 13.5px; line-height: 1.6; color: #B9A9D8; }
+        .ci-para:last-child { margin-bottom: 0; }
+        .ci-vide { font-size: 12.5px; line-height: 1.7; color: #6E668F; text-align: center; }
 
-        /* Pulse animation sur les trophées débloqués récemment */
-        @keyframes trophyGlow {
-            0%, 100% { box-shadow: 0 0 0px transparent; }
-            50%       { box-shadow: 0 0 14px var(--tc-color); }
+        #animaux-sauves-vide {
+            margin: 6px 2px 0; font-size: 12.5px; line-height: 1.7;
+            color: #6E668F; text-align: center;
         }
-        .trophy-cell.new-unlock { animation: trophyGlow 1.8s ease-in-out 3; }
 
         /* === SYSTÈME DE BADGES & CATÉGORIES === */
         #badge-category-card {
@@ -3146,7 +3356,7 @@
         }
 
         /* === HISTORIQUE DES TRAJETS === */
-        /* Meme regle que #trophy-gallery-body : le corps reste masque DANS le panneau
+        /* Meme regle que #animaux-sauves-body : le corps reste masque DANS le panneau
            Profil, il n'est affiche qu'une fois deplace dans la page pleine, ou
            `#profil-sheet-body > .in-profil-sheet` leve ce display. */
         #trip-history-body {
@@ -3485,69 +3695,16 @@
             100% { box-shadow: inset 0 0 70px 20px rgba(255, 149, 0, 0.75); }
         }
 
-        /* === MODALE COFFRE DE RECOMPENSE === */
-        #loot-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 4000; align-items: center; justify-content: center; }
-        #loot-modal-overlay.open { display: flex; animation: fadeIn 0.3s ease; }
-        /* ⚠ ALIGNÉ SUR #arrival-modal (21/08/2026) — les deux fenêtres se SUIVENT en fin de
-           trajet : la fenêtre de points, puis celle-ci. Vues coup sur coup, un gris uni
-           cerclé de bleu derrière un dégradé cerclé de vert donnait l'impression de deux
-           applications différentes. Mêmes largeur, rayon et fond ; seul le cadre vert de
-           depart est propre a ce moment-la, et il change ensuite.
-           ⚠ LA COULEUR DU CADRE EST AUSSI POSÉE EN INLINE par le JS, qui l'emporte sur ces
-           regles : `openLootChestModal()` remet le vert d'ouverture, puis `onChestClick()`
-           le remplace par la couleur de RARETÉ du butin tiré. Modifier la teinte de départ
-           ici ne suffit donc pas — il faut toucher les deux endroits, sans quoi la fenetre
-           s'ouvre d'une couleur et la feuille de style en annonce une autre. */
-        #loot-modal {
-            background: linear-gradient(170deg, #0f1825, #0a0e17);
-            border: 2px solid rgba(40,167,69,0.5); border-radius: 20px;
-            padding: 26px 22px; text-align: center; color: #fff;
-            width: min(88vw, 360px); box-sizing: border-box;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.75);
-            transform: scale(0.85); animation: popUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-        @keyframes popUp { to { transform: scale(1); } }
+        /* ⚠ LE COFFRE À BUTIN A ÉTÉ SUPPRIMÉ LE 25/08/2026 — tout le bloc
+           « MODALE COFFRE DE RECOMPENSE » est parti avec (#loot-modal, #loot-chest-icon,
+           les bannières de rareté, @keyframes popUp et chestShake). Motif dans js/12 :
+           la conduite parfaite ne donne plus de bonus, il n'y a plus rien à ouvrir.
+
+           `@keyframes fadeIn` SURVIT, et c'est la seule chose à ne pas jeter avec
+           le reste : il était DÉCLARÉ dans ce bloc mais #exit-confirm-overlay et
+           #freecourse-end-overlay l'utilisent aussi — les emporter aurait fait
+           apparaître ces deux fenêtres sans transition, sans que rien ne le signale. */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* MODIFICATION : Ajout du style pour l'image du chevalier */
-        #loot-reward-image {
-            width: 100%;
-            max-height: 280px;
-            object-fit: contain;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            display: none;
-        }
-
-        #loot-modal h3 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: 0.3px; }
-        .loot-subtitle { margin: 0 0 28px; font-size: 14px; color: #aaa; }
-        /* Pas de `filter: drop-shadow(...)` : le halo orange qui entourait le cadeau a ete
-           retire le 21/08/2026. Le secouement au clic et l'agrandissement suffisent a dire
-           que l'icone est cliquable. */
-        #loot-chest-icon { font-size: 72px; cursor: pointer; display: inline-block; user-select: none; transition: transform 0.15s ease; }
-        #loot-chest-icon:active { transform: scale(0.92); }
-        #loot-chest-icon.shaking { animation: chestShake 0.15s linear infinite; pointer-events: none; }
-        @keyframes chestShake {
-            0%, 100% { transform: rotate(0deg) translateX(0); }
-            20% { transform: rotate(-9deg) translateX(-4px); }
-            40% { transform: rotate(8deg) translateX(4px); }
-            60% { transform: rotate(-7deg) translateX(-3px); }
-            80% { transform: rotate(6deg) translateX(3px); }
-        }
-
-        #loot-rarity-banner { padding: 12px; border-radius: 10px; font-size: 20px; font-weight: 800; letter-spacing: 1px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.35); margin-bottom: 16px; text-transform: uppercase; }
-        #loot-reward-pill { padding: 16px; border-radius: 12px; font-size: 17px; font-weight: 800; letter-spacing: 0.5px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.35); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; }
-        #loot-stats-box { background: #141414; border-radius: 10px; padding: 14px 10px; margin-bottom: 20px; }
-        .loot-stat-label { font-size: 13px; color: #999; margin-bottom: 4px; }
-        .loot-stat-total { font-size: 17px; font-weight: 800; color: #2196f3; }
-
-        #loot-reward-view button {
-            background: #1e88e5; color: #fff; border: none; border-radius: 10px;
-            padding: 14px 25px; font-weight: 800; cursor: pointer; font-size: 16px; letter-spacing: 0.5px;
-            text-transform: uppercase; width: 100%; transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.5);
-        }
-        #loot-reward-view button:hover { background: #1669b8; transform: scale(1.03); }
 
         #map-pick-hint {
             display: none; position: fixed; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1500;

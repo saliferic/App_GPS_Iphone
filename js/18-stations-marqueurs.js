@@ -354,8 +354,7 @@
                 currentTurfLine = turf.lineString(_baseRouteForGas.coords);
                 if (modalPendingRoute) modalPendingRoute.osrmData = _baseRouteForGas.osrmData;
                 // Restaurer les infos trajet d'origine
-                document.getElementById('preview-time').innerText     = formatTime(_baseRouteForGas.durationH);
-                document.getElementById('preview-arrival').innerText  = formatArrivalTime(_baseRouteForGas.durationH);
+                majPreviewTemps(_baseRouteForGas.durationH, _baseRouteForGas.distKm);
                 document.getElementById('preview-distance').innerText = _baseRouteForGas.distKm.toFixed(1) + ' km';
                 document.getElementById('preview-points').innerText   = (_baseRouteForGas.distKm * 1000 * POINTS_PER_METER).toFixed(2) + ' pts';
                 const cfg = loadVehicleConfig();
@@ -577,8 +576,7 @@
                 const distKm    = totalDistanceM / 1000;
                 const maxPts    = totalDistanceM * POINTS_PER_METER;
 
-                document.getElementById('preview-time').innerText     = formatTime(durationH);
-                document.getElementById('preview-arrival').innerText  = formatArrivalTime(durationH);
+                majPreviewTemps(durationH, distKm);
                 document.getElementById('preview-distance').innerText = distKm.toFixed(1) + ' km';
                 document.getElementById('preview-points').innerText   = maxPts.toFixed(2) + ' pts';
 

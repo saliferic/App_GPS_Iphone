@@ -8,6 +8,84 @@ Calcul dans `estimateTollFromRoute()` (`js/00-noyau-calculs.js`, testé) ;
 
 ---
 
+## ⚠⚠ TOUT CE QUI SUIT LA LIGNE DE 2026-08-23 EST DE L'HISTOIRE, PAS LA MÉTHODE ACTUELLE
+
+**Mapbox DÉCLARE les tronçons payants.** Chaque `intersection` d'un step porte un
+tableau `classes` qui contient `"toll"` quand le tronçon qui la suit est à péage.
+Vérifié le 23/08/2026 sur routes réelles : Paris → Lyon, 397 km déclarés payants sur
+466 ; Paris → Montpellier, 395 sur 749 — l'A75 gratuite s'excluant **toute seule**.
+
+L'affirmation « **Mapbox Directions ne renvoie ni prix de péage ni drapeau tronçon
+payant** », posée le 20/08/2026 et répétée plus bas, **était fausse**. Elle n'a jamais
+été vérifiée : elle a été déduite du fait que `exclude=toll` existe. Les **quatre bugs**
+consignés dans ce journal sont tous des tentatives de reconstituer à la main une
+information que l'API fournissait déjà — rectangles de pays, détection par vitesse,
+continuité par euroroute, liste d'autoroutes gratuites. Le « point ouvert, diagnostiqué
+mais non corrigé » (Perpignan → Paris, +18 %) s'est refermé sans être traité : il passe
+à −5 % du seul fait de lire `classes`.
+
+**La leçon est plus large que les péages : une limite d'API supposée doit être mesurée
+comme le reste.** Celle-ci a orienté trois semaines de conception dans la mauvaise
+direction, et aucun des correctifs successifs ne pouvait la remettre en cause puisqu'ils
+la prenaient tous pour acquise.
+
+### Méthode actuelle — `_sectionsPayantes()` puis modèle affine par SECTION
+
+1. Les kilomètres payants viennent de `intersections[].classes`, mesurés via
+   `annotation.distance` et `geometry_index`. Le `ref` du step ne répond plus qu'à une
+   question : **quel concessionnaire encaisse**, jamais **si l'on paie**.
+2. Le coût est `TOLL_ENTRY_FEE + TOLL_KM_RATE × km`, appliqué **une fois par section
+   payante contiguë** — pas par réseau. Le péage français est un système fermé : sortir
+   du réseau payant et y revenir fait payer deux entrées. Facturer par concessionnaire
+   sous-estimait Perpignan → Paris de 17 %, l'A75 gratuite y coupant le trajet en deux
+   systèmes fermés sur le même réseau.
+3. `TOLL_SECTION_GAP_KM = 25` sépare « deux vrais systèmes fermés » d'un simple trou de
+   tagage. **Mesuré, pas choisi** : l'erreur tombe de 6,7 % à 3,9 % entre 15 et 25 km puis
+   reste plate jusqu'à 60 — un réglage posé sur un plateau ne dépend pas de sa valeur
+   exacte. Sous 20 km, Paris → Le Havre se découpait en cinq entrées sur une seule A13.
+4. `_refHorsFrance()` (le tiret : « AP-7 », « A-2 ») **redevient décisif** : l'autopista
+   espagnole EST taguée `toll`, mais au tarif espagnol. `_horsReseauPeageFr()` garde son
+   rôle pour ce que la géographie sépare, réduit à des tronçons de quelques centaines de
+   mètres — ce qui rend enfin inoffensif le piège de `maneuver.location`.
+
+**Constantes recalibrées le 23/08/2026 — elles ne portent plus sur les mêmes kilomètres.**
+`TOLL_ENTRY_FEE = 4,65 €`, `TOLL_KM_RATE = 0,1035 €/km`. N'ayant plus à absorber les
+sections gratuites facturées à tort, le taux monte et l'entrée baisse. Les anciennes
+valeurs survivent sous `TOLL_LEGACY_*` pour le repli par `ref`, **et ne sont pas
+interchangeables** : appliquer les nouvelles à l'ancien calcul le ferait surestimer d'un
+tiers.
+
+### Validation sur six prix réels — erreur moyenne 3,2 %
+
+| Trajet | Distance | App | Réel (VM/Mappy) | Écart |
+|---|---:|---:|---:|---:|
+| Paris → Lyon | 466 km | 41 € | 41,30 € | **−1 %** |
+| Perpignan → Montpellier | 159 km | 19 € | 17,40 € | +6 % |
+| Perpignan → Marseille | 318 km | 30 € | 30,70 € | **−2 %** |
+| Perpignan → Bordeaux | 450 km | 46 € | 45,40 € | **+2 %** |
+| Perpignan → Paris | 850 km | 64 € | 67,70 € | **−5 %** *(était +18 %)* |
+| Paris → Bruxelles | 312 km | 16 € | 16,30 € | **−3 %** |
+
+Les six ont servi au calage des deux constantes, donc ce tableau **valide la méthode, pas
+la précision** — il faut de nouveaux prix réels non utilisés ici pour un vrai contrôle
+externe. Priorité aux réseaux non mesurés : Sanef, Cofiroute, Escota, dont les
+`TOLL_NETWORK_FACTOR` restent déduits de barèmes publiés et non vérifiés.
+
+### Ce qui reste ouvert
+
+- **Le repli par `ref` n'est plus jamais exercé en production** — aucune réponse Mapbox
+  observée n'est dépourvue de `classes`. Il reste parce qu'une réponse amputée
+  afficherait sinon « Aucun péage » sur un Paris-Marseille, en silence. Ses trois bugs
+  historiques y dorment ; ne pas s'en servir de référence.
+- **La cible reste le calcul par gares de péage** (matrices entrée→sortie en open data,
+  positions OSM), seul chemin vers le prix exact. Le présent travail ramène l'erreur de
+  20-56 % à ~3 % et rend cette étape moins urgente, pas inutile.
+
+---
+
+## Journal historique (20/08/2026) — conservé pour la trace des bugs, méthode périmée
+
+
 - **⚠ LES PÉAGES SONT UNE ESTIMATION, LE CARBURANT UNE MESURE — et les deux s'affichent côte à côte (20/08/2026).** Relevé sur Perpignan → Marseille : carburant **39,12 €** contre 38,67 € chez ViaMichelin (juste, il vient de data.economie.gouv.fr), péages **13,49 €** contre **30,70 €** réels — **−56 %**. Rien à l'écran ne disait que ces deux lignes n'avaient pas le même statut, d'où la conclusion naturelle de l'utilisateur : « l'app va chercher les prix dans une base ». Elle ne le fait pas et ne le fera pas — **Mapbox Directions ne renvoie ni prix de péage ni drapeau « tronçon payant »**, il sait seulement les éviter (`exclude=toll`), et il n'existe aucune API publique gratuite des barèmes français (PDF par concessionnaire ; les seules API qui chiffrent — Google Routes, HERE, TollGuru — supposent une clé et une facturation).
   **Les trois causes du −56 %, toutes dans le même sens, toutes corrigées :** (1) un rectangle `lat < 43.0` déclarait « Espagne » — **Perpignan est à 42,70**, les 50 premiers kilomètres payants de l'A9 étaient jetés, et le test portant sur `step.maneuver.location` (le point de **départ** du step), un step de 40 km commençant sous 43,0 disparaissait en entier ; (2) l'autoroute était détectée par la **vitesse moyenne du step** (> 80 km/h) alors que `fetchRouteMapbox()` interroge `driving-traffic` en priorité — **le prix des péages baissait quand il y avait des bouchons**, et toute 2×2 voies gratuite était facturée ; (3) le taux, 0,08 €/km contre ~0,12 €/km réel sur ASF (le commentaire au-dessus annonçait d'ailleurs 0,09, le code rendait 0,08).
   **Le calcul est maintenant dans `estimateTollFromRoute()` (js/00, testé)** ; `estimateTollCost()` (js/16) n'est plus qu'un emballage qui lit `avoidTolls` — un état de l'app, qui n'a rien à faire dans le noyau. Il lit **`step.ref`** (« A9 », « E15;A9 »), disponible parce que `fetchRouteMapbox()` demande `steps=true` : une donnée **déclarée**, insensible au trafic et au découpage des steps. Puis somme les km par concessionnaire et applique le modèle affine décrit plus bas.

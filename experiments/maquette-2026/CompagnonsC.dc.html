@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Nunito', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #A88BFF; } a:hover { color: #C3AEFF; }
+    .disp { font-family: 'Baloo 2', 'Nunito', sans-serif; }
+    .glass { background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.11); }
+    @keyframes breathe { 0%,100% { transform: scale(1) } 50% { transform: scale(1.035) } }
+    @keyframes trunk { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+    @keyframes flap { 0%,100% { transform: rotate(0deg) } 50% { transform: rotate(-3.5deg) } }
+    @keyframes blink { 0%,90%,100% { transform: scaleY(1) } 95% { transform: scaleY(0.08) } }
+    @keyframes halo { 0%,100% { opacity: 0.3; transform: scale(1) } 50% { opacity: 0.55; transform: scale(1.06) } }
+    @keyframes drift { 0% { transform: translate(0,0); opacity: 0 } 25% { opacity: 1 } 100% { transform: translate(-26px,-28px); opacity: 0 } }
+    .el-body { animation: breathe 3.8s ease-in-out infinite; transform-origin: 60px 100px }
+    .el-trunk { animation: trunk 4.6s ease-in-out infinite; transform-origin: 60px 62px }
+    .el-earL { animation: flap 5.2s ease-in-out infinite; transform-origin: 40px 44px }
+    .el-earR { animation: flap 5.2s ease-in-out infinite reverse; transform-origin: 80px 44px }
+    .el-eyes { animation: blink 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    .halo { animation: halo 3.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    .ff { animation: drift 5.5s linear infinite }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #1B1633; color: #F4EFFF; display: flex; flex-direction: column; overflow: hidden; position: relative">
+
+  <!-- ============ CIEL ============ -->
+  <div style="height: 96px; position: relative; flex-shrink: 0; overflow: hidden">
+    <svg width="390" height="126" viewBox="0 0 390 126" style="position: absolute; top: 0; left: 0; display: block">
+      <defs>
+        <linearGradient id="sky4" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#20193F"/><stop offset="1" stop-color="#4A3168"/></linearGradient>
+        <radialGradient id="glow4" cx="0.5" cy="0" r="0.7"><stop offset="0" stop-color="#A88BFF" stop-opacity="0.32"/><stop offset="1" stop-color="#A88BFF" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="390" height="126" fill="url(#sky4)"/><rect width="390" height="126" fill="url(#glow4)"/>
+      <g fill="#FFF0DC" opacity="0.6"><circle cx="46" cy="30" r="1.4"/><circle cx="130" cy="54" r="1.1"/><circle cx="266" cy="26" r="1.3"/><circle cx="342" cy="58" r="1.1"/></g>
+    </svg>
+    <div style="position: absolute; left: 18px; top: 24px; right: 18px; display: flex; align-items: center; gap: 12px">
+      <div class="glass" style="width: 38px; height: 38px; border-radius: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D8CCEE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+      </div>
+      <div>
+        <div style="font-size: 11.5px; font-weight: 700; color: #C6B6E4">Profil de Kader</div>
+        <div class="disp" style="font-size: 25px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em">Qui t'accompagne&nbsp;?</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FEUILLE ============ -->
+  <div style="flex-grow: 1; background: linear-gradient(180deg, rgba(43,32,72,0.94), rgba(27,22,51,0.98)); border-top: 1px solid rgba(255,255,255,0.12); border-radius: 32px 32px 0 0; margin-top: -32px; z-index: 2; padding: 16px 18px 0; display: flex; flex-direction: column; gap: 13px; box-shadow: 0 -24px 60px rgba(10,6,24,0.6)">
+
+    <!-- aperçu -->
+    <div style="border-radius: 26px; background: linear-gradient(150deg, rgba(168,139,255,0.18), rgba(127,216,232,0.06) 60%, rgba(255,255,255,0.03)); border: 1px solid rgba(168,139,255,0.28); padding: 12px 16px 14px; display: flex; align-items: center; gap: 12px">
+      <svg width="132" height="140" viewBox="0 0 120 130" style="flex-shrink: 0; overflow: visible">
+        <ellipse class="halo" cx="60" cy="60" rx="48" ry="48" fill="#A88BFF" opacity="0.32"/>
+        <ellipse cx="60" cy="122" rx="30" ry="5" fill="#0F0A20" opacity="0.4"/>
+        <g class="el-body">
+          <path d="M86 100 C94 102 96 108 94 113" stroke="#7E76A8" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path d="M94 111 C97 113 97 117 94 118 C92 116 92 113 94 111 Z" fill="#FFF0DC" opacity="0.75"/>
+          <ellipse cx="60" cy="98" rx="27" ry="22" fill="#8E86B8"/>
+          <ellipse cx="60" cy="104" rx="16" ry="13" fill="#ABA3D4"/>
+          <ellipse cx="42" cy="117" rx="9" ry="5.5" fill="#7E76A8"/>
+          <ellipse cx="78" cy="117" rx="9" ry="5.5" fill="#7E76A8"/>
+          <g class="el-earL"><ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <g class="el-earR"><ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <g class="el-trunk">
+            <path d="M60 62 C57 74 55 84 58 92" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M58 92 C60 99 67 100 70 95" stroke="#8E86B8" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <path d="M70 95 C72 92 70 89 68 90" stroke="#8E86B8" stroke-width="6.5" fill="none" stroke-linecap="round"/>
+            <path d="M56 70 L64 70 M55.5 78 L62 78" stroke="#7E76A8" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+          </g>
+          <g class="el-eyes">
+            <ellipse cx="47" cy="49" rx="4.6" ry="5.6" fill="#33203A"/><ellipse cx="73" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+            <circle cx="48.8" cy="46.8" r="1.7" fill="#FFF"/><circle cx="74.8" cy="46.8" r="1.7" fill="#FFF"/>
+          </g>
+          <ellipse cx="38" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/><ellipse cx="82" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/>
+        </g>
+        <g fill="#FFE9B8"><circle class="ff" cx="106" cy="46" r="2" style="animation-delay:0s"/><circle class="ff" cx="112" cy="72" r="1.5" style="animation-delay:2.6s"/></g>
+      </svg>
+      <div style="display: flex; flex-direction: column; gap: 5px; min-width: 0">
+        <div class="disp" style="font-size: 30px; font-weight: 800; color: #C3AEFF; letter-spacing: -0.015em; line-height: 1">Bao</div>
+        <div style="font-size: 12.5px; font-weight: 700; color: #A897C9">L'éléphanteau · il n'oublie rien</div>
+        <div style="font-size: 12px; font-weight: 600; color: #8B7BAE; line-height: 1.45; margin-top: 2px">Il retient tes trajets habituels et te dit quand tu t'en écartes.</div>
+      </div>
+    </div>
+
+    <!-- la troupe -->
+    <div style="font-size: 11.5px; font-weight: 800; color: #8B7BAE; letter-spacing: 0.06em">LA TROUPE</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+
+      <!-- Rouki -->
+      <div class="glass" style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 18px">
+        <svg width="58" height="52" viewBox="0 0 120 100">
+          <circle cx="36" cy="36" r="13" fill="#E8763C"/><circle cx="36" cy="37" r="7" fill="#FFF0DC"/>
+          <circle cx="84" cy="36" r="13" fill="#E8763C"/><circle cx="84" cy="37" r="7" fill="#FFF0DC"/>
+          <circle cx="60" cy="56" r="30" fill="#E8763C"/>
+          <path d="M60 40 C44 40 33 50 33 62 C33 74 45 82 60 82 C75 82 87 74 87 62 C87 50 76 40 60 40 Z" fill="#FFF0DC"/>
+          <ellipse cx="46" cy="43" rx="9" ry="6" fill="#FFF0DC"/><ellipse cx="74" cy="43" rx="9" ry="6" fill="#FFF0DC"/>
+          <ellipse cx="48" cy="55" rx="5" ry="6" fill="#33203A"/><ellipse cx="72" cy="55" rx="5" ry="6" fill="#33203A"/>
+          <circle cx="50" cy="52.5" r="1.8" fill="#FFF"/><circle cx="74" cy="52.5" r="1.8" fill="#FFF"/>
+          <path d="M56.5 66 L63.5 66 L60 70 Z" fill="#33203A"/>
+        </svg>
+        <div style="font-size: 12.5px; font-weight: 800">Rouki</div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #8B7BAE">Panda roux</div>
+      </div>
+
+      <!-- Bao, sélectionné -->
+      <div style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 18px; background: rgba(168,139,255,0.16); border: 1.5px solid #A88BFF; position: relative; box-shadow: 0 0 22px rgba(168,139,255,0.22)">
+        <div style="position: absolute; top: -8px; right: -6px; width: 22px; height: 22px; border-radius: 50%; background: #A88BFF; display: flex; align-items: center; justify-content: center; border: 2px solid #241C42">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#231640" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
+        </div>
+        <svg width="58" height="52" viewBox="0 0 120 105">
+          <ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/>
+          <ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <path d="M60 62 C57 74 55 84 58 92" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+          <path d="M58 92 C60 99 67 100 70 95" stroke="#8E86B8" stroke-width="10" fill="none" stroke-linecap="round"/>
+          <ellipse cx="47" cy="49" rx="4.6" ry="5.6" fill="#33203A"/><ellipse cx="73" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+          <circle cx="48.8" cy="46.8" r="1.7" fill="#FFF"/><circle cx="74.8" cy="46.8" r="1.7" fill="#FFF"/>
+        </svg>
+        <div style="font-size: 12.5px; font-weight: 800; color: #C3AEFF">Bao</div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #A897C9">Éléphanteau</div>
+      </div>
+
+      <!-- Coq -->
+      <div class="glass" style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 18px; opacity: 0.55">
+        <svg width="58" height="52" viewBox="0 0 120 105">
+          <path d="M46 26 C46 16 56 14 58 22 C62 12 74 16 72 26 C80 22 88 30 82 38" fill="#6E5F91"/>
+          <circle cx="62" cy="54" r="26" fill="#6E5F91"/>
+          <path d="M86 56 L102 62 L86 68 Z" fill="#6E5F91"/>
+          <path d="M56 78 C56 88 66 90 68 82" fill="#6E5F91"/>
+        </svg>
+        <div style="font-size: 12.5px; font-weight: 800; color: #8B7BAE">Le coq</div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #6E5F91">À dessiner</div>
+      </div>
+
+      <!-- Nima -->
+      <div class="glass" style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 18px">
+        <svg width="58" height="52" viewBox="0 0 120 105">
+          <path d="M36 44 L31 14 L57 30 Z" fill="#6E8098"/><path d="M38 41 L36 23 L50 32 Z" fill="#E0A8C0" opacity="0.7"/>
+          <path d="M84 44 L89 14 L63 30 Z" fill="#6E8098"/><path d="M82 41 L84 23 L70 32 Z" fill="#E0A8C0" opacity="0.7"/>
+          <circle cx="60" cy="54" r="28" fill="#6E8098"/>
+          <path d="M54 30 L52 40 M60 28 L60 39 M66 30 L68 40" stroke="#55647A" stroke-width="3" stroke-linecap="round"/>
+          <ellipse cx="50" cy="68" rx="11" ry="9" fill="#F0F4F8"/><ellipse cx="70" cy="68" rx="11" ry="9" fill="#F0F4F8"/>
+          <g stroke="#F0F4F8" stroke-width="1.6" stroke-linecap="round" opacity="0.85"><path d="M40 64 L20 60 M40 68 L19 69 M80 64 L100 60 M80 68 L101 69"/></g>
+          <path d="M56.5 62 L63.5 62 L60 66 Z" fill="#E08CA4"/>
+          <ellipse cx="47" cy="51" rx="7" ry="7.5" fill="#7FD8E8"/><ellipse cx="73" cy="51" rx="7" ry="7.5" fill="#7FD8E8"/>
+          <ellipse cx="47" cy="51" rx="2.1" ry="6.4" fill="#25303F"/><ellipse cx="73" cy="51" rx="2.1" ry="6.4" fill="#25303F"/>
+          <circle cx="49.6" cy="47.8" r="1.9" fill="#FFF"/><circle cx="75.6" cy="47.8" r="1.9" fill="#FFF"/>
+        </svg>
+        <div style="font-size: 12.5px; font-weight: 800">Nima</div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #8B7BAE">Chatte</div>
+      </div>
+
+      <!-- Pilou -->
+      <div class="glass" style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; border-radius: 18px">
+        <svg width="58" height="52" viewBox="0 0 120 105">
+          <ellipse cx="30" cy="60" rx="12" ry="25" fill="#C9A87A"/><ellipse cx="31" cy="60" rx="7" ry="18" fill="#B08F62" opacity="0.5"/>
+          <ellipse cx="90" cy="60" rx="12" ry="25" fill="#C9A87A"/><ellipse cx="89" cy="60" rx="7" ry="18" fill="#B08F62" opacity="0.5"/>
+          <circle cx="60" cy="52" r="29" fill="#F0DCC0"/>
+          <ellipse cx="47" cy="38" rx="8" ry="5.5" fill="#C9A87A" opacity="0.6"/><ellipse cx="73" cy="38" rx="8" ry="5.5" fill="#C9A87A" opacity="0.6"/>
+          <ellipse cx="60" cy="66" rx="17" ry="13" fill="#FFF2DE"/>
+          <ellipse cx="60" cy="60" rx="6.5" ry="5" fill="#33203A"/>
+          <path d="M60 65 C60 71 54 73 51 70 M60 65 C60 71 66 73 69 70" stroke="#33203A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <ellipse cx="47" cy="49" rx="5" ry="6" fill="#33203A"/><ellipse cx="73" cy="49" rx="5" ry="6" fill="#33203A"/>
+          <circle cx="48.8" cy="46.6" r="1.8" fill="#FFF"/><circle cx="74.8" cy="46.6" r="1.8" fill="#FFF"/>
+        </svg>
+        <div style="font-size: 12.5px; font-weight: 800">Pilou</div>
+        <div style="font-size: 9.5px; font-weight: 700; color: #8B7BAE">Chien</div>
+      </div>
+
+      <!-- à venir -->
+      <div style="padding: 11px 6px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border-radius: 18px; border: 1.5px dashed rgba(255,255,255,0.14)">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#6E5F91" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <div style="font-size: 10px; font-weight: 700; color: #6E5F91; text-align: center; line-height: 1.3">Un par<br>région</div>
+      </div>
+    </div>
+
+    <!-- un compagnon par profil -->
+    <div style="display: flex; gap: 11px; align-items: flex-start; background: rgba(255,240,220,0.06); border-radius: 18px; padding: 12px 13px">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#7FD8E8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>
+      <div style="font-size: 12px; font-weight: 600; color: #B9A9D8; line-height: 1.5">Chaque profil du véhicule garde son compagnon, son rang et son décor. Kader roule avec Bao, quelqu'un d'autre avec Rouki.</div>
+    </div>
+
+    <!-- CTA -->
+    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; height: 58px; border-radius: 20px; background: linear-gradient(135deg, #C3AEFF, #8E7BE0); color: #241640">
+      <span class="disp" style="font-size: 19px; font-weight: 800; letter-spacing: -0.01em">Partir avec Bao</span>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

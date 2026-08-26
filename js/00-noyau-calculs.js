@@ -604,8 +604,39 @@
            cette part facturable de 0,85 avait été inventée SANS mesure, pour corriger une
            surestimation supposée — la première mesure réelle a montré qu'on sous-estimait.
            Une correction non mesurée poussait donc dans le mauvais sens. */
-        const TOLL_ENTRY_FEE = 7.4;    // € pour entrer sur un réseau concédé
-        const TOLL_KM_RATE   = 0.0745; // € par km parcouru sur ce réseau
+        /* ⚠⚠ RECALIBRÉES LE 23/08/2026 — ELLES NE PORTENT PLUS SUR LES MÊMES KILOMÈTRES.
+           Mapbox DÉCLARE les tronçons payants (`intersections[].classes` contient
+           « toll ») : l'affirmation « Mapbox ne renvoie aucun drapeau tronçon payant »,
+           qui a guidé toute la conception précédente, était fausse. Les constantes
+           ci-dessous s'appliquent désormais aux SEULS kilomètres déclarés payants, plus
+           aux kilomètres d'autoroute devinés par `ref` — elles n'ont donc plus à absorber
+           les sections gratuites facturées à tort, d'où un taux/km plus élevé (0,1035
+           contre 0,0745) et une entrée moins chère (4,65 € contre 7,40 €).
+           Ajustées sur les CINQ prix réels connus, erreur relative moyenne 3,9 % :
+           Paris → Lyon −1 %, Perpignan → Montpellier +6 %, → Marseille −2 %,
+           → Bordeaux +2 %, → Paris −5 %. Voir docs/peages.md. */
+        const TOLL_ENTRY_FEE = 4.65;   // € pour entrer sur une section payante
+        const TOLL_KM_RATE   = 0.1035; // € par km réellement payant
+
+        /* Interruption gratuite au-delà de laquelle on considère être SORTI du système
+           fermé — donc devoir repayer une entrée en y revenant. C'est ce qui distingue
+           Perpignan → Paris (on quitte l'A9 payante à Béziers, on reprend l'A71 payante
+           après 300 km d'A75 gratuite : deux entrées) d'un simple trou dans le tagage
+           Mapbox au milieu d'une même autoroute.
+           ⚠ MESURÉ, PAS CHOISI : l'erreur sur les cinq prix réels tombe de 6,7 % à 3,9 %
+           entre 15 et 25 km, puis reste PLATE jusqu'à 60 km. Un réglage posé sur un
+           plateau ne dépend pas de sa valeur exacte — c'est ce qui le distingue d'une
+           constante ajustée au petit bonheur. Sous 20 km, Paris → Le Havre se découpait
+           en cinq entrées sur une seule A13 mal taguée, et surestimait de 8 €. */
+        const TOLL_SECTION_GAP_KM = 25;
+
+        /* ⚠ NE PAS FUSIONNER AVEC LES DEUX PRÉCÉDENTES. Le repli par `ref` (plus bas)
+           facture des kilomètres d'autoroute, gratuits compris — ses constantes d'origine
+           absorbaient précisément cette surfacturation. Lui appliquer les constantes
+           recalibrées ci-dessus le ferait surestimer d'un tiers. Deux calculs, deux
+           calibrations : elles ne sont pas interchangeables. */
+        const TOLL_LEGACY_ENTRY_FEE = 7.4;
+        const TOLL_LEGACY_KM_RATE   = 0.0745;
 
         /* Multiplicateur par concessionnaire, SANS DIMENSION, appliqué au coût affine
            complet. ASF vaut 1 par construction : c'est le seul réseau sur lequel des
@@ -674,8 +705,8 @@
            désignent aucun réseau et sont ignorées. */
         function _refAutorouteFr(ref) {
             if (!ref) return null;
+            if (_refHorsFrance(ref)) return null;
             const parts = String(ref).split(/[;,]/).map(p => p.trim().toUpperCase());
-            if (parts.some(p => /^[A-Z]{1,2}-\s?\d/.test(p))) return null;
             for (const p of parts) {
                 const m = /^A\s?(\d{1,3})$/.exec(p);
                 if (m) return String(Number(m[1]));
@@ -697,6 +728,21 @@
            elle chevauche toujours une autoroute nationale sans rupture physique — d'où la
            continuité appliquée dans `estimateTollFromRoute()` : un step « E-seul » hérite
            du réseau du DERNIER step classé par numéro français, jamais d'un tarif propre. */
+        /* Vrai si `ref` désigne une voie ÉTRANGÈRE à la forme du numéro : « AP-7 », « A-2 »,
+           « C-32 » — les autoroutes françaises n'ont jamais de tiret.
+           ⚠ EXTRAIT DE `_refAutorouteFr()` LE 23/08/2026, où ce test était noyé et rendait
+           `null`, valeur que la voirie ordinaire (« D900 ») rend aussi. Tant que seul le
+           `ref` décidait de facturer, confondre les deux était sans effet — les deux ne
+           coûtaient rien. Depuis que Mapbox déclare les tronçons payants, la distinction
+           est décisive : l'AP-7 espagnole EST taguée « toll », et sans ce test elle se
+           facturerait au tarif français. Aucune latitude ne peut la rattraper, Perpignan
+           (42,70) et Figueres (42,27) étant du même côté de toutes les lignes. */
+        function _refHorsFrance(ref) {
+            if (!ref) return false;
+            return String(ref).split(/[;,]/).map(p => p.trim().toUpperCase())
+                .some(p => /^[A-Z]{1,2}-\s?\d/.test(p));
+        }
+
         function _estEuroroutePure(ref) {
             if (!ref) return false;
             const parts = String(ref).split(/[;,]/).map(p => p.trim().toUpperCase());
@@ -740,6 +786,123 @@
             return false;
         }
 
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SECTIONS PAYANTES DÉCLARÉES PAR MAPBOX (23/08/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           ⚠⚠ CETTE FONCTION ANNULE UNE AFFIRMATION QUI A COÛTÉ QUATRE BUGS. `docs/peages.md`
+           posait que « Mapbox Directions ne renvoie ni prix de péage ni drapeau tronçon
+           payant, il sait seulement les éviter ». C'est faux : chaque `intersection` d'un
+           step porte un tableau `classes` qui contient « toll » quand le tronçon qui la
+           suit est payant. Vérifié le 23/08/2026 — Paris → Lyon : 397 km déclarés payants
+           sur 466 (l'A6 hors traversées urbaines) ; Paris → Montpellier : 395 sur 749,
+           l'A75 gratuite s'excluant TOUTE SEULE là où la règle de continuité par euroroute
+           la facturait sur 501 km.
+
+           Tout l'échafaudage précédent — liste `TOLL_FREE_MOTORWAYS`, continuité par
+           euroroute, plancher de kilométrage — existait pour reconstituer à la main une
+           information que l'API déclarait déjà. Le `ref` reste utile, mais pour une seule
+           question désormais : QUEL concessionnaire encaisse, pas SI l'on paie.
+
+           ⚠ POURQUOI DES SECTIONS ET NON UN TOTAL. Le péage français est un système fermé :
+           on paie à l'entrée-sortie, pas au kilomètre glissant. Quitter le réseau payant
+           puis y revenir fait payer DEUX entrées. Facturer une entrée par concessionnaire
+           sous-estimait Perpignan → Paris de 17 % — l'A75 gratuite y coupe le trajet en
+           deux systèmes fermés distincts sur le même réseau.
+
+           Renvoie `null` — et non un tableau vide — quand AUCUNE intersection ne porte de
+           `classes` : c'est la signature d'une réponse qui n'a pas la donnée, pas celle
+           d'un trajet gratuit. L'appelant retombe alors sur le repli par `ref`. Confondre
+           les deux afficherait « Aucun péage » sur un Paris-Marseille, en silence. */
+        function _sectionsPayantes(legs, diag) {
+            const sections = [];
+            let classesVues = false, kmHorsFr = 0, kmPayants = 0;
+
+            for (const leg of legs) {
+                /* `annotation.distance` donne la longueur de CHAQUE segment de la géométrie,
+                   et `geometry_index` d'une intersection pointe dans ce même tableau : c'est
+                   le seul moyen de mesurer un tronçon dont les bornes ne sont pas des steps.
+                   `fetchRouteMapbox()` (js/15) demande déjà `annotations=…,distance` sur ses
+                   deux tentatives. Son absence n'est pas rattrapable ici — on rend la main. */
+                const distances = leg && leg.annotation && leg.annotation.distance;
+                if (!Array.isArray(distances)) return null;
+
+                /* On aplatit les intersections de TOUS les steps du leg avant de mesurer :
+                   la longueur d'un tronçon court d'une intersection à la suivante, laquelle
+                   appartient souvent au step d'après. Mesurer step par step tronquerait
+                   chaque fin de step. Le réseau, lui, vient du step d'origine. */
+                const points = [];
+                let dernierReseauFr = null;
+                for (const step of (leg.steps || [])) {
+                    if (!step) continue;
+                    const num = _refAutorouteFr(step.ref);
+                    let reseau;
+                    if (num) {
+                        reseau = TOLL_MOTORWAY_NETWORK[num] || 'default';
+                        dernierReseauFr = reseau;
+                    } else if (_estEuroroutePure(step.ref) && dernierReseauFr) {
+                        /* Continuité par euroroute : conservée, mais elle ne décide plus RIEN
+                           sur le fait de payer — seulement sur le concessionnaire à créditer.
+                           C'est ce changement de rôle qui désamorce le bug de l'A75 : hériter
+                           d'un réseau sur un tronçon gratuit n'a plus aucune conséquence. */
+                        reseau = dernierReseauFr;
+                    } else {
+                        reseau = dernierReseauFr || 'default';
+                    }
+                    const etrangerParRef = _refHorsFrance(step.ref);
+                    for (const it of (step.intersections || [])) {
+                        if (it && Number.isFinite(it.geometry_index)) points.push({ it, reseau, etrangerParRef });
+                    }
+                }
+                points.sort((a, b) => a.it.geometry_index - b.it.geometry_index);
+
+                let courante = null, kmGratuitsDepuis = 0;
+                for (let i = 0; i < points.length; i++) {
+                    const { it, reseau, etrangerParRef } = points[i];
+                    if (Array.isArray(it.classes)) classesVues = true;
+                    const fin = i + 1 < points.length ? points[i + 1].it.geometry_index : distances.length;
+                    let metres = 0;
+                    for (let k = it.geometry_index; k < fin && k < distances.length; k++) {
+                        metres += Number(distances[k]) || 0;
+                    }
+                    const km = metres / 1000;
+                    if (km <= 0) continue;
+
+                    if (!Array.isArray(it.classes) || !it.classes.includes('toll')) {
+                        kmGratuitsDepuis += km;
+                        if (kmGratuitsDepuis > TOLL_SECTION_GAP_KM) courante = null;
+                        continue;
+                    }
+                    /* Étranger : l'AP-7 espagnole est payante et serait taguée « toll », mais
+                       aux tarifs espagnols. `_horsReseauPeageFr()` garde donc sa raison d'être
+                       — réduite à ce seul rôle, elle ne décide plus du sort d'un step entier
+                       mais d'un tronçon de quelques centaines de mètres, ce qui rend enfin
+                       inoffensif le piège de `maneuver.location`. */
+                    const loc = it.location;
+                    if (etrangerParRef
+                        || (Array.isArray(loc) && _horsReseauPeageFr(Number(loc[0]), Number(loc[1])))) {
+                        kmHorsFr += km;
+                        continue;
+                    }
+                    kmGratuitsDepuis = 0;
+                    kmPayants += km;
+                    if (courante && courante.reseau === reseau) courante.km += km;
+                    else { courante = { reseau, km }; sections.push(courante); }
+                }
+            }
+            if (!classesVues) return null;
+
+            /* Les miettes sous 1 km sont des bretelles d'échangeur taguées payantes : les
+               garder ferait payer une entrée pleine pour 300 m. */
+            const retenues = sections.filter(s => s.km > 1);
+            if (diag && typeof diag === 'object') {
+                Object.assign(diag, {
+                    sections: retenues.map(s => s.reseau + ':' + s.km.toFixed(1)),
+                    kmPayants, kmHorsFrPayant: kmHorsFr, source: 'classes',
+                });
+            }
+            return retenues;
+        }
+
         /* Coût estimé des péages, en euros, pour UNE route OSRM/Mapbox (`{ legs: [...] }`).
            L'évitement des péages est la responsabilité de l'appelant : ici on chiffre ce
            que la route contient.
@@ -754,6 +917,25 @@
         function estimateTollFromRoute(route, diag) {
             const legs = route && Array.isArray(route.legs) ? route.legs : null;
             if (!legs) return 0;
+
+            /* ═══ CHEMIN PRINCIPAL : les tronçons payants déclarés par Mapbox ═══
+               Tout ce qui suit (détection par `ref`, continuité, listes d'autoroutes
+               gratuites) n'est plus qu'un REPLI, conservé parce qu'une réponse dépourvue
+               de `classes` afficherait sinon « Aucun péage » sur un Paris-Marseille. */
+            const sections = _sectionsPayantes(legs, diag);
+            if (sections) {
+                let cout = 0, kmPayants = 0;
+                for (const s of sections) {
+                    kmPayants += s.km;
+                    const facteur = TOLL_NETWORK_FACTOR[s.reseau] || TOLL_FACTOR_DEFAULT;
+                    cout += (TOLL_ENTRY_FEE + TOLL_KM_RATE * s.km) * facteur;
+                }
+                /* `TOLL_MIN_KM` survit, mais son rôle a changé : il ne protège plus des
+                   autoroutes urbaines gratuites facturées à tort (les `classes` s'en
+                   chargent), seulement d'une poignée de kilomètres payants isolés que
+                   l'entrée à 4,65 € rendrait disproportionnés. */
+                return kmPayants < TOLL_MIN_KM ? 0 : cout;
+            }
 
             const kmParReseau = {};
             let kmSansRef = 0;      // steps rapides sans `ref` — repli SI refExploitable=false,
@@ -898,11 +1080,11 @@
                     const km = kmParReseau[reseau];
                     kmTotal += km;
                     const facteur = TOLL_NETWORK_FACTOR[reseau] || TOLL_FACTOR_DEFAULT;
-                    cout += (TOLL_ENTRY_FEE + TOLL_KM_RATE * km) * facteur;
+                    cout += (TOLL_LEGACY_ENTRY_FEE + TOLL_LEGACY_KM_RATE * km) * facteur;
                 }
             } else {
                 kmTotal = kmSansRef;
-                cout = (TOLL_ENTRY_FEE + TOLL_KM_RATE * kmSansRef) * TOLL_FACTOR_DEFAULT;
+                cout = (TOLL_LEGACY_ENTRY_FEE + TOLL_LEGACY_KM_RATE * kmSansRef) * TOLL_FACTOR_DEFAULT;
             }
             return kmTotal < TOLL_MIN_KM ? 0 : cout;
         }
@@ -1203,17 +1385,31 @@
             return `${d.getFullYear()}-${mm}-${jj}`;
         }
 
-        /* Miroir exact de `check (points >= 0 and points <= CLASSEMENT_POINTS_MAX)`.
-           On borne AVANT l'envoi pour que le refus vienne de nous avec un message
-           lisible, plutot qu'une erreur SQL brute au milieu d'un `upsert`.
+        /* ═══ CE QUE LE CLASSEMENT COMPTE (25/08/2026) ═══
+           Des ANIMAUX SAUVÉS, plus des points. Les points restent le carburant du
+           trajet (butin, total du profil, objectifs) ; ce qui se compare entre
+           joueurs, c'est le nombre d'animaux menés au bout de leur parcours.
+
+           ⚠ LA COLONNE SQL S'APPELLE TOUJOURS `scores.points`, et c'est voulu : la
+           renommer imposait un `alter table` + un `create or replace view` à lancer
+           à la main sur la base de production, pour un gain purement cosmétique.
+           Elle porte désormais un NOMBRE D'ANIMAUX. Partout où le mot « points »
+           apparaît côté base ou dans `21-classement.js`, lire « animaux » — c'est la
+           seule chose à savoir pour relire ce code avec `docs/schema.sql` à côté.
+
+           Miroir exact de `check (points >= 0 and points <= 500)` : on borne AVANT
+           l'envoi pour que le refus vienne de nous avec un message lisible, plutôt
+           qu'une erreur SQL brute au milieu d'un `upsert`.
            ⚠ `Number()` et non `parseFloat(v) || 0` : le second transforme « 12abc »
            en 12 sans rien signaler — même famille de piège que le `parseInt(v) || repli`
-           déjà corrigé ailleurs dans ce fichier. */
-        const CLASSEMENT_POINTS_MAX = 500;
-        function clampPointsClassement(valeur) {
+           déjà corrigé ailleurs dans ce fichier.
+           ⚠ `Math.floor` et non `Math.round` : un compte d'animaux est ENTIER, et
+           arrondir 2.6 à 3 annoncerait un sauvetage qui n'a pas eu lieu. */
+        const CLASSEMENT_ANIMAUX_MAX = 500;
+        function clampAnimauxClassement(valeur) {
             const n = Number(valeur);
             if (!isFinite(n) || n <= 0) return 0;
-            return Math.min(CLASSEMENT_POINTS_MAX, Math.round(n * 100) / 100);
+            return Math.min(CLASSEMENT_ANIMAUX_MAX, Math.floor(n));
         }
 
         /* Miroir exact de `constraint pseudo_format check (pseudo ~ '^[A-Za-z0-9._-]{3,20}$')`.
@@ -1244,4 +1440,227 @@
         function emailDePseudo(pseudo) {
             if (!pseudoValide(pseudo)) return null;
             return pseudo.trim().toLowerCase() + '@' + PSEUDO_DOMAINE;
+        }
+
+        /* ═══ DURÉE D'UN TRAJET CONDUIT EN EXCÈS DE VITESSE (23/08/2026) ═══
+           « Combien de temps pour Nantes-Paris en respectant les limites, et combien en
+           roulant plus vite ? » — la question à laquelle répond la deuxième ligne du
+           panneau « Informations trajet ».
+
+           LE MODÈLE EST CELUI DE LA SIMULATION, pas une invention : `js/19` fait rouler
+           le bon conducteur à `limite - 10` et le mauvais à `limite + 10..25` (soit
+           `limite + 17,5` en moyenne) sur une fraction des tronçons de 500 m qui dépend
+           du `badLevel` — 20 %, 50 % ou 80 %. L'écart de vitesse entre les deux vaut donc
+           27,5 km/h, et il ne s'applique qu'à cette fraction du parcours.
+
+           ⚠ ON N'ADDITIONNE PAS DES VITESSES, ON ADDITIONNE DES TEMPS. Faire la moyenne
+           des deux vitesses puis diviser la distance par elle donne un résultat faux (la
+           moyenne d'une vitesse est harmonique, pas arithmétique) : sur Nantes-Paris,
+           l'erreur se compte en minutes, dans le sens flatteur pour le chauffard.
+
+           ⚠ La durée de référence vient de Mapbox et inclut le trafic ; elle ne
+           correspond donc pas exactement à « rouler à la limite ». Le résultat est un
+           ORDRE DE GRANDEUR de ce qu'un excès fait gagner, pas une promesse — c'est
+           d'ailleurs tout l'intérêt de l'afficher : le gain est presque toujours plus
+           petit que ce que le conducteur imagine. */
+        const EXCES_FRACTION = { 1: 0.20, 2: 0.50, 3: 0.80 };
+        const EXCES_GAIN_KMH = 27.5;
+        function dureeAvecExces(distanceKm, dureeH, badLevel) {
+            const d = Number(distanceKm), t = Number(dureeH);
+            if (!isFinite(d) || !isFinite(t) || d <= 0 || t <= 0) return null;
+            const p = EXCES_FRACTION[badLevel] || EXCES_FRACTION[1];
+            const vitesseMoyenne = d / t;
+            // Part respectée : durée inchangée. Part en excès : la même distance parcourue
+            // 27,5 km/h plus vite.
+            return t * (1 - p) + (d * p) / (vitesseMoyenne + EXCES_GAIN_KMH);
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════
+        // === LA VIE DU COMPAGNON ===
+        // ═══════════════════════════════════════════════════════════════════
+
+        /* ═══ LA JAUGE DE VIE (25/08/2026) ═══
+           La barre posée au-dessus des compteurs du trajet. Elle suit EXACTEMENT la
+           mécanique des points, parce qu'elle doit rester lisible sans explication :
+           rouler à la bonne vitesse soigne, rouler en excès blesse, et c'est tout.
+           Ce qu'elle ajoute au score, c'est un ENJEU — un score se rattrape au trajet
+           suivant, une vie tombée à zéro se voit tout de suite.
+
+           POURQUOI ICI ET PAS DANS js/22. Le module compagnon a une règle écrite dans
+           son en-tête : dessins et phrases, aucune logique. Le calcul de la jauge est
+           de la logique, et la fiche d'A_VENIR le disait déjà : « cette jauge vivra
+           dans le module de calcul, indexée par ces clés ».
+
+           ⚠ LA VIE EST PAR ANIMAL, PAS PAR TRAJET. Décision du 24/08/2026, rappelée
+           dans js/22 : « un compagnon usé ne se répare pas en changeant d'espèce ».
+           C'est ce qui donne son poids à la jauge — sans ça, il suffirait d'attendre
+           le trajet suivant pour repartir à neuf. Le STOCKAGE de ces valeurs est
+           l'affaire de js/24 ; ici on ne fait que les faire évoluer.
+
+           ⚠ ON RAISONNE EN MÈTRES, PAS EN SECONDES. Une jauge au temps se viderait à
+           l'arrêt dans un embouteillage, où le conducteur ne fait rien de mal, et
+           épargnerait un excès tenu sur autoroute — deux fois l'inverse de ce qu'on
+           veut dire. C'est aussi ce qui la rend cohérente avec le score, qui se compte
+           lui aussi au mètre (POINTS_PER_METER / PENALTY_PER_METER, js/04). */
+        const VIE_MAX = 100;
+
+        /* Calibration à robustesse 1 (aucun compagnon n'y est exactement : c'est le
+           point de référence, pas un réglage utilisé tel quel) :
+             · dégâts — un excès franc (+20 %, sévérité 1) vide une barre pleine en
+               5 km d'affilée. Assez pour faire peur, trop long pour qu'un dépassement
+               bref soit fatal.
+             · soins — 20 km de conduite propre pour refaire une barre entière. Le
+               rapport 4:1 est délibéré : abîmer doit aller plus vite que réparer,
+               sinon la jauge ne dit plus rien. */
+        const VIE_DEGAT_PAR_METRE = VIE_MAX / 5000;
+        const VIE_SOIN_PAR_METRE  = VIE_MAX / 20000;
+
+        /* La sévérité module les dégâts selon l'AMPLEUR du dépassement : 5 km/h de trop
+           sur une départementale ne peut pas coûter ce que coûtent 40. Elle vaut 1 à
+           +20 % de la limite, et reste bornée aux deux bouts — sans plancher, un
+           dépassement à peine au-dessus de la marge radar ne coûterait presque rien et
+           la barre mentirait ; sans plafond, une pointe à 200 km/h en zone 30 (ou un
+           point GPS aberrant) viderait la barre en un seul rafraîchissement. */
+        const VIE_EXCES_REF    = 0.20;
+        const VIE_SEVERITE_MIN = 0.4;
+        const VIE_SEVERITE_MAX = 2.5;
+
+        function severiteExces(vitesseKmh, limiteKmh) {
+            const v = Number(vitesseKmh), l = Number(limiteKmh);
+            if (!isFinite(v) || !isFinite(l) || l <= 0 || v <= l) return 0;
+            const ratio = (v - l) / l;
+            return Math.min(VIE_SEVERITE_MAX, Math.max(VIE_SEVERITE_MIN, ratio / VIE_EXCES_REF));
+        }
+
+        /* LA ROBUSTESSE, c'est-à-dire LA DIFFICULTÉ. C'est le seul curseur du système :
+           un animal fragile réclame une conduite plus propre, et c'est ce qui fait
+           qu'un compagnon est plus dur à mener qu'un autre. Le facteur divise les
+           dégâts ET multiplie les soins — les deux, sinon un compagnon fragile serait
+           seulement plus lent à mourir au lieu d'être réellement plus exigeant.
+
+           L'échelle suit la troupe telle qu'elle est écrite dans js/22 : la masse
+           tranquille encaisse, le vif encaisse mal. Elle donne au passage l'ordre de
+           difficulté dans lequel on peut ouvrir les compagnons.
+             bulle 1.60 (le plus indulgent) → nima 0.50 (le plus exigeant)
+           Les deux compagnons d'A_VENIR y figurent DÉJÀ : leur vie doit exister le jour
+           où on les débloque, pas être ajoutée à ce moment-là. */
+        const VIE_ROBUSTESSE = {
+            bulle: 1.60,   // hippopotame — « la masse tranquille, on ne le bouscule pas »
+            babi:  1.30,   // éléphanteau — compagnon par défaut, volontairement clément
+            zola:  1.10,   // lion        — « le calme du fort, rien à prouver »
+            kiri:  0.90,   // girafe      — elle voit loin, mais elle est haute et fragile
+            sam:   0.85,   // renarde     — « la maligne » : légère, mais elle esquive
+            pilou: 0.80,   // chien       — à venir
+            titi:  0.70,   // singe       — « le curieux », vif, il encaisse mal
+            raya:  0.55,   // tigre       — « le geste juste » : ne pardonne presque rien
+            nima:  0.50    // chatte      — à venir, la plus exigeante de la troupe
+        };
+        const VIE_ROBUSTESSE_DEFAUT = 1;
+
+        function robustesseCompagnon(cle) {
+            const r = VIE_ROBUSTESSE[cle];
+            return isFinite(r) && r > 0 ? r : VIE_ROBUSTESSE_DEFAUT;
+        }
+
+        /* Fait avancer la jauge sur `metres` de trajet.
+           `opts` : { enExces, vitesse, limite, compagnon }.
+
+           ⚠ `metres <= 0` REND LA VALEUR BORNÉE, ET NON LA VALEUR TELLE QUELLE : c'est
+           ce qui permet d'appeler la fonction pour assainir une valeur venue du
+           stockage (un `null`, une chaîne, un 300 écrit à la main dans localStorage)
+           sans avoir à écrire un second chemin de code pour ce seul besoin. */
+        function majVie(vie, metres, opts) {
+            const o = opts || {};
+            let v = Number(vie);
+            if (!isFinite(v)) v = VIE_MAX;
+            const m = Number(metres);
+            if (!isFinite(m) || m <= 0) return Math.min(VIE_MAX, Math.max(0, v));
+
+            const r = robustesseCompagnon(o.compagnon);
+            const delta = o.enExces
+                ? -m * VIE_DEGAT_PAR_METRE * severiteExces(o.vitesse, o.limite) / r
+                :  m * VIE_SOIN_PAR_METRE * r;
+            return Math.min(VIE_MAX, Math.max(0, v + delta));
+        }
+
+        /* Le coup encaissé sur un freinage ou une accélération brusque. `facteur` est
+           celui que calcule déjà `_applyEcoPenalty()` (js/13) : magnitude / seuil,
+           plafonné à 2. Un choc est PONCTUEL — il ne dépend d'aucune distance — d'où
+           une fonction séparée plutôt qu'un cas de plus dans `majVie()`. */
+        const VIE_CHOC_ECO = 2.5;
+        function vieApresChoc(vie, facteur, cleCompagnon) {
+            let v = Number(vie);
+            if (!isFinite(v)) v = VIE_MAX;
+            const f = Number(facteur);
+            if (!isFinite(f) || f <= 0) return Math.min(VIE_MAX, Math.max(0, v));
+            return Math.max(0, v - VIE_CHOC_ECO * Math.min(2, f) / robustesseCompagnon(cleCompagnon));
+        }
+
+        /* Les paliers de la barre. Les couleurs reprennent la référence pixel-art :
+           vert plein, vert, orange, orange sombre, rouge sang. Le `niveau` sert de
+           classe CSS (et servira de clé de phrase au compagnon) ; la `couleur`, du
+           remplissage. Liste ORDONNÉE du haut vers le bas : `palierVie()` rend le
+           premier seuil atteint, il ne faut donc jamais la trier autrement. */
+        const VIE_PALIERS = [
+            { seuil: 75, niveau: 'plein',    couleur: '#3fc35b' },
+            { seuil: 50, niveau: 'bon',      couleur: '#5bbf3e' },
+            { seuil: 30, niveau: 'moyen',    couleur: '#ff9f2f' },
+            { seuil: 12, niveau: 'faible',   couleur: '#e8622a' },
+            { seuil: 0,  niveau: 'critique', couleur: '#b0142a' }
+        ];
+        function palierVie(vie) {
+            const v = isFinite(Number(vie)) ? Math.min(VIE_MAX, Math.max(0, Number(vie))) : VIE_MAX;
+            for (let i = 0; i < VIE_PALIERS.length; i++) {
+                if (v >= VIE_PALIERS[i].seuil) return VIE_PALIERS[i];
+            }
+            return VIE_PALIERS[VIE_PALIERS.length - 1];
+        }
+
+        /* Dans quel état la vie restante met le compagnon (25/08/2026). C'est la règle
+           que lit la fenêtre de fin de trajet, qui ne compte plus des points mais dit
+           comment va l'animal au bout de la route.
+
+           ⚠ TROIS ÉTATS, PAS CINQ. `assoupi` et `absent` ne dépendent pas de la vie :
+           le premier dit « application ouverte, moteur coupé », le second est
+           l'absence du bloc pendant la navigation (voir js/22). Les faire sortir d'ici
+           mélangerait deux dimensions et ferait dormir un animal en pleine forme.
+
+           Le point d'équilibre exact rend `repos` : ni bien ni mal, l'animal n'affiche
+           rien de particulier. Sans lui, 50 % basculerait arbitrairement d'un côté et
+           l'un des deux seuils annoncés ne serait pas celui qu'on applique.
+           ⚠ La valeur est bornée d'abord : une vie corrompue en stockage (`null`, une
+           chaîne, un 300 écrit à la main) ne doit pas décider de l'humeur. */
+        const VIE_SEUIL_SANTE = 50;
+        function etatSanteVie(vie) {
+            const v = isFinite(Number(vie)) ? Math.min(VIE_MAX, Math.max(0, Number(vie))) : VIE_MAX;
+            if (v > VIE_SEUIL_SANTE) return 'ravi';
+            if (v < VIE_SEUIL_SANTE) return 'secoue';
+            return 'repos';
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════
+        // === HEURE D'ARRIVÉE ===
+        // ═══════════════════════════════════════════════════════════════════
+
+        /* L'heure à laquelle on sera rendu, « 14:32 ». Affichée dans la barre du bas
+           (`#nav-arrivee`) et dans la ligne façon Google Maps (`updateGoogleEtaBar`,
+           js/14) — deux endroits, un seul calcul, sinon ils divergent au premier
+           changement de format.
+
+           ⚠ L'INSTANT EST INJECTÉ, jamais lu. Même règle que `getTimeUntilEndOfWeek()` :
+           c'est ce qui rend la fonction testable et déterministe. Un `Date.now()` posé
+           ici rendrait la valeur invérifiable.
+
+           ⚠ FORMATAGE À LA MAIN, pas de `toLocaleTimeString()`. La locale dépend de
+           l'environnement : le même appel rend « 14:32 » dans le navigateur et peut
+           rendre « 2:32 PM » sous un Node compilé sans ICU complet. Deux chiffres et
+           deux-points, c'est tout ce qu'on veut, et ça ne dépend de rien. */
+        function heureArrivee(dureeRestanteH, maintenant) {
+            const h = Number(dureeRestanteH);
+            const t = (maintenant instanceof Date) ? maintenant.getTime() : Number(maintenant);
+            if (!isFinite(h) || h < 0 || !isFinite(t)) return null;
+            const d = new Date(t + h * 3600000);
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
         }

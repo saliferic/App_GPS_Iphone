@@ -1249,6 +1249,10 @@
                 _navOverlayRestoreContent();
             }
             const genuinelyArrived = drivers.length > 0 && !!drivers[0].finished; // capturé avant d'être écrasé ci-dessous
+            /* La vie du compagnon est couchée sur le disque ICI, sans attendre le délai
+               d'écriture différée de js/24 : la fin du trajet est le moment où l'état
+               doit être définitivement acquis, quoi qu'il arrive à l'application ensuite. */
+            if (window.VieCompagnon) VieCompagnon.enregistrer();
             isCourseStarted = false; lastKnownBearing = 0; currentVisualBearing = 0;
             // Masquer le toast hors ligne navigation
             const _offlineToast = document.getElementById('offline-nav-toast');
@@ -1395,32 +1399,24 @@
 
             /* Le score du trajet est plafonné à 0 : un trajet raté ne rapporte rien, mais
                n'entame jamais le capital déjà acquis.
-               ⚠ Sorti des deux branches parce que la fenêtre de fin l'affiche dans les DEUX
-               cas. Il n'est CRÉDITÉ que dans la branche non parfaite : sur une conduite
-               parfaite, c'est `onChestClick()` qui crédite, après le multiplicateur de
-               butin — le créditer aussi ici paierait le trajet deux fois. */
-            const earnedBase = clampTripScore(finalScore);
-
-            if (!isPerfectRun) {
-                const earned = earnedBase;
-                addPointsToActiveProfile(earned);
-                const profile = profiles.find(p => p.id === activeProfileId);
-                const statusEl = document.getElementById('status');
-                if (earned > 0) {
-                    statusEl.innerText = profile
-                        ? `Trajet terminé. ${earned.toFixed(2)} pts ajoutés au profil ${profile.name} 🛑`
-                        : "Trajet terminé. Points arrêtés 🛑";
-                    statusEl.style.color = "#ff6b6b";
-                } else {
-                    // Annoncer un « 0 pt » plutôt qu'un score négatif : le capital est intact.
-                    statusEl.innerText = profile
-                        ? `Trajet terminé. 0 pt gagné — ton total de ${profile.totalPoints.toFixed(2)} pts reste intact 🛡️`
-                        : "Trajet terminé. 0 pt gagné sur ce trajet 🛡️";
-                    statusEl.style.color = "#f39c12";
-                }
+               ⚠⚠ UN SEUL CHEMIN DE CRÉDIT DEPUIS LE 25/08/2026, et c'est celui-ci. La
+               conduite parfaite avait le sien — `onChestClick()`, qui créditait après le
+               multiplicateur de butin —, si bien que la branche parfaite ne devait
+               surtout PAS créditer ici sous peine de payer le trajet deux fois. Le coffre
+               supprimé, l'inverse est devenu vrai : ne pas créditer ici, c'est ne rien
+               créditer du tout, et une conduite parfaite serait le seul cas où rouler ne
+               rapporte rien. La branche a donc disparu avec le bonus. */
+            const earned = clampTripScore(finalScore);
+            addPointsToActiveProfile(earned);
+            const statusEl = document.getElementById('status');
+            if (earned > 0) {
+                statusEl.innerText = "Trajet terminé 🛑";
+                statusEl.style.color = "#ff6b6b";
             } else {
-                document.getElementById('status').innerText = "Trajet terminé. Sans faute ! 🏆";
-                document.getElementById('status').style.color = "#28a745";
+                /* Annoncer un « 0 pt » plutôt qu'un score négatif : le capital est
+                   intact, et c'est la seule chose que cette ligne a encore à dire. */
+                statusEl.innerText = "Trajet terminé. Aucun point sur ce trajet 🛡️";
+                statusEl.style.color = "#f39c12";
             }
 
             document.getElementById('btn-start').disabled = false; document.getElementById('mode-switch').disabled = false; document.getElementById('btn-free').disabled = false;
@@ -1442,27 +1438,19 @@
             if (pinStopBtn)   pinStopBtn.style.display    = 'none';
 
             /* ═══ FENÊTRE DE FIN DE TRAJET — UN SEUL ENDROIT QUI DÉCIDE ═══
-               Trois cas, et un seul point de décision pour qu'ils ne puissent pas se
-               chevaucher :
-                 • arrivé → la fenêtre de points s'ouvre TOUJOURS. Si la conduite a été
-                   parfaite, le coffre est passé en `chest` et attend derrière : il ne
-                   s'ouvrira qu'à la fermeture de cette fenêtre (`closeArrivalSummary`).
-                 • abandonné + conduite parfaite → le coffre seul, comme avant. Célébrer
-                   une arrivée à quelqu'un qui vient de renoncer serait à contresens, mais
-                   la conduite, elle, a bien été parfaite.
-                 • abandonné sans conduite parfaite → rien, le retour `#status` suffit.
-
-               ⚠ Le chiffre passé est `earnedBase` dans les deux cas — c'est le score de
-               BASE. Sur une conduite parfaite, les points ne sont pas encore crédités : ils
-               le sont par `onChestClick()`, après le multiplicateur de butin. */
+               DEUX cas depuis le retrait du coffre à butin (25/08/2026), là où il y en
+               avait trois :
+                 • arrivé → la fenêtre d'arrivée, qui dit comment va le compagnon ;
+                 • abandonné → rien, le retour `#status` suffit. Célébrer une arrivée à
+                   quelqu'un qui vient de renoncer serait à contresens, et la conduite
+                   parfaite n'a plus de fenêtre à elle : elle n'ouvre donc plus rien.
+               ⚠ `isPerfectRun` sert encore, mais plus ici : il alimente l'objectif
+               hebdomadaire « km sans excès » (`updateWeeklyGoalsAfterTrip`, deux lignes
+               plus bas) et l'historique des trajets. C'est une MISSION, pas un bonus. */
             if(drivers.length > 0) {
                 drivers[0].finished = true;
                 if (genuinelyArrived) {
-                    tenterSansBruit(() => showArrivalSummary(earnedBase, {
-                        chest: isPerfectRun ? { score: finalScore, arrived: true } : null
-                    }), 'arrivee/summary');
-                } else if (isPerfectRun) {
-                    openLootChestModal(finalScore, genuinelyArrived);
+                    tenterSansBruit(() => showArrivalSummary(), 'arrivee/summary');
                 }
             }
             releaseWakeLock();
@@ -1805,7 +1793,14 @@
                 updateSpeedLimitBadge(limitKmh);
             }
 
-            let currentMultiplier = d.dist <= 15 ? 1.5 : 1.0;
+            /* ⚠ LE MULTIPLICATEUR DES QUINZE PREMIERS KILOMÈTRES A ÉTÉ RETIRÉ
+               (25/08/2026). Il existait pour un jeu où l'on CUMULAIT des points d'une
+               semaine sur l'autre : gonfler les premiers kilomètres récompensait le
+               trajet quotidien contre les longues routes. Le classement compte
+               désormais des animaux sauvés, et la vie du compagnon se gagne au mètre,
+               sans prime de début : un kilomètre bien conduit en vaut un autre, où
+               qu'il tombe dans le trajet. Le compteur « MULTIPLICATEUR » de
+               #nav-bottom-bar est parti avec, il n'avait plus rien à afficher. */
 
             // === SYSTÈME MARGE + GRÂCE ===
             // 1. Détecter un changement de limite (baisse) et lancer la grâce si besoin
@@ -1825,6 +1820,12 @@
                 d.hasSpeeded = true;
                 d.score -= (distanceMovedMeters * PENALTY_PER_METER);
                 triggerPenaltyAnimation(d.id);
+                /* La vie du compagnon suit le score au mètre près : mêmes conditions,
+                   même distance. Réservée au conducteur réel (drivers[0]) — les autres
+                   sont des adversaires simulés, ils n'ont pas d'animal à user. */
+                if (d.id === drivers[0].id && window.VieCompagnon) {
+                    VieCompagnon.avancer(distanceMovedMeters, { enExces: true, vitesse: d.actualSpeed, limite: limitKmh });
+                }
             } else {
                 d.isSpeeding = false;
                 /* ⚠ AUCUN BONUS SUR UNE COUPURE GPS RECONSTITUÉE — faille corrigée le 18/08/2026.
@@ -1839,7 +1840,14 @@
                    sans un mètre de conduite. La distance parcourue reste comptabilisée (d.dist, stats,
                    ETA) : c'est le POINT gratuit qu'on retire, pas le trajet lui-même. */
                 if (!isGpsGapRecovery) {
-                    d.score += (distanceMovedMeters * POINTS_PER_METER * currentMultiplier);
+                    d.score += (distanceMovedMeters * POINTS_PER_METER);
+                    /* Même garde que pour les points, et pour la même raison : une
+                       coupure GPS reconstituée soignerait gratuitement le compagnon
+                       sur toute la distance sautée. Le bénéfice du doute ne pénalise
+                       pas — il ne doit pas récompenser non plus. */
+                    if (d.id === drivers[0].id && window.VieCompagnon) {
+                        VieCompagnon.avancer(distanceMovedMeters, { enExces: false });
+                    }
                 }
                 document.getElementById(`driver-card-${d.id}`).classList.remove('speeding');
             }
@@ -1940,11 +1948,13 @@
 
             if (d.id === drivers[0].id) {
                 const displayPoints = Math.max(0, d.score).toFixed(0);
-                const navPtsEl = document.getElementById('nav-points');
-                navPtsEl.innerText = "+" + displayPoints + " pts";
-                navPtsEl.style.color = d.score < 0 ? '#ff6b6b' : '#28a745';
+                /* `remainingTimeHours` vaut 0 en trajet libre (aucune destination d'où
+                   tirer une arrivée) : `heureArrivee()` rend alors l'heure courante, ce
+                   qui serait faux. On n'affiche donc que s'il reste vraiment du chemin. */
+                setText('nav-arrivee', remainingTimeHours > 0
+                    ? (heureArrivee(remainingTimeHours, Date.now()) || '--')
+                    : '--');
 
-                document.getElementById('nav-multiplier').innerText = "x" + currentMultiplier;
                 if (DOM.navSpeedValue)   DOM.navSpeedValue.innerText = Math.round(d.actualSpeed);
                 if (DOM.navSpeedDisplay) DOM.navSpeedDisplay.classList.toggle('over-limit', !!d.isSpeeding);
                 updateSpeedometer(d.actualSpeed, limitKmh, !!d.isSpeeding);
@@ -2013,12 +2023,14 @@
             if (ecoCounterEnabled) { const c = document.getElementById('nav-eco-counter'); if(c) c.style.display='flex'; }
             statusBox.innerText = "Trajet libre en cours ! Roulez pour marquer des points 🧭"; statusBox.style.color = "#20c997";
 
-            document.getElementById('nav-points').innerText = "+0 pts";
-            document.getElementById('nav-points').style.color = "#28a745";
-            document.getElementById('nav-multiplier').innerText = "x1.5";
+            document.getElementById('nav-arrivee').innerText = "--";
             document.getElementById('nav-bottom-bar').classList.add('visible');
+            /* ⚠ ON NE REMET PAS LA VIE À 100 %. `monter()` affiche la valeur COURANTE du
+               compagnon, celle où le trajet précédent l'a laissé — c'est la décision du
+               24/08/2026 (js/22, A_VENIR). Un simple rendu, jamais une réinitialisation. */
+            if (window.VieCompagnon) VieCompagnon.monter();
             document.getElementById('nav-speed-display').classList.add('visible');
-            
+
             document.getElementById('nav-side-controls').classList.add('visible');
             document.getElementById('nav-btn-pin-stop').style.display = 'none'; // Masqué en trajet libre : l'ajout d'arrêt n'est possible qu'en trajet avec destination
             /* Partage de position live (📡) masqué en trajet libre, en attendant que la
@@ -2143,12 +2155,12 @@
                 }
                 drivers.forEach(d => { d.marker.setLngLat(startCoords).addTo(map); });
 
-                document.getElementById('nav-points').innerText = "+0 pts";
-                document.getElementById('nav-points').style.color = "#28a745";
-                document.getElementById('nav-multiplier').innerText = "x1.5";
+                document.getElementById('nav-arrivee').innerText = "--";
                 document.getElementById('nav-bottom-bar').classList.add('visible');
+                // Voir startFreeCourse() : on affiche la vie en cours, on ne la refait pas.
+                if (window.VieCompagnon) VieCompagnon.monter();
                 document.getElementById('nav-speed-display').classList.add('visible');
-                
+
                 document.getElementById('nav-side-controls').classList.add('visible');
                 document.getElementById('nav-btn-pin-stop').style.display = 'flex'; // Visible en trajet avec destination
                 // Contrepartie du masquage fait dans startFreeCourse : sans ce rétablissement,
@@ -2316,10 +2328,16 @@
                         }
                         if (d.id === drivers[0].id && !d.finished) checkZFEApproach(d.dist, d.actualSpeed);
 
-                        let currentMultiplier = d.dist <= 15 ? 1.5 : 1.0;
+                        // Plus de multiplicateur de début de trajet : voir handleRealMovement().
                         const deltaDistMeters = (d.dist - prevDist) * 1000;
-                        if (d.isSpeeding) d.score -= (deltaDistMeters * PENALTY_PER_METER); 
-                        else d.score += (deltaDistMeters * POINTS_PER_METER * currentMultiplier); 
+                        if (d.isSpeeding) d.score -= (deltaDistMeters * PENALTY_PER_METER);
+                        else d.score += (deltaDistMeters * POINTS_PER_METER);
+                        /* La simulation doit user le compagnon comme le ferait la route,
+                           sans quoi elle cesserait de valider ce que fait l'appareil —
+                           c'est la même règle que pour la détection d'arrivée. */
+                        if (d.id === drivers[0].id && window.VieCompagnon) {
+                            VieCompagnon.avancer(deltaDistMeters, { enExces: !!d.isSpeeding, vitesse: d.actualSpeed, limite: limitKmh });
+                        }
 
                         if (d.id === drivers[0].id) updateScreenGlow(d.isSpeeding, true, d.actualSpeed, false); // simulation : pas de grâce
 
@@ -2389,10 +2407,10 @@
 
                         if (d.id === drivers[0].id) {
                             const displayPoints = Math.max(0, d.score).toFixed(0);
-                            setText('nav-points', "+" + displayPoints + " pts");
-                            setStyleProp('nav-points', 'color', d.score < 0 ? '#ff6b6b' : '#28a745');
+                            setText('nav-arrivee', remainingTimeHours > 0
+                                ? (heureArrivee(remainingTimeHours, Date.now()) || '--')
+                                : '--');
 
-                            setText('nav-multiplier', "x" + currentMultiplier);
                             setText('nav-speed-value', Math.round(d.actualSpeed));
                             setClass('nav-speed-display', 'over-limit', !!d.isSpeeding);
                             updateSpeedometer(d.actualSpeed, limitKmh, !!d.isSpeeding);

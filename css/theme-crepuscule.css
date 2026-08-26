@@ -1,0 +1,887 @@
+/* ============================================================================
+   THÈME CRÉPUSCULE — surcouche de refonte UI (direction C)
+   ----------------------------------------------------------------------------
+   Chaque règle est préfixée `body.theme-crepuscule`. Sans cette classe sur
+   <body>, ce fichier est totalement inerte et l'app retrouve son apparence
+   d'origine. `styles.css` n'est PAS modifié — c'est le même patron que les
+   thèmes archivés dans experiments/ (voir theme-neo/README.md).
+
+   Ce fichier se charge APRÈS styles.css dans <head> : il gagne par la cascade,
+   à spécificité égale ou supérieure. Ne pas inverser l'ordre des <link>.
+
+   ⚠ CE QUI N'EST VOLONTAIREMENT PAS REPRIS : le HUD de navigation — bandeau de
+   virage, pastille de limitation, compteur de vitesse (#nav-speed-*,
+   #speed-limit-*, #next-turn-panel). Ces trois-là copient des conventions
+   routières ; les repeindre coûterait en lisibilité au volant plus que ça ne
+   rapporterait en cohérence. Ils restent identiques. Ce n'est pas un oubli.
+   ============================================================================ */
+
+
+/* === 0. POLICES EMBARQUÉES =================================================
+   Chargées depuis le disque, PAS depuis Google Fonts : l'app tourne en
+   `file://` et depuis `android_asset`, où aucune police externe ne se charge.
+   Un <link> vers fonts.googleapis.com marcherait au navigateur de bureau et
+   retomberait silencieusement sur Roboto sur l'appareil — c'est le piège noté
+   dans theme-neo/README.md, point 1.
+   Fichiers variables (un seul par famille couvre tous les graisses). */
+
+@font-face {
+    font-family: 'Baloo 2';
+    font-style: normal;
+    font-weight: 600 800;
+    font-display: swap;
+    src: url('fonts/baloo2-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'Baloo 2';
+    font-style: normal;
+    font-weight: 600 800;
+    font-display: swap;
+    src: url('fonts/baloo2-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'Nunito';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('fonts/nunito-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'Nunito';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('fonts/nunito-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+
+/* === 1. JETONS =============================================================
+   Un seul endroit à toucher pour retendre tout le thème. Les couleurs ne
+   décorent pas : chacune dit quelque chose (action / compagnon / temps / éco). */
+
+body.theme-crepuscule {
+    /* Ciel — du plus sombre (fond d'app) au plus clair (haut de feuille) */
+    --cr-sky-0: #1B1633;
+    --cr-sky-1: #241C42;
+    --cr-sky-2: #2B2048;
+
+    /* Surfaces posées sur le ciel */
+    --cr-surface:   rgba(255,255,255,0.055);
+    --cr-surface-2: rgba(255,255,255,0.09);
+    --cr-sunken:    rgba(0,0,0,0.28);
+    --cr-line:      rgba(255,255,255,0.10);
+    --cr-line-2:    rgba(255,255,255,0.17);
+
+    /* Encre */
+    --cr-ink:   #F4EFFF;
+    --cr-ink-2: #B9A9D8;
+    --cr-ink-3: #8B7BAE;
+    --cr-ink-4: #6E5F91;
+
+    /* Lumière — sémantique, jamais décorative */
+    --cr-amber:   #FFB35C;   /* action principale */
+    --cr-amber-2: #FFD9A8;
+    --cr-violet:  #A88BFF;   /* Babi, le compagnon */
+    --cr-turq:    #7FD8E8;   /* le temps, les délais */
+    --cr-mint:    #6FE3A0;   /* éco, réussite */
+    --cr-rose:    #FF8FA3;   /* chaleur, accent doux */
+    --cr-danger:  #FF6B6B;   /* danger UNIQUEMENT */
+
+    /* Géométrie */
+    --cr-r-sheet: 32px;
+    --cr-r-card:  20px;
+    --cr-r-row:   16px;
+
+    /* Flou. Un seul endroit à passer à 0px si le GPU souffre en navigation
+       continue sur mobile bas de gamme — c'est le premier réglage à sacrifier. */
+    --cr-blur: 18px;
+}
+
+
+/* === 2. BASE ET TYPOGRAPHIE ================================================ */
+
+body.theme-crepuscule,
+body.theme-crepuscule html {
+    background: var(--cr-sky-0);
+    font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--cr-ink);
+}
+
+/* Les contrôles n'héritent pas de la police du document : sans cette règle,
+   tous les champs et boutons resteraient en police système. */
+body.theme-crepuscule input,
+body.theme-crepuscule select,
+body.theme-crepuscule button,
+body.theme-crepuscule textarea { font-family: inherit; }
+
+/* Chiffres à chasse fixe : sans ça, un compteur qui passe de 1 à 8 fait
+   sauter toute la ligne à chaque rafraîchissement. */
+body.theme-crepuscule #ui-panel,
+body.theme-crepuscule #main-bottom-nav { font-variant-numeric: tabular-nums; }
+
+/* ⚠ LA RÈGLE LA PLUS STRUCTURANTE DU THÈME.
+   47 déclarations `text-transform: uppercase` + letter-spacing dans styles.css
+   mettaient chaque libellé au même niveau de présence : un titre de section et
+   une note secondaire se lisaient pareil, donc plus aucune hiérarchie. On les
+   neutralise en bloc à l'intérieur du panneau et de la barre d'onglets, et la
+   hiérarchie repasse par le POIDS et la TAILLE (voir sections 3 à 8).
+
+   Portée volontairement limitée à ces deux conteneurs : le HUD de navigation
+   est ailleurs dans le DOM et garde ses capitales. */
+body.theme-crepuscule #ui-panel,
+body.theme-crepuscule #ui-panel *,
+body.theme-crepuscule #main-bottom-nav,
+body.theme-crepuscule #main-bottom-nav * {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+
+/* === 3. LE PANNEAU (la feuille) ============================================ */
+
+body.theme-crepuscule #ui-panel {
+    background: linear-gradient(180deg, rgba(43,32,72,0.94), rgba(27,22,51,0.98));
+    -webkit-backdrop-filter: blur(var(--cr-blur));
+    backdrop-filter: blur(var(--cr-blur));
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-sheet);
+    box-shadow: 0 -24px 60px rgba(10,6,24,0.6);
+    color: var(--cr-ink-2);
+}
+
+/* En bas d'écran (mobile), la feuille est ancrée : seuls les coins hauts
+   s'arrondissent. Media query alignée sur celle de styles.css (~ligne 1901). */
+@media (max-width: 768px) {
+    body.theme-crepuscule #ui-panel {
+        border-radius: var(--cr-r-sheet) var(--cr-r-sheet) 0 0;
+        border-bottom: none;
+    }
+}
+
+body.theme-crepuscule .itin-panel { border-radius: var(--cr-r-sheet); }
+
+/* Le titre : c'était 15px en capitales espacées de 3px, il devient une vraie
+   accroche. C'est le seul endroit du panneau où Baloo 2 apparaît en grand. */
+body.theme-crepuscule .itin-title,
+body.theme-crepuscule #ui-panel-title,
+body.theme-crepuscule #profil-sheet-title {
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: clamp(24px, 7vw, 28px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--cr-ink);
+    margin: 2px 0 14px;
+}
+
+/* Libellés de section : petits, discrets, en casse normale. Ils ne cherchent
+   plus à rivaliser avec le titre. */
+body.theme-crepuscule .itin-section label,
+body.theme-crepuscule .form-group label,
+body.theme-crepuscule .gas-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cr-ink-4);
+}
+
+body.theme-crepuscule .itin-hamburger,
+body.theme-crepuscule .toggle-panel-btn { color: var(--cr-ink-3); }
+body.theme-crepuscule .itin-hamburger:hover,
+body.theme-crepuscule .toggle-panel-btn:hover { color: var(--cr-ink); }
+
+
+/* === 4. CHAMPS ET LIGNES =================================================== */
+
+body.theme-crepuscule .itin-input-row,
+body.theme-crepuscule .itin-select-row,
+body.theme-crepuscule #trip-modal .input-with-btn {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-row);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+    padding: clamp(11px, 2.6vw, 13px) clamp(13px, 3vw, 15px);
+}
+
+/* Le focus se signale par l'ambre — la couleur de l'action — et non plus par
+   un halo bleu. Pas de box-shadow diffuse : elle coûtait un repaint à chaque
+   frappe dans le champ d'adresse. */
+body.theme-crepuscule .itin-input-row:focus-within,
+body.theme-crepuscule #trip-modal .input-with-btn:focus-within {
+    border-color: rgba(255,179,92,0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+body.theme-crepuscule .itin-input-row input,
+body.theme-crepuscule .itin-select-row select {
+    color: var(--cr-ink);
+    font-size: 15px;
+    font-weight: 600;
+}
+body.theme-crepuscule .itin-input-row input::placeholder { color: var(--cr-ink-4); font-weight: 500; }
+
+body.theme-crepuscule .itin-icon-leading { color: var(--cr-amber); }
+body.theme-crepuscule .itin-icon-btn,
+body.theme-crepuscule .itin-select-chevron { color: var(--cr-ink-3); }
+body.theme-crepuscule .itin-icon-btn:hover { color: var(--cr-ink); }
+
+/* Suggestions d'adresse */
+body.theme-crepuscule .addr-suggestions {
+    background: var(--cr-sky-2);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-card);
+    box-shadow: 0 16px 40px rgba(10,6,24,0.6);
+}
+body.theme-crepuscule .addr-suggestion {
+    color: var(--cr-ink-2);
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom-color: var(--cr-line);
+}
+body.theme-crepuscule .addr-suggestion:hover { background: var(--cr-surface-2); color: var(--cr-ink); }
+
+
+/* === 5. BOUTONS ============================================================
+   Un seul bouton plein dans tout l'écran : « En route ». Tout le reste est en
+   contour ou en surface. C'est ce qui fait qu'on sait où appuyer sans lire. */
+
+body.theme-crepuscule .itin-start-btn {
+    background: linear-gradient(135deg, #FFC578, #FF8F5C);
+    border: none;
+    border-radius: 22px;
+    color: #2A1226;
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: 19px;
+    font-weight: 800;
+    padding: clamp(14px, 3.4vw, 17px);
+    box-shadow: 0 10px 30px rgba(255,140,60,0.26);
+}
+body.theme-crepuscule .itin-start-btn:hover,
+body.theme-crepuscule .itin-start-btn:active {
+    color: #2A1226;
+    transform: none;
+    box-shadow: 0 6px 20px rgba(255,140,60,0.34);
+}
+body.theme-crepuscule .itin-start-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+/* Actions secondaires : contour seul */
+body.theme-crepuscule .itin-place-btn,
+body.theme-crepuscule .nav-search-modes button {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-card);
+    color: var(--cr-ink-2);
+    font-weight: 700;
+}
+body.theme-crepuscule .itin-place-btn.has-place { border-color: rgba(168,139,255,0.32); }
+body.theme-crepuscule .itin-free-title { font-size: 14px; font-weight: 800; color: var(--cr-ink); }
+body.theme-crepuscule .itin-free-sub   { font-size: 11px; font-weight: 600; color: var(--cr-ink-3); }
+
+body.theme-crepuscule .itin-footer,
+body.theme-crepuscule #status {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--cr-ink-4);
+}
+
+/* Bascule Réel / Simu */
+body.theme-crepuscule .itin-slider { background: var(--cr-sunken); border: 1px solid var(--cr-line); }
+body.theme-crepuscule .itin-slider::before { background: var(--cr-ink-3); }
+body.theme-crepuscule .itin-switch input:checked + .itin-slider { background: rgba(255,179,92,0.22); border-color: rgba(255,179,92,0.4); }
+body.theme-crepuscule .itin-switch input:checked + .itin-slider::before { background: var(--cr-amber); }
+body.theme-crepuscule .itin-mode-label { font-size: 13px; font-weight: 700; color: var(--cr-ink-4); }
+body.theme-crepuscule .itin-mode-label.active { color: var(--cr-ink); }
+
+
+/* === 6. BARRE D'ONGLETS ==================================================== */
+
+body.theme-crepuscule #main-bottom-nav {
+    background: rgba(30,23,58,0.92);
+    -webkit-backdrop-filter: blur(var(--cr-blur));
+    backdrop-filter: blur(var(--cr-blur));
+    border-top: 1px solid var(--cr-line);
+    box-shadow: 0 -8px 28px rgba(10,6,24,0.5);
+}
+body.theme-crepuscule .main-nav-tab { color: var(--cr-ink-4); }
+body.theme-crepuscule .main-nav-tab span { font-size: 10.5px; font-weight: 700; }
+body.theme-crepuscule .main-nav-tab.active { color: var(--cr-amber); }
+body.theme-crepuscule .main-nav-tab.active::before {
+    background: var(--cr-amber);
+    box-shadow: none;   /* le halo bleu d'origine coûtait un repaint permanent */
+}
+/* Pendant la navigation, l'onglet Trajet reste marqué — même couleur que l'actif */
+body.theme-crepuscule.nav-active #nav-tab-trajet { color: var(--cr-amber); }
+body.theme-crepuscule.nav-active #nav-tab-trajet::before { background: var(--cr-amber); box-shadow: none; }
+
+
+/* === 7. OBJECTIFS DE LA SEMAINE ============================================ */
+
+/* --- L'en-tête. Même principe que le hero de l'onglet Itinéraire (§ 12) : le
+   titre est enveloppé, il échappe donc au bandeau collant noir de styles.css, et
+   le compte à rebours vient se poser à sa droite. --- */
+body.theme-crepuscule .carnet-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    /* ⚠ CETTE MARGE HAUTE N'EST PAS DE L'ESPACEMENT, C'EST UN DÉGAGEMENT.
+       Le chevron d'escamotage (.toggle-panel-btn) est posé en absolu à 10 px du
+       haut du panneau, sur ~22 px de haut. Tant que l'en-tête démarrait à 2 px, la
+       pastille du compte à rebours arrivait à sa hauteur : il fallait lui réserver
+       une gouttière de 26 px à droite (`padding-right`) pour qu'elle ne passe pas
+       dessous et que le geste de fermeture ne tombe pas sur elle.
+
+       En descendant l'en-tête sous la ligne du chevron, les deux ne se croisent
+       plus — la réserve latérale a donc SAUTÉ, et c'est ce qui permet à la pastille
+       de tomber pile sur le bord droit des cartes du dessous (même boîte de padding
+       que .panel-tab-content). Réduire cette marge sans remettre le padding-right
+       ramènerait la collision. */
+    margin: clamp(14px, 4vw, 22px) 0 14px;
+}
+/* Reliquat de l'époque où le compte à rebours était un bloc centré à lui seul,
+   au-dessus de la liste (styles.css le pose encore). Dans l'en-tête c'est un item
+   de flex : cette marge basse ne le déplace pas, mais elle gonfle la hauteur de la
+   ligne pour rien. */
+body.theme-crepuscule .carnet-hero #weekly-goals-timer-panel { margin-bottom: 0; }
+body.theme-crepuscule .carnet-hero-text { min-width: 0; }
+body.theme-crepuscule .carnet-kicker {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--cr-ink-2);
+    margin-bottom: 1px;
+}
+body.theme-crepuscule .carnet-hero .itin-title { margin: 0; }
+
+/* --- Le mot du compagnon : la même carte teintée que celle qu'il avait sur
+   l'écran d'accueil avant le hero, ici à sa vraie place — c'est SON carnet. --- */
+body.theme-crepuscule #carnet-mot {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    background: rgba(255,240,220,0.07);
+    border-radius: 18px;
+    padding: 10px 13px;
+    margin-bottom: 12px;
+}
+body.theme-crepuscule .carnet-mot-dessin { flex-shrink: 0; width: 38px; height: 42px; }
+body.theme-crepuscule .carnet-mot-texte {
+    font-size: 13px; font-weight: 600; line-height: 1.45;
+    color: var(--cr-ink-2); min-width: 0;
+}
+
+
+body.theme-crepuscule .wg-timer-pill {
+    background: rgba(127,216,232,0.12);
+    border: 1px solid rgba(127,216,232,0.3);
+    border-radius: 14px;
+    color: var(--cr-turq);
+    font-size: 15px;
+    font-weight: 800;
+}
+body.theme-crepuscule .wg-timer-pill { display: flex; align-items: center; gap: 7px; }
+body.theme-crepuscule .wg-timer-ico { width: 15px; height: 15px; flex-shrink: 0; }
+/* .wg-timer-cap n'est plus émis par le rendu (la légende a sauté avec le passage
+   dans l'en-tête) ; la règle reste inoffensive dans styles.css. */
+
+body.theme-crepuscule .wg-note {
+    background: rgba(255,240,220,0.06);
+    border: none;
+    border-radius: 18px;
+    color: var(--cr-ink-2);
+    font-size: 12.5px;
+}
+body.theme-crepuscule .wg-note-strong { color: var(--cr-ink); font-weight: 800; }
+
+body.theme-crepuscule .wg-item {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+body.theme-crepuscule .wg-item.completed {
+    background: rgba(111,227,160,0.08);
+    border-color: rgba(111,227,160,0.32);
+}
+body.theme-crepuscule .wg-emblem {
+    background: rgba(168,139,255,0.14);
+    border: none;
+    border-radius: 15px;
+}
+/* Une teinte par famille d'objectif — l'icône et la barre de progression de la
+   carte tirent la même. La coche verte l'emporte dès que c'est bouclé. */
+body.theme-crepuscule .wg-emblem svg { width: 21px; height: 21px; display: block; }
+body.theme-crepuscule .wg-emblem { color: var(--cr-violet); }
+body.theme-crepuscule .wg-emblem-km_total    { background: rgba(255,179,92,0.14); color: var(--cr-amber); }
+body.theme-crepuscule .wg-emblem-km_no_speed { background: rgba(111,227,160,0.14); color: var(--cr-mint); }
+body.theme-crepuscule .wg-emblem-score_total { background: rgba(168,139,255,0.16); color: var(--cr-violet); }
+body.theme-crepuscule .wg-item.completed .wg-emblem {
+    background: rgba(111,227,160,0.18);
+    color: var(--cr-mint);
+}
+/* La coche du balisage d'origine (`<span class="wg-emblem-check">✓</span>`) n'est
+   plus émise ; sa règle de couleur est conservée au cas où un autre écran s'en
+   servirait encore. */
+body.theme-crepuscule .wg-emblem-check { color: var(--cr-ink-4); }
+body.theme-crepuscule .wg-item.completed .wg-emblem-check { color: var(--cr-mint); }
+
+body.theme-crepuscule .wg-item-title { font-size: 14px; font-weight: 800; color: var(--cr-ink); }
+body.theme-crepuscule .wg-tag {
+    background: rgba(255,255,255,0.09);
+    color: var(--cr-ink-2);
+    border-radius: 6px;
+    font-size: 9.5px;
+    font-weight: 800;
+}
+body.theme-crepuscule .wg-val { font-size: 15px; font-weight: 800; color: var(--cr-ink); }
+body.theme-crepuscule .wg-tot { font-size: 11px; color: var(--cr-ink-3); }
+
+body.theme-crepuscule .wg-item-bar { background: var(--cr-sunken); border-radius: 7px; }
+body.theme-crepuscule .wg-item-fill { background: linear-gradient(90deg, var(--cr-violet), var(--cr-turq)); border-radius: 7px; }
+body.theme-crepuscule .wg-km_total .wg-item-fill    { background: linear-gradient(90deg, var(--cr-amber), var(--cr-rose)); }
+body.theme-crepuscule .wg-km_no_speed .wg-item-fill { background: linear-gradient(90deg, var(--cr-mint), var(--cr-turq)); }
+body.theme-crepuscule .wg-score_total .wg-item-fill { background: linear-gradient(90deg, var(--cr-violet), var(--cr-turq)); }
+body.theme-crepuscule .wg-item-fill.done { background: linear-gradient(90deg, var(--cr-mint), var(--cr-turq)); }
+
+body.theme-crepuscule .wg-claim-btn {
+    background: linear-gradient(135deg, #FFC578, #FF8F5C);
+    border: none; border-radius: 20px; color: #2A1226;
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: 17px; font-weight: 800;
+}
+body.theme-crepuscule .wg-remaining {
+    background: rgba(255,179,92,0.09);
+    border: 1px solid rgba(255,179,92,0.26);
+    border-radius: 18px;
+    color: var(--cr-ink-2);
+    font-size: 12.5px; font-weight: 600;
+}
+
+
+/* === 8. PROFIL ============================================================= */
+
+/* --- L'en-tête « Moi ». Comme sur les deux autres onglets, le titre enveloppé
+   échappe au bandeau collant noir de styles.css. Le « + » de création de profil
+   vient s'y poser, à la place du coin haut droit de la maquette. --- */
+body.theme-crepuscule .profil-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 2px 0 14px;
+    /* Réserve pour le chevron d'escamotage du panneau — même raison que .carnet-hero. */
+    padding-right: 26px;
+}
+body.theme-crepuscule .profil-hero .itin-title { margin: 0; }
+body.theme-crepuscule .profil-hero-add {
+    flex-shrink: 0;
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: 14px;
+    color: var(--cr-amber-2);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+body.theme-crepuscule .profil-hero-add:active { background: var(--cr-surface-2); }
+body.theme-crepuscule .profil-hero-add svg { width: 18px; height: 18px; }
+
+/* Le titre de section « Ma catégorie » ne sert plus : la carte se présente toute
+   seule, avec le rang écrit en grand dedans. L'élément RESTE dans le DOM — il est
+   cité par _PROFIL_MASK_IDS (js/13), qui pose et retire son display. */
+body.theme-crepuscule #profil-section-title-monprofil { display: none; }
+
+/* --- La carte de rang. Son fond et sa bordure sont posés en inline par
+   renderBadgeCategoryCard() à partir de la couleur de la catégorie : ici on ne
+   décrit que la forme. --- */
+body.theme-crepuscule #badge-category-card {
+    border-radius: 26px;
+    padding: 14px 16px 15px;
+    margin-bottom: 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+body.theme-crepuscule #badge-category-main {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 13px;
+}
+body.theme-crepuscule #badge-category-portrait {
+    flex-shrink: 0;
+    width: clamp(88px, 27vw, 108px);
+    height: clamp(94px, 29vw, 116px);
+}
+body.theme-crepuscule #badge-category-info { flex: 1; min-width: 0; }
+body.theme-crepuscule #badge-category-kicker {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; color: var(--cr-ink-2);
+}
+body.theme-crepuscule #badge-category-icon svg { width: 15px; height: 15px; display: block; }
+body.theme-crepuscule #badge-category-name {
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: clamp(26px, 8vw, 32px);
+    font-weight: 800; letter-spacing: -0.015em; line-height: 1.05;
+    margin: 2px 0 3px;
+}
+body.theme-crepuscule #badge-category-sub {
+    font-size: 12px; font-weight: 600; color: var(--cr-ink-2); line-height: 1.4;
+}
+/* Le prénom du profil actif : il vivait en 30 px à droite de la médaille, où il
+   écrasait le nom du rang. Il redevient une étiquette discrète en haut de carte. */
+body.theme-crepuscule #badge-category-profile {
+    margin-left: auto; margin-right: 0; align-self: flex-start;
+    font-size: 12px; font-weight: 800; color: var(--cr-ink-2);
+    background: rgba(0,0,0,0.28); border-radius: 10px; padding: 4px 9px;
+    max-width: 40%;
+}
+body.theme-crepuscule #badge-progress-bar-wrap {
+    background: var(--cr-sunken); border-radius: 8px; height: 8px; margin-top: 0;
+}
+body.theme-crepuscule #badge-count-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px;
+}
+body.theme-crepuscule .badge-pip { width: 9px; height: 9px; border-width: 1.8px; }
+body.theme-crepuscule #badge-progress-label {
+    margin-top: 0; font-size: 11.5px; font-weight: 800; color: var(--cr-ink-2);
+}
+
+/* --- Les deux chiffres du profil. --- */
+body.theme-crepuscule .profil-stats {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px;
+    margin-bottom: 12px;
+}
+body.theme-crepuscule .profil-stat {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-card);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.11);
+    padding: 11px 14px;
+}
+body.theme-crepuscule .profil-stat.eco { border-color: rgba(111,227,160,0.25); }
+body.theme-crepuscule .profil-stat-val {
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: 24px; font-weight: 700; line-height: 1.15;
+    letter-spacing: -0.01em; color: var(--cr-ink);
+    font-variant-numeric: tabular-nums;
+}
+body.theme-crepuscule .profil-stat.eco .profil-stat-val { color: var(--cr-mint); }
+body.theme-crepuscule .profil-stat-lab { font-size: 11px; font-weight: 700; color: var(--cr-ink-3); }
+
+/* --- Le style de conduite (Simu). Même ligne que les rubriques au-dessus, avec
+   sa pastille verte à droite — le « Comment je conduis » de la maquette. Le
+   balisage vient de renderDriversUI() (js/14) : on ne l'habille qu'en CSS, pour
+   ne pas toucher au code qui pilote les conducteurs simulés. --- */
+body.theme-crepuscule .drivers-section { border-top: none; padding-top: 0; }
+body.theme-crepuscule .driver-card {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-row);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+    padding: 0 14px;
+    margin: 5px 0;
+}
+body.theme-crepuscule .driver-header {
+    /* nowrap : avec wrap, la pastille passait sous le libellé dès que son texte
+       s'allongeait (« Bon conducteur »), ce qui cassait la ligne unique. */
+    display: flex; align-items: center; gap: 12px;
+    min-height: 56px; flex-wrap: nowrap;
+}
+body.theme-crepuscule .driver-header > div:first-child {
+    margin-top: 0 !important;   /* posé en inline par renderDriversUI */
+    flex-grow: 1; min-width: 0;
+    font-size: 14.5px; font-weight: 700; color: var(--cr-ink);
+    white-space: nowrap;
+}
+body.theme-crepuscule .driver-color-dot { background-color: var(--cr-mint) !important; }
+body.theme-crepuscule .driver-controls {
+    /* Colonne conservée : en « mauvais conducteur », un second select (part du temps
+       en excès) vient dessous — deux pastilles côte à côte ne tiendraient pas. */
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    padding: 8px 0; flex-shrink: 0; min-width: 0;
+}
+body.theme-crepuscule .driver-controls select {
+    /* styles.css impose width:140px : trop étroit une fois la pastille en place,
+       le libellé y était tronqué (« Bon conduct… »). */
+    width: auto;
+    background: rgba(111,227,160,0.14);
+    border: 1px solid rgba(111,227,160,0.30);
+    border-radius: 12px;
+    color: var(--cr-mint);
+    font-size: 12px; font-weight: 800;
+    padding: 6px 9px;
+}
+
+/* --- Les lignes : picto à gauche, libellé, puis chevron. --- */
+body.theme-crepuscule .profil-row-ico { flex-shrink: 0; display: flex; }
+body.theme-crepuscule .profil-row-ico svg { width: 19px; height: 19px; display: block; }
+body.theme-crepuscule .tg-count {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 800; color: var(--cr-amber-2);
+    background: rgba(255,179,92,0.16); border-radius: 8px; padding: 3px 8px;
+    font-variant-numeric: tabular-nums;
+}
+/* Le libellé ne s'étire plus par space-between (le picto en tête l'aurait poussé
+   au milieu de la ligne) : c'est le premier élément de droite qui absorbe la place
+   restante — le compteur s'il existe, sinon le chevron. */
+body.theme-crepuscule .profil-row-btn { justify-content: flex-start; gap: 12px; }
+body.theme-crepuscule .profil-row-btn .profil-row-arrow,
+body.theme-crepuscule #trophy-gallery-toggle .tg-arrow,
+body.theme-crepuscule #trophy-gallery-toggle .tg-count,
+body.theme-crepuscule #aide-conduite-toggle .ac-arrow,
+body.theme-crepuscule #backup-section .profil-row-arrow { margin-left: auto; }
+body.theme-crepuscule #trophy-gallery-toggle .tg-count ~ .tg-arrow { margin-left: 0; }
+
+body.theme-crepuscule .profil-row {
+    border: none;
+    border-radius: var(--cr-r-row);
+    margin-top: 5px; margin-bottom: 5px;
+}
+body.theme-crepuscule .profil-row-btn {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-row);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+    color: var(--cr-ink);
+    font-size: 14.5px;
+    font-weight: 700;
+    padding: clamp(13px, 3.4vw, 16px) clamp(13px, 3.5vw, 16px);
+}
+body.theme-crepuscule .profil-row-btn:hover,
+body.theme-crepuscule .profil-row-btn:active { background: var(--cr-surface-2); }
+
+body.theme-crepuscule #badge-category-card {
+    background: linear-gradient(150deg, rgba(168,139,255,0.16), rgba(255,255,255,0.03));
+    border: 1px solid rgba(168,139,255,0.28);
+    border-radius: 26px;
+}
+body.theme-crepuscule #badge-category-title { font-size: 12px; font-weight: 700; color: var(--cr-ink-3); }
+
+
+/* === 9. WIDGETS POSÉS SUR LA CARTE ========================================= */
+
+body.theme-crepuscule #info-widget-panel,
+body.theme-crepuscule #recenter-btn {
+    background: rgba(36,28,66,0.82);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--cr-line);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(10,6,24,0.45);
+}
+body.theme-crepuscule #recenter-btn { color: var(--cr-amber); }
+body.theme-crepuscule #weather-temp { font-size: 16px; font-weight: 800; color: var(--cr-ink); }
+body.theme-crepuscule #weather-desc { font-size: 10px; font-weight: 600; color: var(--cr-ink-3); }
+
+
+/* === 10. MODALES ET CONFIRMATIONS ========================================== */
+
+body.theme-crepuscule #exit-confirm-box,
+body.theme-crepuscule #trip-modal,
+body.theme-crepuscule #stats-modal,
+body.theme-crepuscule #export-json-box,
+body.theme-crepuscule #nav-panel-overlay-body {
+    background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
+    border: 1px solid var(--cr-line);
+    border-radius: 26px;
+    box-shadow: 0 20px 60px rgba(10,6,24,0.7);
+    color: var(--cr-ink-2);
+}
+body.theme-crepuscule #exit-confirm-box h3,
+body.theme-crepuscule #trip-modal h3,
+body.theme-crepuscule #stats-modal-header h2,
+body.theme-crepuscule #nav-panel-overlay-title,
+body.theme-crepuscule #export-json-title {
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: 21px; font-weight: 700;
+    text-transform: none; letter-spacing: -0.01em;
+    color: var(--cr-ink);
+}
+/* Oui/Non : le refus reste rouge, l'action de rester prend l'ambre. */
+body.theme-crepuscule #exit-confirm-no {
+    background: rgba(255,179,92,0.12); color: var(--cr-amber);
+    border: 1px solid rgba(255,179,92,0.3); border-radius: 14px;
+}
+body.theme-crepuscule #exit-confirm-yes {
+    background: rgba(255,107,107,0.10); color: var(--cr-danger);
+    border: 1px solid rgba(255,107,107,0.28); border-radius: 14px;
+}
+
+
+/* === 11. MOUVEMENT =========================================================
+   Tout le mouvement du thème (respiration de Babi, dérive des lucioles) passe
+   par ces animations. Un utilisateur qui a demandé moins d'animations dans les
+   réglages de son téléphone ne doit rien voir bouger. */
+
+@media (prefers-reduced-motion: reduce) {
+    body.theme-crepuscule *,
+    body.theme-crepuscule *::before,
+    body.theme-crepuscule *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}
+
+
+/* === 12. LE COMPAGNON ======================================================
+   Bloc posé dans le hero de l'onglet Itinéraire (index.html) et rempli par
+   js/22-compagnon.js. */
+
+/* L'en-tête d'accueil : salutation, accroche, et Babi en grand à droite.
+   Plus de carte teintée autour du compagnon — la mascotte se pose directement
+   sur la feuille, comme dans la maquette : c'est ce qui lui donne sa taille. */
+body.theme-crepuscule .itin-hero {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0 16px;
+}
+
+body.theme-crepuscule .itin-hero-text { flex: 1; min-width: 0; }
+
+/* Le compagnon est un ornement : il cède la place avant l'accroche quand la
+   largeur manque, d'où le flex-shrink et la taille en clamp. */
+body.theme-crepuscule #compagnon-dessin {
+    flex-shrink: 0;
+    width: clamp(76px, 24vw, 104px);
+    height: clamp(82px, 26vw, 112px);
+    margin-bottom: -6px;   /* l'ombre au sol du SVG appartient au dessin */
+}
+body.theme-crepuscule .cp-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* La bulle est devenue le sur-titre : « Bonsoir » au-dessus de l'accroche, et
+   le reste du temps la phrase de contexte de Babi, à la même place. */
+body.theme-crepuscule #compagnon-bulle {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cr-ink-3);
+    line-height: 1.3;
+    margin-bottom: 2px;
+    min-height: 1.3em;   /* réserve la ligne : le titre ne saute pas au premier message */
+    min-width: 0;
+}
+
+/* Le titre suit le texte du hero : plus de marge basse, c'est .itin-hero qui
+   porte l'espacement jusqu'à la cellule Destination. */
+body.theme-crepuscule .itin-hero .itin-title { margin: 0; }
+
+/* ⚠ LA RÈGLE DE SÉCURITÉ.
+   Dès que la navigation démarre, le compagnon quitte l'écran — aucune
+   animation, aucune bulle, rien qui bouge dans le champ de vision.
+   Elle est ICI et pas en JS à dessein : si un événement de démarrage de
+   navigation venait à ne pas se déclencher, une règle JS laisserait l'éléphant
+   remuer les oreilles au volant. Une règle CSS liée à `body.nav-active` suit
+   l'état réel de l'app et ne peut pas être ratée.
+   NE PAS déplacer cette règle dans le JS. */
+body.theme-crepuscule.nav-active .itin-hero { display: none !important; }
+
+/* --- LA CLAIRIÈRE (onglet Objectifs). Dessinée par Compagnon.clairiere().
+   Un paysage, pas un graphique : c'est le seul endroit de l'app où le score de la
+   semaine se lit sans un chiffre. --- */
+body.theme-crepuscule .clairiere {
+    position: relative;
+    border-radius: 26px;
+    overflow: hidden;
+    border: 1px solid var(--cr-line);
+    margin: 14px 0 4px;
+}
+body.theme-crepuscule .cl-svg { display: block; width: 100%; height: auto; }
+
+/* La légende est POSÉE SUR le dessin, dans son coin bas : hors du cadre elle
+   aurait ajouté une bande de texte sous une image déjà bavarde. */
+body.theme-crepuscule .cl-legende {
+    position: absolute;
+    left: 14px; right: 14px; bottom: 11px;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 10px;
+    pointer-events: none;
+}
+body.theme-crepuscule .cl-titre {
+    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-size: 17px; font-weight: 700; line-height: 1.1; color: var(--cr-ink);
+}
+body.theme-crepuscule .cl-sous { font-size: 11.5px; font-weight: 600; color: #A9F0C8; }
+body.theme-crepuscule .cl-eco {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 700; color: var(--cr-ink-2);
+    background: rgba(0,0,0,0.35); border-radius: 10px; padding: 5px 9px;
+}
+
+/* --- LE PARCOURS (onglet Objectifs). Dessiné par Compagnon.parcours().
+   L'étape en cours reprend exactement le cadre de la clairière (`.pa-planche`
+   porte aussi la classe `.clairiere`) : les deux blocs se suivent, ils doivent
+   avoir le même bord et le même rayon. Seule la bande des étapes à venir est
+   propre au parcours. --- */
+body.theme-crepuscule .pa-suite {
+    display: flex; gap: 10px; margin: 10px 0 4px;
+}
+/* Le vert de la clairière dit « c'est acquis ». Une étape EN COURS ne l'est pas :
+   « Ouvrir la cage. » en vert se lisait comme une cage déjà ouverte. Le vert est
+   donc gardé pour le seul état qui le mérite, l'animal libre. */
+body.theme-crepuscule .pa-planche .cl-sous { color: var(--cr-ink-2); }
+body.theme-crepuscule .pa-planche.pa-libre .cl-sous { color: #A9F0C8; }
+/* Une étape à venir est un POINTILLÉ, comme les graines des décors : une
+   attente, jamais un reproche. Ne pas la remplacer par un cadre rouge ni par un
+   « raté » — voir la règle de voix en tête de js/22-compagnon.js. */
+body.theme-crepuscule .pa-vign {
+    position: relative; flex: 1 1 0; min-width: 0;
+    border-radius: 18px; overflow: hidden;
+    border: 1.5px dashed rgba(168,139,255,0.45);
+}
+/* Désaturée : la scène se devine, le détail se garde pour le jour du
+   déblocage. */
+body.theme-crepuscule .pa-vign .cl-svg {
+    filter: grayscale(1) brightness(0.55) contrast(0.9);
+}
+body.theme-crepuscule .pa-vign::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(15,10,32,0.35); pointer-events: none;
+}
+body.theme-crepuscule .pa-cadenas {
+    position: absolute; top: 7px; right: 7px; width: 18px; height: 18px;
+    color: #C3AEFF; z-index: 1;
+}
+body.theme-crepuscule .pa-cadenas svg { width: 100%; height: 100%; display: block; }
+body.theme-crepuscule .pa-nom {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+    padding: 6px 8px;
+    background: linear-gradient(transparent, rgba(15,10,32,0.92));
+    font-size: 10.5px; font-weight: 700; color: #C3AEFF;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Un animal sauvé n'a plus de barreaux : sa carte le dit aussi. */
+body.theme-crepuscule .cpx-sauve .cpx-etat { color: #6FE3A0; }
+
+/* Les pousses respirent, les lucioles dérivent. Comme tout le reste du thème,
+   c'est neutralisé par le bloc prefers-reduced-motion du § 11. */
+@keyframes cl-sprout { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.05) rotate(-2deg); } }
+@keyframes cl-drift  { 0% { transform: translate(0,0); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(-40px,-34px); opacity: 0; } }
+body.theme-crepuscule .cl-pl { animation: cl-sprout 4.4s ease-in-out infinite; }
+body.theme-crepuscule .cl-ff { animation: cl-drift 6s linear infinite; }
+
+/* --- Mouvement. Discret et lent : il doit se remarquer au deuxième regard,
+   jamais au premier. Tout est neutralisé par le bloc prefers-reduced-motion
+   du § 11. --- */
+@keyframes cp-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes cp-trunk   { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes cp-flap    { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-3.5deg); } }
+@keyframes cp-blink   { 0%, 90%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } }
+@keyframes cp-zzz     { 0% { transform: translate(0,0) scale(0.7); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(38px,-64px) scale(1.1); opacity: 0; } }
+@keyframes cp-larme   { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(32px); opacity: 0; } }
+
+body.theme-crepuscule .cp-body  { animation: cp-breathe 3.8s ease-in-out infinite; transform-origin: 160px 350px; }
+body.theme-crepuscule .cp-trunk { animation: cp-trunk 4.6s ease-in-out infinite; transform-origin: 160px 182px; }
+body.theme-crepuscule .cp-earL  { animation: cp-flap 5.2s ease-in-out infinite; transform-origin: 106px 132px; }
+body.theme-crepuscule .cp-earR  { animation: cp-flap 5.2s ease-in-out infinite reverse; transform-origin: 214px 132px; }
+body.theme-crepuscule .cp-zz    { animation: cp-zzz 3s ease-out infinite; }
+body.theme-crepuscule .cp-zz2   { animation-delay: 1.4s; }
+body.theme-crepuscule .cp-larme    { animation: cp-larme 2.2s ease-in infinite; }
+
+/* `transform-box: fill-box` est indispensable ici : sur un élément SVG,
+   `transform-origin: center` se résout par défaut contre le viewBox entier, pas
+   contre l'élément. Sans cette ligne, le clignement ne rétrécit pas les yeux
+   sur place — il les fait glisser vers le haut de la planche. */
+body.theme-crepuscule .cp-eyes {
+    animation: cp-blink 6s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+}

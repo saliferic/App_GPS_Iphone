@@ -1,0 +1,88 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Le parcours — planche de contrôle</title>
+<!-- PLANCHE DE CONTRÔLE DU PARCOURS.
+     Elle charge le VRAI module (js/22-compagnon.js) et exerce Compagnon.parcours()
+     dans ses quatre états, plus les vignettes en cage de la fenêtre de choix.
+     C'est ici qu'on vérifie un changement de dessin avant de lancer l'app entière.
+     Ce que l'app décide (l'étape courante) est ici posé à la main : le module ne
+     compte rien, c'est js/12-gamification.js qui lui passe `etape` et `libre`.
+
+       1. Le Sauvetage        — la cage, cadenas fermé
+       2. La Grande Échappée  — l'attelage, remorque ouverte
+       3. Le Grand Envol      — le décor du compagnon
+       + « sauvé » : l'étape 3 franchie, la cage vide au fond et les oiseaux. -->
+<link rel="stylesheet" href="../css/theme-crepuscule.css">
+<style>
+  body { margin:0; padding:32px; background:#241C3C; font-family:system-ui,sans-serif; }
+  h2 { color:#C3AEFF; font-size:12.5px; font-weight:800; letter-spacing:.06em;
+       text-transform:uppercase; margin:0 0 6px; }
+  .sous { color:#A897C9; font-size:12.5px; margin:0 0 18px; max-width:64ch; line-height:1.5; }
+  section { margin-bottom:44px; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .col { flex:0 0 360px; }
+  .col h3 { margin:0 0 8px; font-size:13px; color:#EDE6FF; }
+  .col p { margin:8px 0 0; font-size:11.5px; color:#A897C9; line-height:1.45; }
+  /* La largeur réelle du carnet sur un téléphone : un dessin qui tient en grand
+     et se brouille à 340 px n'a pas tenu. */
+  .telephone { flex:0 0 340px; }
+  .grille-cpx { display:grid; grid-template-columns:repeat(3,150px); gap:12px; }
+  .cpx-carte { text-align:center; }
+</style>
+<body class="theme-crepuscule">
+
+<section>
+  <h2>Le parcours, dans ses quatre états</h2>
+  <p class="sous">Rendu par <code>Compagnon.parcours()</code>, exactement comme dans le carnet.
+     Les étapes à venir restent visibles en pointillés — un pointillé est une attente, pas un reproche.</p>
+  <div class="row" id="etats"></div>
+</section>
+
+<section>
+  <h2>À la largeur réelle du carnet</h2>
+  <p class="sous">340 px, soit la largeur d'un téléphone étroit. C'est là que se voit
+     un dessin trop chargé.</p>
+  <div class="row"><div class="telephone" id="tel"></div></div>
+</section>
+
+<section>
+  <h2>La fenêtre « Qui sauvons-nous ? »</h2>
+  <p class="sous">Tant qu'un animal n'est pas sauvé, il est dessiné derrière ses barreaux
+     (<code>Compagnon.vignetteCage()</code>). Le dernier de la rangée est montré sauvé, pour comparaison.</p>
+  <div class="grille-cpx" id="cpx"></div>
+</section>
+
+<script src="../js/22-compagnon.js"></script>
+<script>
+  /* Le module relit le compagnon choisi dans localStorage : sans ça, la planche
+     dessinerait Bulle ou Titi si l'app a servi entre-temps. */
+  Compagnon.choisir('babi');
+
+  const ETATS = [
+    [{ etape:1, libre:false, total:3 }, 'Semaine 1 — Le Sauvetage', 'Premier lancement de l’app : l’animal est déjà en cage, le récit commence par un problème.'],
+    [{ etape:2, libre:false, total:3 }, 'Semaine 2 — La Grande Échappée', 'Une semaine d’objectifs tenue. Il est sorti, il n’est pas encore chez lui.'],
+    [{ etape:3, libre:false, total:3 }, 'Semaine 3 — Le Grand Envol', 'Arrivé dans SON décor (celui du compagnon choisi, jamais un décor en dur).'],
+    [{ etape:3, libre:true,  total:3 }, 'Sauvé', 'Étape 3 franchie : la cage vide au fond, porte arrachée, et les oiseaux partent.']
+  ];
+
+  document.getElementById('etats').innerHTML = ETATS.map((e, i) =>
+    `<div class="col"><h3>${e[1]}</h3><div id="pa-${i}"></div><p>${e[2]}</p></div>`).join('');
+  ETATS.forEach((e, i) => Compagnon.parcours('pa-' + i, e[0]));
+
+  Compagnon.parcours('tel', { etape:1, libre:false, total:3 });
+
+  document.getElementById('cpx').innerHTML = Compagnon.catalogue()
+    .filter(c => c.debloque)
+    .map((c, i, l) => {
+      const sauve = i === l.length - 1;
+      return `<div class="cpx-carte${sauve ? ' cpx-sauve' : ''}">
+                <div class="cpx-vignette" style="--cpx-accent:${c.accent}">
+                  ${sauve ? c.vignette : Compagnon.vignetteCage(c.cle)}
+                </div>
+                <div class="cpx-nom">${c.nom}</div>
+                <div class="cpx-espece">${c.espece}</div>
+                <div class="cpx-etat">${sauve ? 'Sauvé' : 'En cage'}</div>
+              </div>`;
+    }).join('');
+</script>
+</body>

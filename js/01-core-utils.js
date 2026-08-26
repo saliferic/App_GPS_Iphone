@@ -33,6 +33,45 @@
             return true;
         }
 
+        /* Les trois lignes de temps du panneau « Informations trajet », écrites ensemble
+           (23/08/2026). Elles étaient dupliquées sur QUATRE sites d'appel — alternative
+           choisie (js/04), aperçu initial (js/16), station essence retenue et retour à
+           l'itinéraire de base (js/18) — et la ligne « avec excès » aurait manqué sur
+           trois d'entre eux au premier oubli. Un seul point d'écriture, donc.
+           `dureeAvecExces` (js/00) rend `null` sur une entrée aberrante : dans ce cas la
+           ligne affiche « -- » plutôt qu'un « NaN » qui aurait l'air d'un bug. */
+        /* Dernier couple (durée, distance) affiché. Le réglage du niveau d'excès se change
+           APRÈS que l'aperçu a été calculé, et rien ne redemande d'itinéraire à ce
+           moment-là : sans ce souvenir, il faudrait relancer un calcul réseau complet
+           pour mettre à jour une ligne qui ne dépend que de deux nombres déjà connus. */
+        let _dernierPreviewTrajet = null;
+
+        function rafraichirPreviewTemps() {
+            if (!_dernierPreviewTrajet) return;   // aucun trajet en aperçu : rien à refaire
+            majPreviewTemps(_dernierPreviewTrajet.dureeH, _dernierPreviewTrajet.distanceKm);
+        }
+
+        function majPreviewTemps(dureeH, distanceKm) {
+            _dernierPreviewTrajet = { dureeH, distanceKm };
+            setText('preview-time', formatTime(dureeH));
+            setText('preview-arrival', formatArrivalTime(dureeH));
+            /* Le niveau vient du réglage « mauvais conducteur » (js/14), pas d'une valeur
+               figée : l'estimation affichée avant le départ doit décrire la conduite qui
+               sera effectivement simulée. Repli sur 1 tant qu'aucun conducteur n'existe —
+               l'aperçu peut s'ouvrir avant `addDriver()`. */
+            const niveau = (typeof drivers !== 'undefined' && drivers[0] && drivers[0].badLevel) || 1;
+            setText('preview-time-fast-label',
+                    `• Temps avec excès (${Math.round((EXCES_FRACTION[niveau] || 0.2) * 100)} % du trajet)`);
+            const rapide = dureeAvecExces(distanceKm, dureeH, niveau);
+            if (rapide == null) { setText('preview-time-fast', '--'); return; }
+            const gainMin = Math.round((dureeH - rapide) * 60);
+            /* Le gain est la raison d'être de la ligne : sans lui, le conducteur doit
+               soustraire deux durées de tête pour obtenir la seule chose qu'il veut
+               savoir. Sous la minute, on n'affiche rien plutôt qu'un « −0 min ». */
+            setText('preview-time-fast',
+                    formatTime(rapide) + (gainMin >= 1 ? ` (−${gainMin} min)` : ''));
+        }
+
         // Idem pour une propriété de style (couleur des points, etc.)
         function setStyleProp(id, prop, val) {
             const el = (typeof id === 'string') ? getEl(id) : id;

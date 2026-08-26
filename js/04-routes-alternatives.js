@@ -75,8 +75,7 @@
             tenterSansBruit(() => fetchRestAreasAlongRoute(durationH, currentTurfLine),
                             'selectAlternativeRoute/airesDeRepos');
 
-            document.getElementById('preview-time').innerText = formatTime(durationH);
-            document.getElementById('preview-arrival').innerText = formatArrivalTime(durationH);
+            majPreviewTemps(durationH, distKm);
             document.getElementById('preview-distance').innerText = distKm.toFixed(1) + " km";
             document.getElementById('preview-points').innerText = maxPts.toFixed(2) + " pts";
 

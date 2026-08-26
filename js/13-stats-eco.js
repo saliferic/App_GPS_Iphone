@@ -507,7 +507,8 @@
 
         /* ═══ PAGES PLEINES DES SECTIONS DU PROFIL ═══
 
-           Galerie des trophées, Mon véhicule et Aide à la conduite s'ouvraient en accordéon,
+           Animaux sauvés, Mon véhicule et Aide à la conduite s'ouvrent en page pleine. Les
+           trois s'ouvraient auparavant en accordéon,
            DANS le panneau Profil : leur contenu se dépliait sous le bouton, donc en bas d'une
            zone déjà remplie et désormais bornée à la moitié de l'écran (règle 50/50). Il
            fallait faire défiler pour atteindre ce qu'on venait d'ouvrir. Elles s'ouvrent
@@ -515,7 +516,7 @@
 
            ⚠ LE CONTENU EST DÉPLACÉ, JAMAIS RECOPIÉ. C'est le point à ne pas défaire : ces
            trois blocs sont pleins d'`id` uniques (champs de configuration véhicule, grille
-           des trophées, interrupteurs trafic/voix/hotbox) que des dizaines de
+           des animaux sauvés, interrupteurs trafic/voix/hotbox) que des dizaines de
            `getElementById` adressent depuis tout le code. Un clone créerait des id en double
            — `getElementById` rendrait alors le premier trouvé, c'est-à-dire l'exemplaire
            caché : on réglerait ses paramètres dans la page et rien ne se passerait.
@@ -528,8 +529,13 @@
                openProfilSheet), à la place du pictogramme emoji d'origine. Les quatre
                sections y sont passées ; le drapeau reste optionnel pour une entrée
                future qui voudrait garder un emoji dans `title`. */
-            trophy:  { bodyId: 'trophy-gallery-body', title: 'Galerie des trophées', dot: true,
-                       onOpen: () => { try { renderTrophyGallery(); } catch (e) { logAppError('profilSheet/renderTrophyGallery', e); } } },
+            /* `title` accepte une FONCTION depuis le 26/08/2026 : la fiche du compagnon
+               s'intitule du nom de l'animal, qui change avec lui. Les autres gardent une
+               chaîne — un titre fixe n'a pas à devenir une fonction pour autant. */
+            compagnon: { bodyId: 'compagnon-identite-body', title: () => titreIdentiteCompagnon(), dot: true,
+                       onOpen: () => { try { renderIdentiteCompagnon(); } catch (e) { logAppError('profilSheet/renderIdentiteCompagnon', e); } } },
+            animaux: { bodyId: 'animaux-sauves-body', title: 'Animaux sauvés', dot: true,
+                       onOpen: () => { try { renderAnimauxSauves(); } catch (e) { logAppError('profilSheet/renderAnimauxSauves', e); } } },
             vehicle: { bodyId: 'vehicle-panel-body',  title: 'Mon véhicule', dot: true,
                        onOpen: () => { try { initVehicleConfigUI(); } catch (e) { logAppError('profilSheet/initVehicleConfigUI', e); } } },
             trips:   { bodyId: 'trip-history-body',   title: 'Historique des trajets', dot: true,
@@ -571,7 +577,15 @@
                 puce.className = 'ui-dot';
                 titleEl.appendChild(puce);
             }
-            titleEl.appendChild(document.createTextNode(def.title));
+            /* Le titre peut être une fonction (voir PROFIL_SHEETS) : on l'appelle À
+               L'OUVERTURE, jamais au chargement du fichier — c'est tout l'intérêt, il doit
+               dire l'état du moment. Le `try` évite qu'un titre bavard empêche l'ouverture
+               de la page : mieux vaut un intitulé générique qu'un écran qui ne s'ouvre pas. */
+            let libelle = def.title;
+            if (typeof libelle === 'function') {
+                libelle = tenterSansBruit(() => def.title(), 'profilSheet/titre') || 'Mon compagnon';
+            }
+            titleEl.appendChild(document.createTextNode(libelle));
             overlay.classList.add('open');
             host.scrollTop = 0;
             if (def.onOpen) def.onOpen();
@@ -1022,6 +1036,10 @@
             const factor = Math.min(2, magnitude / threshold);
             d.ecoScore = Math.max(0, d.ecoScore - ECO_PENALTY_SCORE * factor);
             d.score    = Math.max(d.score - ECO_PENALTY_MAIN * factor, d.score - 5);
+            /* Un à-coup secoue aussi le compagnon. Le même `factor` sert aux deux :
+               la vie et le score doivent punir la même chose avec la même intensité,
+               sinon la barre raconte une autre histoire que les points. */
+            if (drivers.length > 0 && d.id === drivers[0].id && window.VieCompagnon) VieCompagnon.choc(factor);
             // Mise à jour affichage score éco dans le profil
             const ptsEl = document.getElementById(`pts-${d.id}`);
             if (ptsEl) { ptsEl.innerText = Math.max(0, d.score).toFixed(3); ptsEl.style.color = d.score < 0 ? '#ff6b6b' : '#4da3ff'; }
@@ -1080,7 +1098,7 @@
         function saveProfilesToStorage() { localStorage.setItem('gps_profiles', JSON.stringify(profiles)); }
         function renderProfilesDropdown() {
             const dropdown = document.getElementById('profile-dropdown');
-            dropdown.innerHTML = profiles.length === 0 ? '<option value="">👤 Aucun profil créé</option>' : '<option value="">👤 Choisir un profil...</option>';
+            dropdown.innerHTML = profiles.length === 0 ? '<option value="">Aucun profil créé</option>' : '<option value="">Choisir un profil...</option>';
             profiles.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.id; opt.textContent = `${p.name} (${p.totalPoints.toFixed(2)} pts)`; dropdown.appendChild(opt);
@@ -1104,7 +1122,7 @@
             const label  = document.getElementById('profile-dropdown-trigger-label');
             if (!select || !label) return;
             const opt = select.options[select.selectedIndex];
-            label.textContent = opt ? opt.textContent : '👤 Aucun profil créé';
+            label.textContent = opt ? opt.textContent : 'Aucun profil créé';
         }
 
         function _renderProfileDropdownMenu() {
@@ -1172,14 +1190,26 @@
         const _PROFIL_MASK_IDS = [
             'profil-section-title-monprofil',
             'badge-category-card',
-            'trophy-gallery-section',
+            'animaux-a-sauver-section',
+            'animaux-sauves-section',
             'vehicle-panel-section',
             'aide-conduite-section',
             'eco-score-bar',
             'drivers-container',
             'profil-options-trajet',
             'backup-section',
-            'profil-itin-title'
+            /* 'profil-itin-title' est devenu 'profil-hero' (24/08/2026) : le titre est
+               maintenant enveloppé avec le bouton « + » de création. Masquer le seul
+               <h2> aurait laissé ce « + » flotter tout seul au-dessus du formulaire. */
+            'profil-hero',
+            'profil-stats',
+            /* Ajoutées le 23/08/2026 : ces lignes ouvrent des écrans qui parlent du profil
+               ACTIF. Les laisser visibles pendant la création d'un compte invitait à
+               consulter le classement ou l'historique de quelqu'un d'autre au milieu d'une
+               saisie de mot de passe. Elles étaient trois : `stats-section` est partie
+               avec la ligne « Mes statistiques » (26/08/2026). */
+            'classement-section',
+            'trip-history-section'
         ];
         function showCreateProfileInline() {
             // Le bouton "+" est un voisin du menu déroulant DANS la même ligne : un clic
@@ -1193,16 +1223,26 @@
             });
             document.getElementById('create-profile-inline').style.display = 'block';
             document.getElementById('btn-show-create-profile').style.display = 'none';
+            /* Le contenu dépend de la session Supabase : formulaire pseudo/mot de passe
+               si personne n'est connecté, actions de compte sinon. On le (re)construit à
+               chaque ouverture — la session peut avoir expiré depuis la dernière. */
+            if (typeof renderProfilCompteBloc === 'function') renderProfilCompteBloc();
             // Libère la hauteur plancher de l'onglet : le panneau se resserre sur le
             // formulaire et remonte au-dessus du clavier (voir #ui-panel.profile-focus).
             const panel = document.getElementById('ui-panel');
             if (panel) panel.classList.add('profile-focus');
-            document.getElementById('new-profile-name').focus();
+            const premier = document.getElementById('profil-pseudo');
+            if (premier) premier.focus();   // absent quand un compte est déjà connecté
         }
         function hideCreateProfileInline() {
             document.getElementById('create-profile-inline').style.display = 'none';
             document.getElementById('btn-show-create-profile').style.display = '';
-            document.getElementById('new-profile-name').value = '';
+            /* Le formulaire est reconstruit à chaque ouverture : le vider ici suffit à ne
+               pas laisser un mot de passe en clair dans le DOM d'un panneau replié. */
+            const bloc = document.getElementById('profil-compte-bloc');
+            if (bloc) bloc.innerHTML = '';
+            const st = document.getElementById('profil-compte-statut');
+            if (st) { st.textContent = ''; st.className = 'cl-status'; }
             const panel = document.getElementById('ui-panel');
             if (panel) panel.classList.remove('profile-focus');
             // Réafficher tout le contenu de la page Profil
@@ -1211,10 +1251,14 @@
                 if (el) el.style.display = '';
             });
         }
-        function createProfile() {
+        /* `nomFourni` (23/08/2026) : le champ « Prénom » n'existe plus dans la page — le
+           nom vient maintenant du pseudo du compte, ou de la saisie du formulaire de
+           compte pour un profil local sans compte. L'argument évite de dupliquer ici la
+           création du profil et la question « l'utiliser maintenant ? ». */
+        function createProfile(nomFourni) {
             const input = document.getElementById('new-profile-name');
-            const name = input.value.trim();
-            if (!name) { input.focus(); return; }
+            const name = String(nomFourni != null ? nomFourni : (input ? input.value : '')).trim();
+            if (!name) { if (input) input.focus(); return; }
             const id = 'profil_' + Date.now();
             profiles.push({ id, name, totalPoints: 0 });
             saveProfilesToStorage();
@@ -1261,7 +1305,10 @@
             renderWeeklyGoalsPanel();
             updateWeeklyGoalsButton();
             // Rafraîchir la galerie (re-render si ouverte, sinon juste le compteur)
-            refreshTrophyGalleryCount();
+            /* La page « Animaux sauvés » dépend du profil : un autre joueur n'a pas
+               sauvé les mêmes bêtes. Elle ne se repeint que si elle est ouverte. */
+            if (typeof rafraichirAnimauxSauves === 'function') rafraichirAnimauxSauves();
+            if (typeof rafraichirIdentiteCompagnon === 'function') rafraichirIdentiteCompagnon();
         }
         function updateProfileSummary() {
             const summaryEl = document.getElementById('profile-summary');
@@ -1303,17 +1350,39 @@
             if (!profile) return;
             profile.totalPoints += gained;
             saveProfilesToStorage(); renderProfilesDropdown(); updateProfileSummary();
-            /* Report vers le classement en ligne (js/21-classement.js). Ce point de
-               convergence est aussi le bon endroit pour le classement : un branchement
-               unique, plutôt qu'un par chemin d'attribution.
-               `typeof` + `try` parce que le module est chargé APRÈS ce fichier et peut
-               ne pas exister du tout (CDN Supabase bloqué). Le score local, lui, est
-               déjà écrit : rien de ce qui suit ne doit pouvoir le remettre en cause. */
-            if (typeof clAjouter === 'function') {
-                try { clAjouter(gained); } catch (e) { logAppError('classement/ajouter', e); }
-            }
+            /* ⚠ PLUS RIEN NE PART VERS LE CLASSEMENT D'ICI (25/08/2026). Le classement
+               ne compte plus des points mais des ANIMAUX SAUVÉS : son unique point
+               d'entrée est désormais `clAnimauxMaj()`, appelé par `synchroniserParcours()`
+               (js/12), là où un parcours peut se terminer. Les points gardent tous leurs
+               autres rôles — total du profil, butin, objectifs — ils ne classent plus. */
         }
         loadProfilesFromStorage();
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           PREMIER LANCEMENT — CRÉATION DU PROFIL (23/08/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           Aucun profil en mémoire = l'app vient d'être installée. On ouvre d'office
+           l'onglet Profil sur le formulaire de compte, plutôt que de laisser un
+           « Aucun profil créé » que personne ne va chercher : sans profil, les points,
+           les badges et le classement n'ont nulle part où aller.
+
+           ⚠ LE DÉLAI N'EST PAS COSMÉTIQUE. `switchMainTab()` vit dans le fichier 14,
+           chargé APRÈS celui-ci : l'appeler tout de suite lèverait un ReferenceError au
+           top-level, ce qui interromprait l'évaluation de la fin de CE fichier (piège
+           documenté dans AGENTS.md). Le setTimeout sort du fil de chargement, et sa
+           durée cale l'ouverture sur la fin de l'écran de bienvenue (2 s + 0,8 s de
+           fondu, voir #welcome-screen dans styles.css).
+
+           Le bouton « Annuler » reste actif : on ne séquestre pas le conducteur dans un
+           formulaire, et « Continuer sans compte » est le chemin prévu pour qui n'en
+           veut pas. Le formulaire se rouvre par le « + » du sélecteur. */
+        setTimeout(() => {
+            try {
+                if (profiles.length > 0) return;
+                if (typeof switchMainTab === 'function') switchMainTab('profil');
+                showCreateProfileInline();
+            } catch (e) { logAppError('profil/premierLancement', e); }
+        }, 2900);
         // Initialiser badges et objectifs APRÈS chargement des profils (activeProfileId connu)
         updateWeeklyGoalsButton();
         renderBadgeCategoryCard();

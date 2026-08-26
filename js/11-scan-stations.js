@@ -1530,4 +1530,3 @@
             } catch (e) { if (DEBUG) console.warn('[Pause] réarmement du plan impossible :', e); }
         }
 
-        let pendingLootScore = 0;

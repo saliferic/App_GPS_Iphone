@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éléphant Kawaii</title>
+<style>
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0; min-height: 100vh;
+        display: flex; justify-content: center; align-items: center;
+        background: radial-gradient(circle at 50% 20%, #302653 0%, #17132f 70%);
+        font-family: "Segoe UI", sans-serif;
+    }
+
+    .elephant-container { width: 320px; height: 380px; }
+    svg { width: 100%; height: 100%; overflow: visible; }
+
+    .elephant { transform-origin: 50% 85%; animation: breathe 3s ease-in-out infinite; }
+    @keyframes breathe {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50%      { transform: translateY(-3px) scale(1.015); }
+    }
+
+    .eye { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+    @keyframes blink {
+        0%, 92%, 100% { transform: scaleY(1); }
+        95%           { transform: scaleY(0.08); }
+    }
+
+    .tail { transform-box: fill-box; transform-origin: left center; animation: tailMove 2.5s ease-in-out infinite; }
+    @keyframes tailMove {
+        0%, 100% { transform: rotate(0deg); }
+        50%      { transform: rotate(8deg); }
+    }
+
+    /* La trompe se balance très légèrement, ancrée à la racine. */
+    .trunk { transform-box: fill-box; transform-origin: top center; animation: trunkMove 4.6s ease-in-out infinite; }
+    @keyframes trunkMove {
+        0%, 100% { transform: rotate(-2.5deg); }
+        50%      { transform: rotate(2.5deg); }
+    }
+</style>
+</head>
+<body>
+
+<div class="elephant-container">
+<svg viewBox="0 0 320 380" xmlns="http://www.w3.org/2000/svg" aria-label="Éléphant kawaii">
+
+    <defs>
+        <!-- Le modelé passe par des dégradés radiaux décentrés vers le haut-gauche :
+             une seule source de lumière pour tout le personnage. -->
+        <radialGradient id="gTete" cx="38%" cy="28%" r="80%">
+            <stop offset="0"   stop-color="#B4ABE8"/>
+            <stop offset="1"   stop-color="#8C83C2"/>
+        </radialGradient>
+        <radialGradient id="gCorps" cx="40%" cy="24%" r="82%">
+            <stop offset="0"   stop-color="#A79EDC"/>
+            <stop offset="1"   stop-color="#827AB8"/>
+        </radialGradient>
+        <radialGradient id="gVentre" cx="50%" cy="42%" r="58%">
+            <stop offset="0"   stop-color="#C3BBF2" stop-opacity="0.85"/>
+            <stop offset="1"   stop-color="#C3BBF2" stop-opacity="0"/>
+        </radialGradient>
+        <!-- La trompe est un TUBE : c'est ce dégradé transversal, sombre-clair-sombre,
+             qui le dit. Sans lui elle se lit comme une dalle plate. -->
+        <linearGradient id="gTrompe" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0"    stop-color="#9188C6"/>
+            <stop offset="0.40" stop-color="#ADA4E6"/>
+            <stop offset="0.78" stop-color="#9A91D0"/>
+            <stop offset="1"    stop-color="#8A81BC"/>
+        </linearGradient>
+        <radialGradient id="gOreille" cx="42%" cy="35%" r="75%">
+            <stop offset="0"   stop-color="#A79EDA"/>
+            <stop offset="1"   stop-color="#867DBE"/>
+        </radialGradient>
+        <radialGradient id="gRose" cx="45%" cy="38%" r="72%">
+            <stop offset="0"   stop-color="#F2B7CF"/>
+            <stop offset="1"   stop-color="#DE93B3"/>
+        </radialGradient>
+        <radialGradient id="gPatte" cx="40%" cy="30%" r="78%">
+            <stop offset="0"   stop-color="#9990CE"/>
+            <stop offset="1"   stop-color="#7C73AE"/>
+        </radialGradient>
+        <linearGradient id="gDefense" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0"   stop-color="#FFFBEC"/>
+            <stop offset="1"   stop-color="#EAD9AF"/>
+        </linearGradient>
+    </defs>
+
+    <!-- OMBRE AU SOL -->
+    <ellipse cx="160" cy="354" rx="86" ry="13" fill="#0d0a22" opacity="0.45"/>
+
+    <g class="elephant">
+
+        <!-- QUEUE — tracée AVANT le corps : elle doit sortir de derrière la
+             silhouette, sinon elle flotte à côté comme un gribouillis détaché. -->
+        <g class="tail">
+            <path d="M214 292 C246 284 264 304 256 324"
+                  fill="none" stroke="#8880BC" stroke-width="10" stroke-linecap="round"/>
+            <path d="M256 320 C265 323 268 332 261 337 C254 341 248 335 251 328 Z"
+                  fill="#9A92CE"/>
+        </g>
+
+        <!-- BRAS — de part et d'autre, avant le corps : ils s'y rattachent. -->
+        <ellipse cx="97"  cy="252" rx="19" ry="28" transform="rotate(-14 97 252)"  fill="url(#gPatte)"/>
+        <ellipse cx="223" cy="252" rx="19" ry="28" transform="rotate(14 223 252)"  fill="url(#gPatte)"/>
+
+        <!-- CORPS -->
+        <path d="M88 260 C88 210 118 188 160 188 C202 188 232 210 232 260
+                 C232 318 206 350 160 350 C114 350 88 318 88 260 Z"
+              fill="url(#gCorps)"/>
+
+        <!-- Ventre : dégradé qui s'éteint sur les bords. En aplat, il découpait
+             un ovale net au milieu du corps au lieu d'un éclaircissement. -->
+        <ellipse cx="160" cy="288" rx="55" ry="57" fill="url(#gVentre)"/>
+
+        <!-- PIEDS -->
+        <ellipse cx="116" cy="324" rx="33" ry="28" fill="url(#gPatte)"/>
+        <ellipse cx="204" cy="324" rx="33" ry="28" fill="url(#gPatte)"/>
+        <ellipse cx="100" cy="332" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+        <ellipse cx="115" cy="336" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+        <ellipse cx="130" cy="332" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+        <ellipse cx="190" cy="332" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+        <ellipse cx="205" cy="336" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+        <ellipse cx="220" cy="332" rx="5.5" ry="7.5" fill="#F8ECD6"/>
+
+        <!-- OREILLES — poussées vers l'extérieur pour que le rose soit une vraie
+             palette et non un croissant coincé derrière la tête. -->
+        <ellipse cx="62"  cy="126" rx="48" ry="58" fill="url(#gOreille)"/>
+        <ellipse cx="59"  cy="128" rx="29" ry="38" fill="url(#gRose)"/>
+        <ellipse cx="258" cy="126" rx="48" ry="58" fill="url(#gOreille)"/>
+        <ellipse cx="261" cy="128" rx="29" ry="38" fill="url(#gRose)"/>
+
+        <!-- TÊTE -->
+        <circle cx="160" cy="140" r="86" fill="url(#gTete)"/>
+
+        <!-- Touffe -->
+        <path d="M147 58 C152 49 157 54 160 47 C163 54 168 49 173 58"
+              fill="none" stroke="#8C83C2" stroke-width="6" stroke-linecap="round"/>
+
+        <!-- SOURCILS -->
+        <path d="M106 114 Q124 102 142 113" fill="none" stroke="#6F669F" stroke-width="5" stroke-linecap="round"/>
+        <path d="M214 114 Q196 102 178 113" fill="none" stroke="#6F669F" stroke-width="5" stroke-linecap="round"/>
+
+        <!-- YEUX -->
+        <g class="eye">
+            <ellipse cx="124" cy="148" rx="21" ry="26" fill="#241D3A"/>
+            <ellipse cx="124" cy="150" rx="14" ry="19" fill="#3D3362"/>
+            <ellipse cx="118" cy="139" rx="7"  ry="9"  fill="#FFF"/>
+            <circle  cx="132" cy="158" r="3.6"          fill="#FFF"/>
+            <ellipse cx="196" cy="148" rx="21" ry="26" fill="#241D3A"/>
+            <ellipse cx="196" cy="150" rx="14" ry="19" fill="#3D3362"/>
+            <ellipse cx="190" cy="139" rx="7"  ry="9"  fill="#FFF"/>
+            <circle  cx="204" cy="158" r="3.6"          fill="#FFF"/>
+        </g>
+
+        <!-- JOUES -->
+        <ellipse cx="104" cy="184" rx="17" ry="9.5" fill="#E38FB0" opacity="0.8"/>
+        <ellipse cx="216" cy="184" rx="17" ry="9.5" fill="#E38FB0" opacity="0.8"/>
+
+        <!-- DÉFENSES — tracées AVANT la trompe : elles sortent de derrière elle,
+             au lieu de flotter comme deux gouttes posées à côté. -->
+        <path d="M150 202 C138 212 126 224 120 240 C130 238 140 226 154 212 Z" fill="url(#gDefense)"/>
+        <path d="M170 202 C182 212 194 224 200 240 C190 238 180 226 166 212 Z" fill="url(#gDefense)"/>
+
+        <!-- TROMPE — elle s'AFFINE vers le bas (34 px à la racine, 21 au bout) et
+             le dégradé transversal lui donne son volume. Les anneaux sont le
+             second signe de lecture : sans eux, c'est un tuyau. -->
+        <g class="trunk">
+            <path d="M133 172 C130 210 137 238 148 256 C155 268 169 267 174 254
+                     C183 234 187 208 187 172 Z"
+                  fill="url(#gTrompe)"/>
+            <path d="M136 196 Q160 206 184 196" fill="none" stroke="#6E6599" stroke-width="2.4" stroke-linecap="round" opacity="0.3"/>
+            <path d="M141 224 Q160 234 179 224" fill="none" stroke="#6E6599" stroke-width="2.4" stroke-linecap="round" opacity="0.3"/>
+        </g>
+
+    </g>
+</svg>
+</div>
+
+</body>
+</html>

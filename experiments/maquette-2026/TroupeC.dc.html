@@ -1,0 +1,431 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Nunito', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #FFB35C; } a:hover { color: #FFCB8E; }
+    .disp { font-family: 'Baloo 2', 'Nunito', sans-serif; }
+    .lbl { font-size: 12px; font-weight: 800; color: #8B7BAE; letter-spacing: 0.08em }
+    .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px }
+    .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); padding: 12px 9px 11px;
+            display: flex; flex-direction: column; align-items: center; gap: 4px }
+    .done { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.085) }
+    .ico { height: 88px; display: flex; align-items: center; justify-content: center }
+    .nm { font-family: 'Baloo 2', sans-serif; font-size: 17px; font-weight: 700; line-height: 1.1 }
+    .sp { font-size: 10px; font-weight: 700; color: #8B7BAE; margin-bottom: 2px }
+    .tr { font-size: 11.5px; font-weight: 700; text-align: center; line-height: 1.3; min-height: 30px }
+    .mt { font-size: 9.5px; font-weight: 600; color: #7C6C9E; text-align: center; line-height: 1.35 }
+    .clash { color: #FF8FA3; font-weight: 800 }
+    @keyframes blink { 0%,92%,100% { transform: scaleY(1) } 96% { transform: scaleY(0.1) } }
+    .bk { animation: blink 6.5s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+  </style>
+</helmet>
+
+<div style="width: 1900px; height: 1090px; background: linear-gradient(160deg, #20193F 0%, #2E2350 50%, #43305C 100%); color: #F4EFFF; padding: 34px 38px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; position: relative; overflow: hidden">
+
+  <svg width="1900" height="1090" viewBox="0 0 1900 1090" style="position: absolute; inset: 0; pointer-events: none">
+    <g fill="#FFF0DC" opacity="0.35">
+      <circle cx="1740" cy="58" r="1.6"/><circle cx="1812" cy="126" r="1.2"/><circle cx="1620" cy="34" r="1.3"/>
+      <circle cx="58" cy="88" r="1.2"/><circle cx="148" cy="42" r="1.4"/><circle cx="900" cy="30" r="1.3"/>
+      <circle cx="1300" cy="60" r="1.2"/><circle cx="480" cy="36" r="1.3"/>
+    </g>
+  </svg>
+
+  <!-- en-tête -->
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; position: relative">
+    <div>
+      <div style="font-size: 13px; font-weight: 700; color: #C6B6E4; letter-spacing: 0.02em">Direction C — Crépuscule</div>
+      <div class="disp" style="font-size: 42px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05">La troupe — 18 compagnons</div>
+    </div>
+    <div style="font-size: 12.5px; font-weight: 600; color: #A897C9; max-width: 620px; line-height: 1.55; text-align: right">Tous à l'état <em>au repos</em>. Le système est déjà calé par les quatre premiers : mêmes 5 états, mêmes 4 rôles, un décor de progression et un porteur de rang propres à chacun. Les noms sont des propositions.</div>
+  </div>
+
+  <!-- déjà en place -->
+  <div style="display: flex; flex-direction: column; gap: 9px; position: relative">
+    <div class="lbl">DÉJÀ DESSINÉS — planche complète à 5 états</div>
+    <div class="grid">
+
+      <div class="card done">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="36" cy="36" r="13" fill="#E8763C"/><circle cx="36" cy="37" r="7" fill="#FFF0DC"/>
+          <circle cx="84" cy="36" r="13" fill="#E8763C"/><circle cx="84" cy="37" r="7" fill="#FFF0DC"/>
+          <circle cx="60" cy="56" r="30" fill="#E8763C"/>
+          <path d="M60 40 C44 40 33 50 33 62 C33 74 45 82 60 82 C75 82 87 74 87 62 C87 50 76 40 60 40 Z" fill="#FFF0DC"/>
+          <ellipse cx="46" cy="43" rx="9" ry="6" fill="#FFF0DC"/><ellipse cx="74" cy="43" rx="9" ry="6" fill="#FFF0DC"/>
+          <g class="bk"><ellipse cx="48" cy="55" rx="5" ry="6" fill="#33203A"/><ellipse cx="72" cy="55" rx="5" ry="6" fill="#33203A"/>
+          <circle cx="50" cy="52.5" r="1.8" fill="#FFF"/><circle cx="74" cy="52.5" r="1.8" fill="#FFF"/></g>
+          <ellipse cx="39" cy="65" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.5"/><ellipse cx="81" cy="65" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.5"/>
+          <path d="M56.5 66 L63.5 66 L60 70 Z" fill="#33203A"/>
+        </svg></div>
+        <div class="nm">Rouki</div><div class="sp">panda roux</div>
+        <div class="tr" style="color: #FFB35C">Il observe et relativise</div>
+        <div class="mt">Décor · la clairière</div>
+        <div class="mt">Rang · médaille au cou</div>
+      </div>
+
+      <div class="card done">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/>
+          <ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <path d="M60 62 C57 74 55 84 58 92" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+          <path d="M58 92 C60 99 67 100 70 95" stroke="#8E86B8" stroke-width="10" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="47" cy="49" rx="4.6" ry="5.6" fill="#33203A"/><ellipse cx="73" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+          <circle cx="48.8" cy="46.8" r="1.7" fill="#FFF"/><circle cx="74.8" cy="46.8" r="1.7" fill="#FFF"/></g>
+          <ellipse cx="38" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/><ellipse cx="82" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/>
+        </svg></div>
+        <div class="nm">Bao</div><div class="sp">éléphanteau</div>
+        <div class="tr" style="color: #A88BFF">Il n'oublie rien et constate</div>
+        <div class="mt">Décor · le point d'eau</div>
+        <div class="mt">Rang · parure de front</div>
+      </div>
+
+      <div class="card done">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <ellipse cx="30" cy="60" rx="12" ry="25" fill="#C9A87A"/><ellipse cx="31" cy="60" rx="7" ry="18" fill="#B08F62" opacity="0.5"/>
+          <ellipse cx="90" cy="60" rx="12" ry="25" fill="#C9A87A"/><ellipse cx="89" cy="60" rx="7" ry="18" fill="#B08F62" opacity="0.5"/>
+          <circle cx="60" cy="52" r="29" fill="#F0DCC0"/>
+          <ellipse cx="47" cy="38" rx="8" ry="5.5" fill="#C9A87A" opacity="0.6"/><ellipse cx="73" cy="38" rx="8" ry="5.5" fill="#C9A87A" opacity="0.6"/>
+          <ellipse cx="60" cy="66" rx="17" ry="13" fill="#FFF2DE"/>
+          <ellipse cx="60" cy="60" rx="6.5" ry="5" fill="#33203A"/>
+          <path d="M60 65 C60 71 54 73 51 70 M60 65 C60 71 66 73 69 70" stroke="#33203A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="47" cy="49" rx="5" ry="6" fill="#33203A"/><ellipse cx="73" cy="49" rx="5" ry="6" fill="#33203A"/>
+          <circle cx="48.8" cy="46.6" r="1.8" fill="#FFF"/><circle cx="74.8" cy="46.6" r="1.8" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Pilou</div><div class="sp">chien</div>
+        <div class="tr" style="color: #6FE3A0">Il fête et relance</div>
+        <div class="mt">Décor · le sentier</div>
+        <div class="mt">Rang · pendentif de collier</div>
+      </div>
+
+      <div class="card done">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M36 44 L31 14 L57 30 Z" fill="#6E8098"/><path d="M38 41 L36 23 L50 32 Z" fill="#E0A8C0" opacity="0.7"/>
+          <path d="M84 44 L89 14 L63 30 Z" fill="#6E8098"/><path d="M82 41 L84 23 L70 32 Z" fill="#E0A8C0" opacity="0.7"/>
+          <circle cx="60" cy="54" r="28" fill="#6E8098"/>
+          <path d="M54 30 L52 40 M60 28 L60 39 M66 30 L68 40" stroke="#55647A" stroke-width="3" stroke-linecap="round"/>
+          <ellipse cx="50" cy="68" rx="11" ry="9" fill="#F0F4F8"/><ellipse cx="70" cy="68" rx="11" ry="9" fill="#F0F4F8"/>
+          <g stroke="#F0F4F8" stroke-width="1.6" stroke-linecap="round" opacity="0.85"><path d="M40 64 L20 60 M40 68 L19 69 M80 64 L100 60 M80 68 L101 69"/></g>
+          <path d="M56.5 62 L63.5 62 L60 66 Z" fill="#E08CA4"/>
+          <g class="bk"><ellipse cx="47" cy="51" rx="7" ry="7.5" fill="#7FD8E8"/><ellipse cx="73" cy="51" rx="7" ry="7.5" fill="#7FD8E8"/>
+          <ellipse cx="47" cy="51" rx="2.1" ry="6.4" fill="#25303F"/><ellipse cx="73" cy="51" rx="2.1" ry="6.4" fill="#25303F"/>
+          <circle cx="49.6" cy="47.8" r="1.9" fill="#FFF"/><circle cx="75.6" cy="47.8" r="1.9" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Nima</div><div class="sp">chatte</div>
+        <div class="tr" style="color: #7FD8E8">Aucun geste inutile</div>
+        <div class="mt">Décor · les toits</div>
+        <div class="mt">Rang · anneau de queue</div>
+      </div>
+
+      <div style="grid-column: span 3; display: flex; align-items: center; padding: 0 18px">
+        <div style="font-size: 12.5px; font-weight: 600; color: #A897C9; line-height: 1.6">Ces quatre-là ont déjà leur planche complète : cinq états dessinés, quatre rôles écrits, une voix tenue.<br>Les quatorze ci-dessous n'existent qu'à l'état de repos — juste assez pour que tu tranches. Seuls les retenus passeront aux cinq états.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- à arbitrer -->
+  <div style="display: flex; flex-direction: column; gap: 9px; position: relative">
+    <div class="lbl">À ARBITRER — 14 propositions</div>
+    <div class="grid">
+
+      <!-- COQ -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M44 32 C44 21 52 19 54 28 C58 15 69 19 67 30 C75 26 81 34 77 43" fill="#E85A52"/>
+          <circle cx="60" cy="56" r="26" fill="#F5E3CA"/>
+          <path d="M36 70 C42 82 78 82 84 70 C78 78 42 78 36 70 Z" fill="#E0C49E"/>
+          <path d="M54 62 L66 62 L60 75 Z" fill="#FFC24D"/>
+          <path d="M55 75 C53 85 59 89 60 81 C61 89 67 85 65 75 Z" fill="#E85A52"/>
+          <g class="bk"><circle cx="48" cy="50" r="5.5" fill="#33203A"/><circle cx="50" cy="47.6" r="2" fill="#FFF"/>
+          <circle cx="72" cy="50" r="5.5" fill="#33203A"/><circle cx="74" cy="47.6" r="2" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Piko</div><div class="sp">coq</div>
+        <div class="tr" style="color: #FF7A6B">Il lance la journée</div>
+        <div class="mt">Décor · l'aube qui se lève</div>
+        <div class="mt">Rang · sur sa crête</div>
+      </div>
+
+      <!-- CAPYBARA -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="60" cy="22" r="10" fill="#FFD76B"/>
+          <path d="M60 13 C57 9 63 8 62 13 Z" fill="#7A9E5C"/>
+          <ellipse cx="34" cy="40" rx="8" ry="7" fill="#8A6B4F"/><ellipse cx="86" cy="40" rx="8" ry="7" fill="#8A6B4F"/>
+          <path d="M60 34 C40 34 32 46 32 60 C32 76 44 86 60 86 C76 86 88 76 88 60 C88 46 80 34 60 34 Z" fill="#A8845F"/>
+          <ellipse cx="60" cy="74" rx="19" ry="12" fill="#C4A182"/>
+          <ellipse cx="53" cy="70" rx="2.8" ry="2.2" fill="#33203A"/><ellipse cx="67" cy="70" rx="2.8" ry="2.2" fill="#33203A"/>
+          <path d="M60 76 L60 80 M60 80 C57 82 55 80 55 78 M60 80 C63 82 65 80 65 78" stroke="#6E5240" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="46" cy="52" rx="4.2" ry="4.6" fill="#33203A"/><ellipse cx="74" cy="52" rx="4.2" ry="4.6" fill="#33203A"/>
+          <circle cx="47.4" cy="50.4" r="1.5" fill="#FFF"/><circle cx="75.4" cy="50.4" r="1.5" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Yuzu</div><div class="sp">capybara</div>
+        <div class="tr" style="color: #FFC49B">Rien ne l'énerve, jamais</div>
+        <div class="mt">Décor · le bain chaud</div>
+        <div class="mt">Rang · le fruit sur sa tête</div>
+      </div>
+
+      <!-- LOUTRE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="34" cy="34" r="9" fill="#7A5E45"/><circle cx="34" cy="34" r="4.5" fill="#5E4735"/>
+          <circle cx="86" cy="34" r="9" fill="#7A5E45"/><circle cx="86" cy="34" r="4.5" fill="#5E4735"/>
+          <circle cx="60" cy="54" r="28" fill="#8A6B4F"/>
+          <ellipse cx="60" cy="70" rx="20" ry="14" fill="#EBD9C2"/>
+          <g stroke="#EBD9C2" stroke-width="1.5" stroke-linecap="round" opacity="0.8"><path d="M42 68 L22 64 M42 72 L21 74 M78 68 L98 64 M78 72 L99 74"/></g>
+          <ellipse cx="60" cy="63" rx="6" ry="4.6" fill="#33203A"/>
+          <path d="M60 68 C60 73 55 74 53 72 M60 68 C60 73 65 74 67 72" stroke="#33203A" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="48" cy="49" rx="5" ry="5.6" fill="#33203A"/><ellipse cx="72" cy="49" rx="5" ry="5.6" fill="#33203A"/>
+          <circle cx="49.6" cy="46.8" r="1.8" fill="#FFF"/><circle cx="73.6" cy="46.8" r="1.8" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Lou</div><div class="sp">loutre</div>
+        <div class="tr" style="color: #4FC7A8">La joueuse, elle allège le trajet</div>
+        <div class="mt">Décor · la rivière</div>
+        <div class="mt">Rang · son galet fétiche</div>
+      </div>
+
+      <!-- CHEVAL -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M42 36 L38 12 L54 28 Z" fill="#A87450"/>
+          <path d="M78 36 L82 12 L66 28 Z" fill="#A87450"/>
+          <path d="M60 28 C46 28 42 42 44 56 C46 72 52 88 60 88 C68 88 74 72 76 56 C78 42 74 28 60 28 Z" fill="#B98157"/>
+          <path d="M44 34 C50 22 70 22 76 34 C70 40 50 40 44 34 Z" fill="#5E4028"/>
+          <path d="M60 42 C55 42 54 54 55 66 C56 76 58 82 60 82 C62 82 64 76 65 66 C66 54 65 42 60 42 Z" fill="#E0B48C"/>
+          <ellipse cx="55" cy="77" rx="3" ry="2.4" fill="#33203A"/><ellipse cx="65" cy="77" rx="3" ry="2.4" fill="#33203A"/>
+          <g class="bk"><ellipse cx="46" cy="52" rx="4.6" ry="5.4" fill="#33203A"/><ellipse cx="74" cy="52" rx="4.6" ry="5.4" fill="#33203A"/>
+          <circle cx="47.4" cy="49.8" r="1.6" fill="#FFF"/><circle cx="75.4" cy="49.8" r="1.6" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Sable</div><div class="sp">cheval</div>
+        <div class="tr" style="color: #E0956B">L'endurance, les longs trajets</div>
+        <div class="mt">Décor · la plaine</div>
+        <div class="mt">Rang · tresse de crinière</div>
+      </div>
+
+      <!-- LAPIN -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <ellipse cx="46" cy="26" rx="9" ry="24" fill="#E4DCE8"/><ellipse cx="46" cy="27" rx="5" ry="18" fill="#F0B8C8"/>
+          <ellipse cx="74" cy="26" rx="9" ry="24" fill="#E4DCE8"/><ellipse cx="74" cy="27" rx="5" ry="18" fill="#F0B8C8"/>
+          <circle cx="60" cy="60" r="26" fill="#F2ECF4"/>
+          <ellipse cx="52" cy="70" rx="9.5" ry="7.5" fill="#FFFFFF"/><ellipse cx="68" cy="70" rx="9.5" ry="7.5" fill="#FFFFFF"/>
+          <g stroke="#D8CCE0" stroke-width="1.5" stroke-linecap="round"><path d="M44 68 L26 64 M44 72 L25 74 M76 68 L94 64 M76 72 L95 74"/></g>
+          <path d="M56.5 64 L63.5 64 L60 68 Z" fill="#E08CA4"/>
+          <path d="M60 68 L60 71" stroke="#B08098" stroke-width="1.6" stroke-linecap="round"/>
+          <rect x="56.2" y="72" width="3.4" height="6.5" rx="1.5" fill="#FFFFFF" stroke="#D8CCE0" stroke-width="0.8"/>
+          <rect x="60.4" y="72" width="3.4" height="6.5" rx="1.5" fill="#FFFFFF" stroke="#D8CCE0" stroke-width="0.8"/>
+          <g class="bk"><ellipse cx="49" cy="57" rx="5" ry="5.8" fill="#33203A"/><ellipse cx="71" cy="57" rx="5" ry="5.8" fill="#33203A"/>
+          <circle cx="50.6" cy="54.8" r="1.8" fill="#FFF"/><circle cx="72.6" cy="54.8" r="1.8" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Bibi</div><div class="sp">lapin</div>
+        <div class="tr" style="color: #D8A8FF">Le rapide, à qui on apprend à ralentir</div>
+        <div class="mt">Décor · le terrier</div>
+        <div class="mt">Rang · ruban d'oreille</div>
+      </div>
+
+      <!-- TORTUE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <ellipse cx="26" cy="88" rx="10" ry="6" fill="#8FB570"/><ellipse cx="94" cy="88" rx="10" ry="6" fill="#8FB570"/>
+          <path d="M16 90 C16 62 36 44 60 44 C84 44 104 62 104 90 Z" fill="#7A9E5C"/>
+          <path d="M16 90 C16 62 36 44 60 44 C84 44 104 62 104 90" fill="none" stroke="#5E7D44" stroke-width="3"/>
+          <path d="M60 44 L60 90 M38 52 L44 90 M82 52 L76 90 M24 72 L96 72" stroke="#5E7D44" stroke-width="2.2" fill="none"/>
+          <circle cx="60" cy="34" r="18" fill="#A8C98A"/>
+          <path d="M52 44 C55 48 65 48 68 44" stroke="#6E8E52" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="53" cy="32" rx="4" ry="4.6" fill="#33203A"/><ellipse cx="67" cy="32" rx="4" ry="4.6" fill="#33203A"/>
+          <circle cx="54.4" cy="30" r="1.5" fill="#FFF"/><circle cx="68.4" cy="30" r="1.5" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Tao</div><div class="sp">tortue</div>
+        <div class="tr" style="color: #9FC98A">La lenteur comme vertu</div>
+        <div class="mt">Décor · le jardin sur sa carapace</div>
+        <div class="mt">Rang · motif de carapace</div>
+      </div>
+
+      <!-- GIRAFE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M50 28 L48 14" stroke="#B9834A" stroke-width="4" stroke-linecap="round"/><circle cx="48" cy="12" r="4.5" fill="#5E4028"/>
+          <path d="M70 28 L72 14" stroke="#B9834A" stroke-width="4" stroke-linecap="round"/><circle cx="72" cy="12" r="4.5" fill="#5E4028"/>
+          <ellipse cx="31" cy="36" rx="12" ry="6" fill="#D9A45C" transform="rotate(-20 31 36)"/>
+          <ellipse cx="89" cy="36" rx="12" ry="6" fill="#D9A45C" transform="rotate(20 89 36)"/>
+          <path d="M60 26 C48 26 44 40 46 54 C48 70 53 88 60 88 C67 88 72 70 74 54 C76 40 72 26 60 26 Z" fill="#E8B96E"/>
+          <circle cx="52" cy="34" r="4.5" fill="#C08A4E"/><circle cx="69" cy="33" r="4" fill="#C08A4E"/>
+          <circle cx="50" cy="60" r="4" fill="#C08A4E"/><circle cx="71" cy="59" r="4.5" fill="#C08A4E"/>
+          <ellipse cx="60" cy="76" rx="12" ry="9" fill="#F5D9A8"/>
+          <ellipse cx="55" cy="73" rx="2.4" ry="2" fill="#33203A"/><ellipse cx="65" cy="73" rx="2.4" ry="2" fill="#33203A"/>
+          <g class="bk"><ellipse cx="47" cy="46" rx="4.6" ry="5.2" fill="#33203A"/><ellipse cx="73" cy="46" rx="4.6" ry="5.2" fill="#33203A"/>
+          <circle cx="48.4" cy="44" r="1.6" fill="#FFF"/><circle cx="74.4" cy="44" r="1.6" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Kiri</div><div class="sp">girafe</div>
+        <div class="tr" style="color: #FFD76B">Elle voit loin, elle anticipe</div>
+        <div class="mt">Décor · l'arbre qui grandit</div>
+        <div class="mt">Rang · ses ossicônes</div>
+      </div>
+
+      <!-- SINGE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="24" cy="52" r="14" fill="#8A6B4F"/><circle cx="24" cy="52" r="7.5" fill="#D4A882"/>
+          <circle cx="96" cy="52" r="14" fill="#8A6B4F"/><circle cx="96" cy="52" r="7.5" fill="#D4A882"/>
+          <circle cx="60" cy="54" r="27" fill="#8A6B4F"/>
+          <path d="M60 32 C46 32 40 46 42 58 C44 72 52 81 60 81 C68 81 76 72 78 58 C80 46 74 32 60 32 Z" fill="#E8C9A8"/>
+          <g class="bk"><ellipse cx="50" cy="52" rx="5" ry="5.8" fill="#33203A"/><ellipse cx="70" cy="52" rx="5" ry="5.8" fill="#33203A"/>
+          <circle cx="51.6" cy="49.8" r="1.8" fill="#FFF"/><circle cx="71.6" cy="49.8" r="1.8" fill="#FFF"/></g>
+          <ellipse cx="56.5" cy="64" rx="1.9" ry="1.5" fill="#33203A"/><ellipse cx="63.5" cy="64" rx="1.9" ry="1.5" fill="#33203A"/>
+          <path d="M52 70 C56 75 64 75 68 70" stroke="#33203A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        </svg></div>
+        <div class="nm">Titi</div><div class="sp">singe</div>
+        <div class="tr" style="color: #C77BB0">Le curieux, il te fait changer de route</div>
+        <div class="mt">Décor · la canopée</div>
+        <div class="mt">Rang · son bracelet</div>
+      </div>
+
+      <!-- SERPENT -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M26 96 C24 82 36 74 50 76" stroke="#4FA890" stroke-width="14" fill="none" stroke-linecap="round"/>
+          <path d="M60 30 C45 37 41 53 45 66 C49 79 71 79 75 66 C79 53 75 37 60 30 Z" fill="#5FBFA8"/>
+          <path d="M50 44 C54 41 66 41 70 44" stroke="#43A38C" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M52 62 C55 59 65 59 68 62" stroke="#43A38C" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="51" cy="53" rx="5.4" ry="6" fill="#FFD76B"/><ellipse cx="69" cy="53" rx="5.4" ry="6" fill="#FFD76B"/>
+          <ellipse cx="51" cy="53" rx="1.9" ry="5.2" fill="#33203A"/><ellipse cx="69" cy="53" rx="1.9" ry="5.2" fill="#33203A"/></g>
+          <path d="M60 72 L60 82 M60 82 L55.5 89 M60 82 L64.5 89" stroke="#FF6FA5" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        </svg></div>
+        <div class="nm">Sinu</div><div class="sp">serpent</div>
+        <div class="tr" style="color: #5FBFA8">La trajectoire fluide, aucun à-coup</div>
+        <div class="mt">Décor · le désert qui fleurit</div>
+        <div class="mt">Rang · écailles du dos</div>
+      </div>
+
+      <!-- FLAMANT -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M44 100 C38 80 46 60 64 54" stroke="#FF9FC0" stroke-width="12" fill="none" stroke-linecap="round"/>
+          <circle cx="70" cy="46" r="17" fill="#FFB3CE"/>
+          <path d="M84 42 C98 42 104 50 100 60 C96 68 84 64 80 54 Z" fill="#F2ECE0"/>
+          <path d="M94 58 C99 58 101 61 98 64 C94 66 90 63 90 60 Z" fill="#33203A"/>
+          <g class="bk"><circle cx="74" cy="42" r="4.2" fill="#33203A"/><circle cx="75.6" cy="40.4" r="1.6" fill="#FFF"/></g>
+          <ellipse cx="62" cy="52" rx="6" ry="4" fill="#FF8FA3" opacity="0.45"/>
+        </svg></div>
+        <div class="nm">Rosa</div><div class="sp">flamant rose</div>
+        <div class="tr" style="color: #FF6FA5">L'équilibre, tenir sur une patte</div>
+        <div class="mt">Décor · la lagune</div>
+        <div class="mt">Rang · anneau de patte</div>
+      </div>
+
+      <!-- GAZELLE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <path d="M51 28 C47 18 47 10 51 5" stroke="#5E4028" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          <path d="M69 28 C73 18 73 10 69 5" stroke="#5E4028" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          <g stroke="#5E4028" stroke-width="2" stroke-linecap="round"><path d="M47.6 22 L52.6 21 M47 15 L51.6 14 M72.4 22 L67.4 21 M73 15 L68.4 14"/></g>
+          <ellipse cx="31" cy="38" rx="12" ry="6" fill="#D9AE7A" transform="rotate(-22 31 38)"/>
+          <ellipse cx="89" cy="38" rx="12" ry="6" fill="#D9AE7A" transform="rotate(22 89 38)"/>
+          <path d="M60 28 C48 28 44 42 46 56 C48 72 53 88 60 88 C67 88 72 72 74 56 C76 42 72 28 60 28 Z" fill="#E8C89B"/>
+          <path d="M50 46 C48 58 50 72 55 82" stroke="#B98B5C" stroke-width="4.5" fill="none" opacity="0.45" stroke-linecap="round"/>
+          <path d="M70 46 C72 58 70 72 65 82" stroke="#B98B5C" stroke-width="4.5" fill="none" opacity="0.45" stroke-linecap="round"/>
+          <ellipse cx="60" cy="77" rx="11" ry="8.5" fill="#FFF2DE"/>
+          <ellipse cx="56" cy="75" rx="2.2" ry="1.8" fill="#33203A"/><ellipse cx="64" cy="75" rx="2.2" ry="1.8" fill="#33203A"/>
+          <g class="bk"><ellipse cx="48" cy="52" rx="4.8" ry="5.4" fill="#33203A"/><ellipse cx="72" cy="52" rx="4.8" ry="5.4" fill="#33203A"/>
+          <circle cx="49.4" cy="49.8" r="1.6" fill="#FFF"/><circle cx="73.4" cy="49.8" r="1.6" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Sila</div><div class="sp">gazelle</div>
+        <div class="tr" style="color: #E8C89B">La souplesse, l'économie du geste</div>
+        <div class="mt">Décor · la savane à l'aube</div>
+        <div class="mt">Rang · cornes annelées</div>
+      </div>
+
+      <!-- LION -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <g fill="#C77A2E">
+            <circle cx="60" cy="20" r="13"/><circle cx="88" cy="30" r="13"/><circle cx="100" cy="56" r="13"/>
+            <circle cx="88" cy="82" r="13"/><circle cx="60" cy="92" r="13"/><circle cx="32" cy="82" r="13"/>
+            <circle cx="20" cy="56" r="13"/><circle cx="32" cy="30" r="13"/>
+          </g>
+          <circle cx="60" cy="56" r="32" fill="#B36C26"/>
+          <circle cx="40" cy="34" r="8" fill="#F2C489"/><circle cx="80" cy="34" r="8" fill="#F2C489"/>
+          <circle cx="60" cy="54" r="25" fill="#F2C489"/>
+          <ellipse cx="52" cy="68" rx="10" ry="8" fill="#FFF2DE"/><ellipse cx="68" cy="68" rx="10" ry="8" fill="#FFF2DE"/>
+          <path d="M56.5 62 L63.5 62 L60 66 Z" fill="#8A5A3A"/>
+          <path d="M60 66 C60 71 55 72 53 70 M60 66 C60 71 65 72 67 70" stroke="#8A5A3A" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="50" cy="50" rx="4.8" ry="5.4" fill="#33203A"/><ellipse cx="70" cy="50" rx="4.8" ry="5.4" fill="#33203A"/>
+          <circle cx="51.4" cy="47.8" r="1.7" fill="#FFF"/><circle cx="71.4" cy="47.8" r="1.7" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Zola</div><div class="sp">lion</div>
+        <div class="tr" style="color: #F2A93B">Le calme du fort, rien à prouver</div>
+        <div class="mt">Décor · le rocher, la nuit</div>
+        <div class="mt">Rang · crinière qui s'épaissit</div>
+      </div>
+
+      <!-- TIGRE -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="34" cy="28" r="12" fill="#E8763C"/><circle cx="34" cy="29" r="6" fill="#FFF2DE"/>
+          <circle cx="86" cy="28" r="12" fill="#E8763C"/><circle cx="86" cy="29" r="6" fill="#FFF2DE"/>
+          <circle cx="60" cy="56" r="29" fill="#F28B4A"/>
+          <g stroke="#3A2418" stroke-width="3.6" stroke-linecap="round">
+            <path d="M46 32 L50 43 M60 28 L60 39 M74 32 L70 43"/>
+            <path d="M32 52 L43 54 M32 63 L43 63 M88 52 L77 54 M88 63 L77 63"/>
+          </g>
+          <ellipse cx="50" cy="70" rx="11" ry="9" fill="#FFF2DE"/><ellipse cx="70" cy="70" rx="11" ry="9" fill="#FFF2DE"/>
+          <g stroke="#FFF2DE" stroke-width="1.5" stroke-linecap="round" opacity="0.9"><path d="M40 66 L22 62 M40 71 L21 72 M80 66 L98 62 M80 71 L99 72"/></g>
+          <path d="M56.5 63 L63.5 63 L60 67 Z" fill="#E08CA4"/>
+          <path d="M60 67 C60 71 56 72 54.5 70 M60 67 C60 71 64 72 65.5 70" stroke="#3A2418" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <g class="bk"><ellipse cx="49" cy="52" rx="5" ry="5.6" fill="#33203A"/><ellipse cx="71" cy="52" rx="5" ry="5.6" fill="#33203A"/>
+          <circle cx="50.6" cy="49.8" r="1.8" fill="#FFF"/><circle cx="72.6" cy="49.8" r="1.8" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Raya</div><div class="sp">tigre</div>
+        <div class="tr" style="color: #E8763C">La précision, le geste juste</div>
+        <div class="mt">Décor · la jungle de nuit</div>
+        <div class="mt">Rang · ses rayures</div>
+      </div>
+
+      <!-- HIPPOPOTAME -->
+      <div class="card">
+        <div class="ico"><svg width="90" height="80" viewBox="0 0 120 105">
+          <circle cx="34" cy="28" r="8" fill="#9F8FA8"/><circle cx="34" cy="28" r="4" fill="#E0A8C0"/>
+          <circle cx="86" cy="28" r="8" fill="#9F8FA8"/><circle cx="86" cy="28" r="4" fill="#E0A8C0"/>
+          <path d="M60 30 C40 30 28 42 28 58 C28 76 42 88 60 88 C78 88 92 76 92 58 C92 42 80 30 60 30 Z" fill="#A896B4"/>
+          <ellipse cx="60" cy="72" rx="27" ry="16" fill="#BFA9C9"/>
+          <ellipse cx="49" cy="65" rx="4.2" ry="3.2" fill="#6E5F7A"/><ellipse cx="71" cy="65" rx="4.2" ry="3.2" fill="#6E5F7A"/>
+          <path d="M45 78 C52 83 68 83 75 78" stroke="#6E5F7A" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <rect x="47" y="79" width="4.5" height="5" rx="1.8" fill="#FFF2DE"/><rect x="68.5" y="79" width="4.5" height="5" rx="1.8" fill="#FFF2DE"/>
+          <g class="bk"><ellipse cx="45" cy="45" rx="4.4" ry="4.8" fill="#33203A"/><ellipse cx="75" cy="45" rx="4.4" ry="4.8" fill="#33203A"/>
+          <circle cx="46.4" cy="43" r="1.6" fill="#FFF"/><circle cx="76.4" cy="43" r="1.6" fill="#FFF"/></g>
+        </svg></div>
+        <div class="nm">Bulle</div><div class="sp">hippopotame</div>
+        <div class="tr" style="color: #8FA8D8">La masse tranquille, on ne le bouscule pas</div>
+        <div class="mt">Décor · le fleuve</div>
+        <div class="mt">Rang · fleur d'eau sur l'oreille</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- le constat couleur -->
+  <div style="display: flex; gap: 14px; align-items: stretch; position: relative">
+    <div style="flex-grow: 1; background: rgba(255,143,163,0.09); border: 1px solid rgba(255,143,163,0.3); border-radius: 20px; padding: 14px 18px; display: flex; flex-direction: column; gap: 6px">
+      <div class="disp" style="font-size: 17px; font-weight: 700; color: #FF8FA3">À 18 compagnons, la couleur ne peut plus servir d'identifiant</div>
+      <div style="font-size: 12.5px; font-weight: 600; color: #D8B9CB; line-height: 1.5">C'est ce que je craignais et c'est vérifié à l'écran : quatre paires sont déjà indistinguables — <span class="clash">Sinu / Lou</span> (deux verts d'eau), <span class="clash">Sila / Yuzu</span> (deux sables), <span class="clash">Zola / Rouki</span> (deux ambres), <span class="clash">Raya / Rouki</span> (le tigre a exactement la fourrure du panda roux).<br>
+      Deux sorties possibles : soit on garde une troupe de six à huit et chacun garde sa couleur, soit on assume les dix-huit et l'accent redevient unique pour toute l'app — c'est alors le <strong style="color: #F4EFFF">dessin</strong> qui identifie le compagnon, pas la teinte. La deuxième option est plus simple à coder et plus solide : une seule palette à tenir au lieu de dix-huit.</div>
+    </div>
+    <div style="flex-shrink: 0; width: 420px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; padding: 14px 18px; display: flex; flex-direction: column; gap: 7px">
+      <div class="disp" style="font-size: 17px; font-weight: 700; color: #A9E8F4">Ce que coûte chaque compagnon retenu</div>
+      <div style="font-size: 12.5px; font-weight: 600; color: #B9A9D8; line-height: 1.5">5 dessins (les états), 1 décor de progression, 1 porteur de rang décliné sur 8 paliers, 1 fichier de phrases. Aucune ligne de logique.<br>Le porteur de rang est le vrai coût caché : c'est 8 variantes par compagnon.</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

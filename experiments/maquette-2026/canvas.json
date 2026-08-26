@@ -1,0 +1,67 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "A · Itinéraire", "x": 0, "y": 0, "w": 390, "h": 844 },
+    { "file": "Objectifs.dc.html", "title": "A · Objectifs", "x": 490, "y": 0, "w": 390, "h": 844 },
+    { "file": "Profil.dc.html", "title": "A · Profil", "x": 980, "y": 0, "w": 390, "h": 844 },
+
+    { "file": "ItineraireB.dc.html", "title": "B · Itinéraire", "x": 0, "y": 1120, "w": 390, "h": 844 },
+    { "file": "ObjectifsB.dc.html", "title": "B · Défis", "x": 490, "y": 1120, "w": 390, "h": 844 },
+    { "file": "ProfilB.dc.html", "title": "B · Profil", "x": 980, "y": 1120, "w": 390, "h": 844 },
+
+    { "file": "ItineraireC.dc.html", "title": "C · Route", "x": 0, "y": 2240, "w": 390, "h": 844 },
+    { "file": "ObjectifsC.dc.html", "title": "C · Carnet", "x": 490, "y": 2240, "w": 390, "h": 844 },
+    { "file": "ProfilC.dc.html", "title": "C · Moi", "x": 980, "y": 2240, "w": 390, "h": 844 },
+    { "file": "RoukiC.dc.html", "title": "C · Rouki, la mascotte", "x": 1470, "y": 2240, "w": 880, "h": 660 },
+
+    { "file": "CompagnonsC.dc.html", "title": "C · Choix du compagnon", "x": 1470, "y": 3200, "w": 390, "h": 844 },
+    { "file": "ElephantC.dc.html", "title": "C · Bao, l'éléphanteau", "x": 1960, "y": 3200, "w": 880, "h": 700 },
+    { "file": "ChienC.dc.html", "title": "C · Pilou, le chien", "x": 2940, "y": 3200, "w": 880, "h": 700 },
+    { "file": "ChatC.dc.html", "title": "C · Nima, la chatte", "x": 3920, "y": 3200, "w": 880, "h": 700 },
+    { "file": "TroupeC.dc.html", "title": "C · La troupe — 18 compagnons", "x": 1470, "y": 4180, "w": 1900, "h": 1090 }
+  ],
+  "annotations": [
+    {
+      "id": "commun",
+      "x": 0,
+      "y": -280,
+      "w": 640,
+      "text": "Ce qui ne change pas d'une direction à l'autre\n\n· Plus aucun uppercase + letter-spacing : la hiérarchie passe par le poids et la taille.\n· Plus aucun emoji comme icône : tout est en SVG tracé.\n· La couleur dit quelque chose (action / badge / objectif), elle ne décore pas.\n· Le HUD de navigation (virage, limitation, compteur) n'est repris dans aucune des trois : conventions routières, lisibilité au volant d'abord.\n· Polices à embarquer en .woff2 dans css/fonts/ — en file:// les polices Google ne se chargent pas sur l'appareil.\n\nLes chiffres affichés sont des valeurs d'exemple pour montrer les états."
+    },
+    {
+      "id": "dir-a",
+      "x": 1470,
+      "y": 0,
+      "w": 420,
+      "text": "DIRECTION A — Nuit sobre\n\nSombre neutre, couleur rare et sémantique.\nLime #C8FF3D éco/action · Orange #FF8A3D badges · Violet #A78BFA objectifs.\nBricolage Grotesque + Space Grotesk.\n\nPour : lisible de nuit au volant, vieillit bien, cohérent avec le HUD qu'on ne touche pas. Léger à rendre en WebView.\n\nContre : c'est le registre de la moitié des apps tech. Ça ne se distingue pas dans un store, et le côté « jeu » reste discret."
+    },
+    {
+      "id": "dir-b",
+      "x": 1470,
+      "y": 1120,
+      "w": 420,
+      "text": "DIRECTION B — Arcade papier\n\nPapier crème, contours noirs épais, ombres dures décalées, aplats saturés. Carte laissée sombre.\nVert #12BE6E action · Jaune #FFD23D badges · Bleu #2F5BFF défis · Rose #FF3E88 série.\nGabarito 800/900.\n\nPour : mémorable, assume le jeu. Aplats + contours = zéro flou, donc le moins cher des trois en GPU.\n\nContre : feuille claire = éblouissante de nuit, il faut un vrai mode nuit en plus. Ton tutoyant qui ne plaira pas à tout le monde."
+    },
+    {
+      "id": "dir-c",
+      "x": 2450,
+      "y": 2240,
+      "w": 440,
+      "text": "DIRECTION C — Crépuscule\n\nUn univers, pas un thème. Ciel de fin de journée en dégradé, verre translucide, lumière chaude, et Rouki — un panda roux qui tient le carnet, porte ton rang et fait pousser une clairière au rythme de ton score éco.\n\nCiel #1B1633 → #6A3F62. Ambre #FFB35C action · Rose #FF8FA3 chaleur · Turquoise #7FD8E8 temps · Violet #A88BFF points · Menthe #6FE3A0 éco.\nBaloo 2 + Nunito. Barre de navigation flottante.\n\nCe qui bouge vraiment ici : Rouki respire, cligne des yeux, agite la queue ; l'itinéraire se trace au chargement ; le bouton principal pulse ; les lucioles dérivent ; la barre d'un défi réussi scintille. Tout est en CSS, désactivé sous prefers-reduced-motion.\n\nPour : aucune app GPS ne ressemble à ça. La mascotte donne un ton à tous les écrans vides et fait de la gamification une histoire au lieu d'un tableau de bord. C'est la seule des trois qui crée un attachement.\n\nContre : la plus chère à produire et à tenir — il faut dessiner Rouki dans 8 rangs et plusieurs états, et écrire une voix cohérente partout. Le flou (backdrop-filter) et les dégradés coûtent plus cher en GPU que A et B : à surveiller en navigation continue. Et l'univers doit rester à sa place — la règle « Rouki disparaît au volant » n'est pas une option."
+    },
+    {
+      "id": "troupe",
+      "x": 1470,
+      "y": 2960,
+      "w": 880,
+      "text": "LA TROUPE — un compagnon par profil\n\nTon app a déjà un sélecteur de profils (« Aucun profil créé ») qui ne sert pas à grand-chose aujourd'hui. Lui accrocher un compagnon lui donne enfin une raison d'exister : chaque conducteur du véhicule a le sien, avec son rang et son décor.\n\nLa mécanique ne bouge pas d'un compagnon à l'autre — mêmes 5 états, mêmes déclencheurs, mêmes 8 rangs. Ce qui change : les dessins, une couleur d'accent prise dans la palette, un décor de progression, et un fichier de phrases.\n\nAmbre Rouki · Violet Bao · le coq, le chat et le chien prendront rose, turquoise et menthe.\n\nAjouter un compagnon = 5 dessins + 1 fichier de textes. Aucune ligne de logique à toucher."
+    },
+    {
+      "id": "mascotte",
+      "x": 3460,
+      "y": 4180,
+      "w": 560,
+      "text": "Pourquoi un panda roux, et pas un renard ou un hibou\n\nLe renard est pris (Firefox et cent autres), le hibou appartient à Duolingo. Hérisson et cerf sont écartés pour une raison bête mais sérieuse : ce sont les animaux qu'on écrase sur la route, mauvais signal dans une app de conduite.\n\nLe panda roux est calme, lent, économe de ses gestes — exactement le comportement que l'app récompense. Il se lit instantanément en petit (oreilles rondes, masque crème, queue rayée) et sa couleur rousse tient déjà le rôle d'accent chaud de la palette.\n\nNom proposé : Rouki. Court, prononçable en français comme ailleurs, aucune homonymie gênante. À valider."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

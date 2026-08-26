@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Nunito', 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #A88BFF; } a:hover { color: #C3AEFF; }
+    .disp { font-family: 'Baloo 2', 'Nunito', sans-serif; }
+    .glass { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10); }
+    @keyframes breathe { 0%,100% { transform: scale(1) } 50% { transform: scale(1.035) } }
+    @keyframes trunk { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+    @keyframes flap { 0%,100% { transform: rotate(0deg) } 50% { transform: rotate(-3.5deg) } }
+    @keyframes blink { 0%,90%,100% { transform: scaleY(1) } 95% { transform: scaleY(0.08) } }
+    @keyframes zzz { 0% { transform: translate(0,0) scale(0.7); opacity: 0 } 30% { opacity: 1 } 100% { transform: translate(14px,-24px) scale(1.1); opacity: 0 } }
+    @keyframes sweat { 0% { transform: translateY(0); opacity: 0 } 30% { opacity: 1 } 100% { transform: translateY(12px); opacity: 0 } }
+    @keyframes spark { 0%,100% { opacity: 0.2; transform: scale(0.7) } 50% { opacity: 1; transform: scale(1.2) } }
+    .el-body { animation: breathe 3.8s ease-in-out infinite; transform-origin: 60px 100px }
+    .el-trunk { animation: trunk 4.6s ease-in-out infinite; transform-origin: 60px 62px }
+    .el-earL { animation: flap 5.2s ease-in-out infinite; transform-origin: 40px 44px }
+    .el-earR { animation: flap 5.2s ease-in-out infinite reverse; transform-origin: 80px 44px }
+    .el-eyes { animation: blink 6s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    .zz { animation: zzz 3s ease-out infinite }
+    .sw { animation: sweat 2.2s ease-in infinite }
+    .sp { animation: spark 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+  </style>
+</helmet>
+
+<div style="width: 880px; height: 700px; background: linear-gradient(160deg, #20193F 0%, #2E2350 45%, #3E2F63 100%); color: #F4EFFF; padding: 34px 38px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; position: relative; overflow: hidden">
+
+  <svg width="880" height="700" viewBox="0 0 880 700" style="position: absolute; inset: 0; pointer-events: none">
+    <g fill="#FFF0DC" opacity="0.4">
+      <circle cx="736" cy="58" r="1.6"/><circle cx="812" cy="126" r="1.2"/><circle cx="660" cy="34" r="1.3"/>
+      <circle cx="58" cy="88" r="1.2"/><circle cx="148" cy="42" r="1.4"/><circle cx="836" cy="300" r="1.2"/>
+    </g>
+  </svg>
+
+  <!-- en-tête -->
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; position: relative">
+    <div>
+      <div style="font-size: 13px; font-weight: 700; color: #C6B6E4; letter-spacing: 0.02em">Direction C — Crépuscule · compagnon n°2</div>
+      <div class="disp" style="font-size: 44px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05">Bao, l'éléphanteau</div>
+    </div>
+    <div style="font-size: 13px; font-weight: 600; color: #A897C9; max-width: 400px; line-height: 1.55; text-align: right">Mêmes rôles que Rouki, même mécanique, mais une autre voix : Bao n'oublie rien. C'est lui qui se souvient de tes habitudes.</div>
+  </div>
+
+  <!-- rôle + grand Bao -->
+  <div style="display: flex; gap: 20px; align-items: stretch; position: relative">
+    <div class="glass" style="flex-shrink: 0; width: 220px; display: flex; align-items: center; justify-content: center; border-color: rgba(168,139,255,0.28); background: linear-gradient(150deg, rgba(168,139,255,0.16), rgba(255,255,255,0.03))">
+      <svg width="190" height="200" viewBox="0 0 120 130" style="overflow: visible">
+        <ellipse cx="60" cy="122" rx="30" ry="5" fill="#0F0A20" opacity="0.4"/>
+        <g class="el-body">
+          <!-- queue -->
+          <path d="M86 100 C94 102 96 108 94 113" stroke="#7E76A8" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path d="M94 111 C97 113 97 117 94 118 C92 116 92 113 94 111 Z" fill="#FFF0DC" opacity="0.75"/>
+          <!-- corps -->
+          <ellipse cx="60" cy="98" rx="27" ry="22" fill="#8E86B8"/>
+          <ellipse cx="60" cy="104" rx="16" ry="13" fill="#ABA3D4"/>
+          <ellipse cx="42" cy="117" rx="9" ry="5.5" fill="#7E76A8"/>
+          <ellipse cx="78" cy="117" rx="9" ry="5.5" fill="#7E76A8"/>
+          <!-- oreilles -->
+          <g class="el-earL"><ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <g class="el-earR"><ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <!-- tête -->
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <!-- défenses -->
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <!-- trompe -->
+          <g class="el-trunk">
+            <path d="M60 62 C57 74 55 84 58 92" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M58 92 C60 99 67 100 70 95" stroke="#8E86B8" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <path d="M70 95 C72 92 70 89 68 90" stroke="#8E86B8" stroke-width="6.5" fill="none" stroke-linecap="round"/>
+            <path d="M56 70 L64 70 M55.5 78 L62 78" stroke="#7E76A8" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+          </g>
+          <!-- yeux -->
+          <g class="el-eyes">
+            <ellipse cx="47" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+            <ellipse cx="73" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+            <circle cx="48.8" cy="46.8" r="1.7" fill="#FFF"/>
+            <circle cx="74.8" cy="46.8" r="1.7" fill="#FFF"/>
+          </g>
+          <ellipse cx="38" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/>
+          <ellipse cx="82" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/>
+        </g>
+      </svg>
+    </div>
+
+    <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px">
+      <div class="glass" style="padding: 13px 15px; display: flex; flex-direction: column; gap: 4px">
+        <div class="disp" style="font-size: 16px; font-weight: 700; color: #C3AEFF">1 · Il tient le carnet</div>
+        <div style="font-size: 12.5px; font-weight: 600; color: #B9A9D8; line-height: 1.45">Là où Rouki observe, Bao se souvient : « Tu prends cette route tous les mardis. Elle t'a coûté 2 points la dernière fois. »</div>
+      </div>
+      <div class="glass" style="padding: 13px 15px; display: flex; flex-direction: column; gap: 4px">
+        <div class="disp" style="font-size: 16px; font-weight: 700; color: #7FD8E8">2 · Sa mare = ton score</div>
+        <div style="font-size: 12.5px; font-weight: 600; color: #B9A9D8; line-height: 1.45">Chaque compagnon a son décor. La clairière de Rouki devient chez Bao un point d'eau qui remonte à chaque défi bouclé.</div>
+      </div>
+      <div class="glass" style="padding: 13px 15px; display: flex; flex-direction: column; gap: 4px">
+        <div class="disp" style="font-size: 16px; font-weight: 700; color: #6FE3A0">3 · Il porte ton rang</div>
+        <div style="font-size: 12.5px; font-weight: 600; color: #B9A9D8; line-height: 1.45">Les 8 catégories Bronze → Ange restent identiques. Chez Bao elles se portent en parure de front plutôt qu'en médaille.</div>
+      </div>
+      <div class="glass" style="padding: 13px 15px; display: flex; flex-direction: column; gap: 4px; border-color: rgba(255,143,163,0.32); background: rgba(255,143,163,0.07)">
+        <div class="disp" style="font-size: 16px; font-weight: 700; color: #FF8FA3">4 · Il disparaît au volant</div>
+        <div style="font-size: 12.5px; font-weight: 600; color: #D8B9CB; line-height: 1.45">Règle commune à tous les compagnons, sans exception. Navigation lancée = écran rendu au HUD.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- états -->
+  <div style="display: flex; flex-direction: column; gap: 10px; position: relative">
+    <div style="font-size: 12px; font-weight: 800; color: #8B7BAE; letter-spacing: 0.08em">SES ÉTATS — mêmes cinq que Rouki, pour que le code n'ait qu'un seul jeu d'états à gérer</div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 11px">
+
+      <div class="glass" style="padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+        <svg width="78" height="78" viewBox="0 0 120 105" style="overflow: visible">
+          <g class="el-earL"><ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <g class="el-earR"><ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <g class="el-trunk">
+            <path d="M60 62 C57 74 55 84 58 92" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M58 92 C60 99 67 100 70 95" stroke="#8E86B8" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <path d="M70 95 C72 92 70 89 68 90" stroke="#8E86B8" stroke-width="6.5" fill="none" stroke-linecap="round"/>
+          </g>
+          <g class="el-eyes">
+            <ellipse cx="47" cy="49" rx="4.6" ry="5.6" fill="#33203A"/><ellipse cx="73" cy="49" rx="4.6" ry="5.6" fill="#33203A"/>
+            <circle cx="48.8" cy="46.8" r="1.7" fill="#FFF"/><circle cx="74.8" cy="46.8" r="1.7" fill="#FFF"/>
+          </g>
+          <ellipse cx="38" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/><ellipse cx="82" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.45"/>
+        </svg>
+        <div style="font-size: 12px; font-weight: 800">Au repos</div>
+        <div style="font-size: 10.5px; font-weight: 600; color: #8B7BAE; text-align: center; line-height: 1.35">Écran d'accueil</div>
+      </div>
+
+      <div class="glass" style="padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+        <svg width="78" height="78" viewBox="0 0 120 105" style="overflow: visible">
+          <g class="sp"><path d="M102 20 L104.5 27 L111 29.5 L104.5 32 L102 39 L99.5 32 L93 29.5 L99.5 27 Z" fill="#FFE9B8"/></g>
+          <g class="sp" style="animation-delay:.8s"><path d="M18 26 L20 31.5 L25 33.5 L20 35.5 L18 41 L16 35.5 L11 33.5 L16 31.5 Z" fill="#FFE9B8"/></g>
+          <g class="el-earL"><ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <g class="el-earR"><ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <!-- trompe levée -->
+          <path d="M62 64 C70 72 82 74 88 66" stroke="#8E86B8" stroke-width="13" fill="none" stroke-linecap="round"/>
+          <path d="M88 66 C92 60 90 52 84 50" stroke="#8E86B8" stroke-width="9" fill="none" stroke-linecap="round"/>
+          <path d="M84 50 C81 48 79 50 79 52" stroke="#8E86B8" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M43 51 C45.5 45 50.5 45 53 51" stroke="#33203A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <path d="M67 51 C69.5 45 74.5 45 77 51" stroke="#33203A" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+          <ellipse cx="38" cy="61" rx="7" ry="4.6" fill="#FF8FA3" opacity="0.6"/><ellipse cx="82" cy="61" rx="7" ry="4.6" fill="#FF8FA3" opacity="0.6"/>
+        </svg>
+        <div style="font-size: 12px; font-weight: 800; color: #6FE3A0">Ravi</div>
+        <div style="font-size: 10.5px; font-weight: 600; color: #8B7BAE; text-align: center; line-height: 1.35">Défi validé, badge gagné</div>
+      </div>
+
+      <div class="glass" style="padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+        <svg width="78" height="78" viewBox="0 0 120 105" style="overflow: visible">
+          <g class="sw"><path d="M100 32 C100 32 95 40 95 44 A5 5 0 0 0 105 44 C105 40 100 32 100 32 Z" fill="#7FD8E8"/></g>
+          <ellipse cx="32" cy="58" rx="18" ry="20" fill="#8E86B8"/><ellipse cx="34" cy="60" rx="11" ry="13" fill="#E0A8C0" opacity="0.6"/>
+          <ellipse cx="88" cy="58" rx="18" ry="20" fill="#8E86B8"/><ellipse cx="86" cy="60" rx="11" ry="13" fill="#E0A8C0" opacity="0.6"/>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <!-- trompe repliée -->
+          <path d="M60 62 C58 72 52 78 46 78" stroke="#8E86B8" stroke-width="13" fill="none" stroke-linecap="round"/>
+          <path d="M46 78 C40 78 38 72 41 68" stroke="#8E86B8" stroke-width="9" fill="none" stroke-linecap="round"/>
+          <path d="M41 42 L53 46 M79 42 L67 46" stroke="#33203A" stroke-width="2.6" stroke-linecap="round"/>
+          <ellipse cx="47" cy="52" rx="4.2" ry="4.8" fill="#33203A"/><ellipse cx="73" cy="52" rx="4.2" ry="4.8" fill="#33203A"/>
+        </svg>
+        <div style="font-size: 12px; font-weight: 800; color: #FFB35C">Secoué</div>
+        <div style="font-size: 10.5px; font-weight: 600; color: #8B7BAE; text-align: center; line-height: 1.35">Bilan de trajet brusque</div>
+      </div>
+
+      <div class="glass" style="padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+        <svg width="78" height="78" viewBox="0 0 120 105" style="overflow: visible">
+          <g class="zz"><text x="92" y="30" font-family="'Baloo 2', sans-serif" font-size="17" font-weight="800" fill="#A88BFF">z</text></g>
+          <g class="zz" style="animation-delay:1.4s"><text x="98" y="38" font-family="'Baloo 2', sans-serif" font-size="13" font-weight="800" fill="#A88BFF">z</text></g>
+          <g class="el-earL"><ellipse cx="30" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="32" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <g class="el-earR"><ellipse cx="90" cy="52" rx="20" ry="22" fill="#8E86B8"/><ellipse cx="88" cy="53" rx="13" ry="15" fill="#E0A8C0" opacity="0.75"/></g>
+          <circle cx="60" cy="50" r="28" fill="#8E86B8"/>
+          <path d="M50 72 C47 76 47 80 49 82 C51 80 51.5 76 51.5 72 Z" fill="#FFF0DC"/>
+          <path d="M70 72 C73 76 73 80 71 82 C69 80 68.5 76 68.5 72 Z" fill="#FFF0DC"/>
+          <path d="M60 62 C58 74 56 86 60 94" stroke="#8E86B8" stroke-width="14" fill="none" stroke-linecap="round"/>
+          <path d="M60 94 C63 99 68 98 70 94" stroke="#8E86B8" stroke-width="9.5" fill="none" stroke-linecap="round"/>
+          <path d="M43 49 C45.5 53 50.5 53 53 49" stroke="#33203A" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+          <path d="M67 49 C69.5 53 74.5 53 77 49" stroke="#33203A" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+          <ellipse cx="38" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.4"/><ellipse cx="82" cy="60" rx="6.5" ry="4.2" fill="#FF8FA3" opacity="0.4"/>
+        </svg>
+        <div style="font-size: 12px; font-weight: 800; color: #A88BFF">Assoupi</div>
+        <div style="font-size: 10.5px; font-weight: 600; color: #8B7BAE; text-align: center; line-height: 1.35">App ouverte, moteur coupé</div>
+      </div>
+
+      <div class="glass" style="padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; border-color: rgba(255,143,163,0.32); background: rgba(255,143,163,0.06)">
+        <div style="width: 78px; height: 78px; display: flex; align-items: center; justify-content: center; position: relative">
+          <svg width="78" height="78" viewBox="0 0 120 105" style="opacity: 0.15">
+            <ellipse cx="30" cy="52" rx="20" ry="22" fill="#FFF0DC"/><ellipse cx="90" cy="52" rx="20" ry="22" fill="#FFF0DC"/>
+            <circle cx="60" cy="50" r="28" fill="#FFF0DC"/>
+            <path d="M60 62 C57 74 55 84 58 92" stroke="#FFF0DC" stroke-width="14" fill="none" stroke-linecap="round"/>
+          </svg>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FF8FA3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+        </div>
+        <div style="font-size: 12px; font-weight: 800; color: #FF8FA3">Absent</div>
+        <div style="font-size: 10.5px; font-weight: 600; color: #C9A8BA; text-align: center; line-height: 1.35">Pendant toute la navigation</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- la voix -->
+  <div style="display: flex; flex-direction: column; gap: 10px; position: relative">
+    <div style="font-size: 12px; font-weight: 800; color: #8B7BAE; letter-spacing: 0.08em">CE QUI CHANGE VRAIMENT D'UN COMPAGNON À L'AUTRE : LA VOIX</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px">
+      <div class="glass" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 10.5px; font-weight: 800; color: #8B7BAE">MÊME MOMENT — objectifs recalés</div>
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+          <div style="flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #FFB35C; margin-top: 5px"></div>
+          <div style="font-size: 12.5px; font-weight: 600; color: #D8CCEE; line-height: 1.4">« J'ai calé tes défis sur tes 210 km. »</div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+          <div style="flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #A88BFF; margin-top: 5px"></div>
+          <div style="font-size: 12.5px; font-weight: 600; color: #D8CCEE; line-height: 1.4">« 210 km par semaine depuis quatre semaines. Je note. »</div>
+        </div>
+      </div>
+      <div class="glass" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 10.5px; font-weight: 800; color: #8B7BAE">MÊME MOMENT — trajet brusque</div>
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+          <div style="flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #FFB35C; margin-top: 5px"></div>
+          <div style="font-size: 12.5px; font-weight: 600; color: #D8CCEE; line-height: 1.4">« Aïe. On se calme la prochaine fois ? »</div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+          <div style="flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: #A88BFF; margin-top: 5px"></div>
+          <div style="font-size: 12.5px; font-weight: 600; color: #D8CCEE; line-height: 1.4">« Onze freinages. C'est trois de plus que d'habitude. »</div>
+        </div>
+      </div>
+      <div class="glass" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border-color: rgba(111,227,160,0.25)">
+        <div style="font-size: 10.5px; font-weight: 800; color: #8B7BAE">POURQUOI ÇA TIENT</div>
+        <div style="font-size: 12.5px; font-weight: 600; color: #B9A9D8; line-height: 1.45">Un seul jeu d'états, un seul jeu de déclencheurs. Chaque compagnon n'est qu'un jeu de dessins + un fichier de phrases. Ajouter le coq, le chat ou le chien ne touche pas à la logique.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

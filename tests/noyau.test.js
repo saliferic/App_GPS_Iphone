@@ -35,14 +35,20 @@ function chargerNoyau() {
         '_refAutorouteFr', '_estEuroroutePure', '_horsReseauPeageFr',
         'estimateTollFromRoute', 'formatTollEstimate',
         'TOLL_ENTRY_FEE', 'TOLL_KM_RATE', 'TOLL_NETWORK_FACTOR', 'TOLL_MIN_KM',
+        'TOLL_LEGACY_ENTRY_FEE', 'TOLL_LEGACY_KM_RATE', 'TOLL_SECTION_GAP_KM', '_sectionsPayantes',
         'extractGasCoords', 'extractGasPrice', 'getBestPrice',
         'COUNTRY_BOXES', 'detectCountriesOnRoute',
         'getTimeUntilEndOfWeek',
         'formatTripDayLabel', 'formatTripTime', 'groupTripsByDate',
         'formatTripDuration', 'formatTripDistance', 'tripPlacesLabel',
         'ARRIVAL_AUTO_M', 'ARRIVAL_ASSERT_M',
-        '_lundiISO', 'CLASSEMENT_POINTS_MAX', 'clampPointsClassement',
+        '_lundiISO', 'CLASSEMENT_ANIMAUX_MAX', 'clampAnimauxClassement',
         'pseudoValide', 'emailDePseudo', 'PSEUDO_DOMAINE',
+        'dureeAvecExces', 'EXCES_FRACTION', 'EXCES_GAIN_KMH',
+        'VIE_MAX', 'VIE_DEGAT_PAR_METRE', 'VIE_SOIN_PAR_METRE', 'VIE_ROBUSTESSE',
+        'severiteExces', 'robustesseCompagnon', 'majVie', 'vieApresChoc', 'palierVie',
+        'VIE_SEUIL_SANTE', 'etatSanteVie',
+        'heureArrivee',
     ];
     const retour = `\n;return { ${noms.join(', ')} };`;
     return new Function(code + retour)();
@@ -598,7 +604,7 @@ section('Péages');
        le même unique réseau. Un écart de `TOLL_ENTRY_FEE` ici signalerait que le step
        E80 s'est vu attribuer un réseau à lui, donc une deuxième entrée facturée. */
     verifieProche('le step E80 rejoint le réseau du step précédent, au kilomètre près',
-        coutAvecEuroroute - coutSansLeStepE80, 72 * N.TOLL_KM_RATE, 1e-6);
+        coutAvecEuroroute - coutSansLeStepE80, 72 * N.TOLL_LEGACY_KM_RATE, 1e-6);
 
     /* ⚠ LA CONTINUITÉ NE TRAVERSE PAS UNE DÉPARTEMENTALE. Si le step E-seul suit un
        "D900" (quitter l'autoroute, rouler un peu, y revenir), il ne doit RIEN hériter :
@@ -647,6 +653,91 @@ section('Péages');
     verifieProche('deux steps du même réseau = une seule entrée',
         peage(route(step('A9', 100, 115, [2.92, 42.72]), step('A9', 100, 115, [2.95, 43.20]))),
         unSeulReseau, 1e-9);
+
+    /* ═══ SECTIONS PAYANTES DÉCLARÉES PAR MAPBOX (23/08/2026) ════════════════════
+       Le chemin PRINCIPAL depuis cette date. Tous les cas ci-dessus exercent le repli
+       par `ref` : leurs routes n'ont ni `annotation` ni `intersections`, exactement
+       comme une réponse Mapbox amputée. Les cas ci-dessous portent la donnée réelle.
+
+       ⚠ CE QUE CES TESTS VERROUILLENT. La conception précédente reposait sur une
+       affirmation fausse — « Mapbox ne renvoie aucun drapeau tronçon payant » — qui a
+       produit quatre bugs successifs, tous des tentatives de reconstituer à la main
+       une information déjà déclarée. Si quelqu'un réécrit un jour ce calcul en
+       repartant de `ref` seul, ces tests doivent l'arrêter. */
+
+    /* Route porteuse de `classes`. Chaque tronçon = un segment d'`annotation.distance`
+       et une intersection qui pointe dessus, ce qui est la forme réelle de la réponse.
+       `payant` pose la classe « toll » que Mapbox met sur les tronçons à péage. */
+    const routeClasses = (...troncons) => {
+        const distances = troncons.map(t => t.km * 1000);
+        const steps = troncons.map((t, i) => ({
+            ref: t.ref, distance: t.km * 1000, duration: (t.km / 110) * 3600,
+            maneuver: { location: t.loc || [3.0, 43.5] },
+            intersections: [{
+                geometry_index: i, location: t.loc || [3.0, 43.5],
+                classes: t.payant ? ['motorway', 'toll'] : ['motorway'],
+            }],
+        }));
+        return { legs: [{ steps, annotation: { distance: distances } }] };
+    };
+    const tr = (ref, km, payant, loc) => ({ ref, km, payant, loc });
+
+    verifieProche('section payante déclarée : entrée + km, au tarif recalibré',
+        peage(routeClasses(tr('A9', 100, true, [2.92, 42.72]))),
+        (N.TOLL_ENTRY_FEE + N.TOLL_KM_RATE * 100) * N.TOLL_NETWORK_FACTOR.asf, 1e-6);
+
+    /* ⚠ LE BUG QUI A RÉSISTÉ LE PLUS LONGTEMPS, ENFIN VERROUILLÉ. Un step tagué « E 11 »
+       seul couvrant l'A75 gratuite héritait d'APRR par continuité et facturait 501 km
+       sur Paris → Montpellier — le « point ouvert, diagnostiqué mais non corrigé » de
+       docs/peages.md. Avec les classes, la continuité ne décide plus que du
+       concessionnaire : un tronçon non tagué « toll » ne coûte rien, quel que soit le
+       réseau dont il hérite. */
+    verifie('euroroute seule sur voie GRATUITE : 0 €, malgré la continuité de réseau',
+        peage(routeClasses(tr('A71', 80, true, [3.1, 46.0]), tr('E 11', 300, false, [3.2, 44.5]))) > 0
+        && peage(routeClasses(tr('A71', 80, true, [3.1, 46.0]), tr('E 11', 300, false, [3.2, 44.5])))
+           < peage(routeClasses(tr('A71', 80, true, [3.1, 46.0]))) + 0.01, true);
+
+    /* ⚠ DEUX SYSTÈMES FERMÉS, DEUX ENTRÉES. Mesuré sur Perpignan → Paris : facturer une
+       seule entrée par concessionnaire sous-estimait de 17 %, l'A75 gratuite y coupant
+       le trajet en deux. Même réseau des deux côtés : seule la coupure compte. */
+    const coupeLong = peage(routeClasses(
+        tr('A9', 100, true, [2.92, 42.72]),
+        tr('A75', 60, false, [3.2, 44.5]),          // > TOLL_SECTION_GAP_KM
+        tr('A9', 100, true, [3.0, 45.5])));
+    const dUnTrait = peage(routeClasses(tr('A9', 200, true, [2.92, 42.72])));
+    verifieProche('interruption gratuite longue : une deuxième entrée est facturée',
+        coupeLong - dUnTrait, N.TOLL_ENTRY_FEE * N.TOLL_NETWORK_FACTOR.asf, 1e-6);
+
+    /* Le symétrique, et c'est lui qui justifie le seuil : un trou court est un défaut de
+       tagage au milieu d'une même autoroute, pas une sortie. Sous 20 km, Paris → Le Havre
+       se découpait en cinq entrées sur une seule A13 et surestimait de 8 €. */
+    verifieProche('interruption gratuite courte : une seule entrée, le trou est un défaut de tagage',
+        peage(routeClasses(tr('A13', 100, true, [1.0, 49.3]),
+                           tr('A13', 5, false, [0.8, 49.4]),
+                           tr('A13', 100, true, [0.6, 49.4]))),
+        (N.TOLL_ENTRY_FEE + N.TOLL_KM_RATE * 200) * N.TOLL_NETWORK_FACTOR.sapn, 1e-6);
+
+    /* L'AP-7 espagnole EST payante et Mapbox la tague « toll » — mais au tarif espagnol.
+       `_horsReseauPeageFr()` garde donc sa raison d'être, réduite à ce seul rôle. */
+    verifie('tronçon payant à l’étranger : exclu du calcul français',
+        peage(routeClasses(tr('AP-7', 150, true, [2.0, 41.6]))), 0);
+
+    /* ⚠ LE REPLI RESTE OBLIGATOIRE — et `null` doit se distinguer d'un trajet gratuit.
+       Une réponse sans `classes` n'est pas une route sans péage : c'est une route dont
+       on ignore le péage. Afficher « Aucun » sur un Paris-Marseille serait un calcul
+       faux en silence, le mode de panne que ce fichier existe pour attraper. */
+    const sansClasses = { legs: [{ annotation: { distance: [200000] }, steps: [
+        { ref: 'A9', distance: 200000, duration: 6260, maneuver: { location: [2.92, 42.72] },
+          intersections: [{ geometry_index: 0, location: [2.92, 42.72] }] }] }] };
+    verifie('aucune classe dans la réponse : on retombe sur le repli par ref',
+        peage(sansClasses) > 15, true);
+    /* Même exigence quand c'est `annotation.distance` qui manque : sans lui aucune
+       longueur de tronçon n'est mesurable, la classe seule ne suffit pas. */
+    const sansAnnotation = { legs: [{ steps: [
+        { ref: 'A9', distance: 200000, duration: 6260, maneuver: { location: [2.92, 42.72] },
+          intersections: [{ geometry_index: 0, location: [2.92, 42.72], classes: ['toll'] }] }] }] };
+    verifie('annotation.distance absente : on retombe sur le repli par ref',
+        peage(sansAnnotation) > 15, true);
 
     // ── Ce qui ne doit RIEN coûter ──────────────────────────────────────────────
     /* A75 : 340 km d'autoroute gratuite. Au taux forfaitaire précédent elle coûtait
@@ -1001,8 +1092,8 @@ section('Historique — regroupement');
 // ── Classement en ligne ─────────────────────────────────────────────────────────
 section('Classement en ligne');
 {
-    const { _lundiISO: lundi, clampPointsClassement: borne,
-            CLASSEMENT_POINTS_MAX: PMAX, pseudoValide: valide,
+    const { _lundiISO: lundi, clampAnimauxClassement: borne,
+            CLASSEMENT_ANIMAUX_MAX: PMAX, pseudoValide: valide,
             emailDePseudo: email } = N;
 
     /* La colonne `scores.semaine` est une clé primaire partagée : deux appareils du
@@ -1024,14 +1115,17 @@ section('Classement en ligne');
     verifie('semaine à cheval sur le nouvel an', lundi(new Date(2027, 0, 1)), '2026-12-28');
     verifie('date invalide → null', lundi(new Date('n\'importe quoi')), null);
 
-    // Bornage : miroir du `check` SQL, testé aux deux extrémités.
-    verifie('score normal conservé au centime', borne(37.456), 37.46);
-    verifie('score nul reste nul',              borne(0), 0);
+    /* Bornage : miroir du `check` SQL, testé aux deux extrémités. Ce qui voyage dans
+       la colonne `scores.points` est un NOMBRE D'ANIMAUX SAUVÉS depuis le 25/08/2026
+       (le nom de la colonne n'a pas suivi, voir le noyau) — donc un entier. */
+    verifie('compte entier conservé',           borne(3), 3);
+    verifie('décimale tronquée, jamais arrondie au-dessus', borne(2.9), 2);
+    verifie('compte nul reste nul',             borne(0), 0);
     verifie('négatif ramené à zéro',            borne(-12), 0);
     verifie('au-dessus du plafond → plafond',   borne(PMAX + 1), PMAX);
     verifie('le plafond lui-même passe',        borne(PMAX), PMAX);
-    /* Ce que `parseFloat` laisserait passer : la valeur vient de `profile.totalPoints`,
-       donc d'un localStorage que l'utilisateur peut éditer à la main. */
+    /* Ce que `parseFloat` laisserait passer : la valeur vient d'un localStorage que
+       l'utilisateur peut éditer à la main. */
     verifie('texte → zéro, jamais NaN',  borne('douze'), 0);
     verifie('null → zéro',               borne(null), 0);
     verifie('undefined → zéro',          borne(undefined), 0);
@@ -1059,6 +1153,169 @@ section('Classement en ligne');
        adresses de vraies personnes. */
     verifie('le domaine n\'est pas un service de messagerie',
         ['gmail.com', 'outlook.com', 'yahoo.fr', 'hotmail.com'].includes(N.PSEUDO_DOMAINE), false);
+}
+
+{
+    section('Durée avec excès de vitesse');
+    const duree = N.dureeAvecExces;
+
+    /* Nantes-Paris : 385 km en 3 h 40 selon Mapbox, soit 105 km/h de moyenne. Le gain
+       d'un excès permanent (badLevel 3, 80 % du trajet à +27,5 km/h) doit rester de
+       l'ordre de la demi-heure — c'est la réponse à la question qui a motivé ce calcul,
+       et le résultat est volontairement moins spectaculaire qu'attendu. */
+    const t = 385 / 105;
+    const rapide3 = duree(385, t, 3);
+    verifie('excès permanent : gain compris entre 20 et 45 min',
+        (t - rapide3) * 60 > 20 && (t - rapide3) * 60 < 45, true);
+
+    /* ⚠ LE PIÈGE. Moyenner les vitesses au lieu des temps donne un trajet plus court que
+       la réalité : ce test échouerait si quelqu'un « simplifiait » la formule en
+       divisant la distance par la vitesse moyennée. */
+    const faux = 385 / (105 + 0.8 * 27.5);
+    verifie('la moyenne des temps ne vaut pas la moyenne des vitesses', rapide3 > faux, true);
+
+    /* Plus on triche, moins on met de temps — et jamais l'inverse. */
+    verifie('monotone en badLevel',
+        duree(385, t, 1) > duree(385, t, 2) && duree(385, t, 2) > duree(385, t, 3), true);
+    verifie('rouler vite ne peut pas rallonger le trajet', duree(385, t, 1) < t, true);
+
+    /* Entrées aberrantes : la fonction rend null, jamais NaN — l'affichage sait
+       montrer « -- », il ne sait pas reconnaître un NaN. */
+    verifie('distance nulle → null', duree(0, 3, 1), null);
+    verifie('durée nulle → null',    duree(385, 0, 1), null);
+    verifie('non numérique → null',  duree('x', 3, 1), null);
+    /* badLevel absent ou farfelu : on retombe sur le niveau 1 plutôt que sur NaN. */
+    verifie('badLevel inconnu → niveau 1', duree(385, t, 9), duree(385, t, 1));
+}
+
+
+// ── La vie du compagnon ─────────────────────────────────────────────────────────
+section('Vie du compagnon');
+{
+
+    const { VIE_MAX, VIE_ROBUSTESSE, severiteExces, robustesseCompagnon,
+            majVie, vieApresChoc, palierVie,
+            VIE_SEUIL_SANTE: SEUIL, etatSanteVie: etatSante } = N;
+
+    /* La sévérité. Elle vaut 1 au dépassement de référence (+20 %) : c'est sur ce
+       point que toute la calibration des dégâts est accrochée. */
+    verifie('+20 % de la limite → sévérité 1', severiteExces(60, 50), 1);
+    verifie('à la limite → aucun excès',       severiteExces(50, 50), 0);
+    verifie('sous la limite → aucun excès',    severiteExces(40, 50), 0);
+    /* ⚠ LES DEUX BORNES. Sans plancher, un dépassement d'un cheveu ne coûterait
+       presque rien et la barre mentirait ; sans plafond, un point GPS aberrant
+       (ou une pointe à 200 en zone 30) viderait la jauge d'un seul coup. */
+    verifie('petit dépassement : plancher',  severiteExces(51, 50), 0.4);
+    verifie('énorme dépassement : plafond',  severiteExces(200, 30), 2.5);
+    verifie('limite absente → aucun excès',  severiteExces(90, 0), 0);
+    verifie('limite non numérique → 0',      severiteExces(90, null), 0);
+
+    /* La robustesse, c'est la difficulté. Une clé inconnue ne doit JAMAIS rendre
+       NaN : la jauge deviendrait un `width: NaN%` silencieux. */
+    verifie('compagnon inconnu → robustesse 1', robustesseCompagnon('licorne'), 1);
+    verifie('clé absente → robustesse 1',       robustesseCompagnon(undefined), 1);
+    verifie('bulle est le plus robuste',
+        Math.max.apply(null, Object.keys(VIE_ROBUSTESSE).map(k => VIE_ROBUSTESSE[k])), VIE_ROBUSTESSE.bulle);
+    /* Les deux compagnons d'A_VENIR (js/22) ont déjà leur vie : sans ça, les
+       débloquer les ferait tomber sur la robustesse par défaut sans que rien ne
+       le signale. */
+    verifie('nima a une robustesse',  typeof VIE_ROBUSTESSE.nima,  'number');
+    verifie('pilou a une robustesse', typeof VIE_ROBUSTESSE.pilou, 'number');
+
+    /* La calibration annoncée dans le noyau : 5 km d'excès franc vident une barre
+       pleine à robustesse 1. Ce test est le garde-fou du réglage — le changer doit
+       être un geste conscient, pas un effet de bord. */
+    verifie('5 km d\'excès à +20 % vident la barre (robustesse 1)',
+        majVie(VIE_MAX, 5000, { enExces: true, vitesse: 60, limite: 50 }), 0);
+    verifie('20 km propres refont la barre (robustesse 1)',
+        majVie(0, 20000, { enExces: false }), VIE_MAX);
+
+    /* Un animal fragile encaisse plus et se soigne moins : les deux, sinon il
+       serait seulement plus lent à mourir au lieu d'être plus exigeant. */
+    const degatRaya  = VIE_MAX - majVie(VIE_MAX, 1000, { enExces: true, vitesse: 60, limite: 50, compagnon: 'raya' });
+    const degatBulle = VIE_MAX - majVie(VIE_MAX, 1000, { enExces: true, vitesse: 60, limite: 50, compagnon: 'bulle' });
+    verifie('le tigre encaisse plus que l\'hippopotame', degatRaya > degatBulle, true);
+    const soinRaya  = majVie(0, 1000, { enExces: false, compagnon: 'raya' });
+    const soinBulle = majVie(0, 1000, { enExces: false, compagnon: 'bulle' });
+    verifie('le tigre se soigne moins vite que l\'hippopotame', soinRaya < soinBulle, true);
+
+    /* Le bornage. Une vie ne sort jamais de [0, 100] : au-delà, `width` en CSS
+       déborderait la piste, en deçà elle passerait derrière le cœur. */
+    verifie('jamais au-dessus de 100', majVie(98, 100000, { enExces: false }), VIE_MAX);
+    verifie('jamais en dessous de 0',
+        majVie(2, 100000, { enExces: true, vitesse: 200, limite: 30 }), 0);
+    /* ⚠ `metres <= 0` REND LA VALEUR BORNÉE, pas la valeur telle quelle : c'est ce
+       qui permet à js/24 d'assainir une valeur venue de localStorage sans second
+       chemin de code. Un `return vie` naïf casserait cet usage en silence. */
+    verifie('valeur corrompue assainie par majVie(v, 0)', majVie(300, 0), VIE_MAX);
+    verifie('valeur négative assainie par majVie(v, 0)',  majVie(-40, 0), 0);
+    verifie('vie absente → pleine',   majVie(undefined, 0), VIE_MAX);
+    verifie('vie non numérique → pleine', majVie('abcd', 0), VIE_MAX);
+    verifie('distance nulle ne bouge rien', majVie(50, 0, { enExces: false }), 50);
+    verifie('distance négative ne soigne pas', majVie(50, -1000, { enExces: false }), 50);
+
+    /* Le choc éco (freinage / accélération brusque). `facteur` est celui de
+       `_applyEcoPenalty()` (js/13), déjà plafonné à 2 chez lui — on le replafonne
+       ici, parce qu'une fonction du noyau ne fait confiance à aucun appelant. */
+    verifie('un choc entame la vie', vieApresChoc(100, 1, 'babi') < 100, true);
+    verifie('choc plafonné à facteur 2',
+        vieApresChoc(100, 50, 'babi'), vieApresChoc(100, 2, 'babi'));
+    verifie('le fragile encaisse plus le choc',
+        vieApresChoc(100, 1, 'raya') < vieApresChoc(100, 1, 'bulle'), true);
+    verifie('choc sans amplitude ne fait rien', vieApresChoc(60, 0, 'babi'), 60);
+    verifie('un choc ne passe pas sous zéro', vieApresChoc(0.5, 2, 'nima'), 0);
+
+    /* Les paliers pilotent la couleur ET la classe CSS du battement de cœur. La
+       liste est ORDONNÉE : un tri malencontreux rendrait toujours le premier seuil. */
+    verifie('barre pleine → palier plein',   palierVie(100).niveau, 'plein');
+    verifie('75 % → plein (borne incluse)',  palierVie(75).niveau,  'plein');
+    verifie('40 % → moyen',                  palierVie(40).niveau,  'moyen');
+    verifie('5 % → critique',                palierVie(5).niveau,   'critique');
+    verifie('0 % → critique',                palierVie(0).niveau,   'critique');
+    verifie('valeur aberrante → un palier quand même', typeof palierVie(NaN).niveau, 'string');
+    verifie('chaque palier a une couleur', palierVie(40).couleur.charAt(0), '#');
+
+    /* L'état affiché en fin de trajet (25/08/2026). Les DEUX seuils annoncés sont
+       stricts : c'est ce qui laisse le point d'équilibre à `repos` plutôt que de le
+       verser arbitrairement d'un côté. */
+    verifie('vie pleine → ravi',            etatSante(100), 'ravi');
+    verifie('juste au-dessus du seuil → ravi',   etatSante(50.1), 'ravi');
+    verifie('le seuil exact → repos',       etatSante(SEUIL), 'repos');
+    verifie('juste en dessous → secoué',    etatSante(49.9), 'secoue');
+    verifie('barre vide → secoué',          etatSante(0), 'secoue');
+    /* Une vie illisible ne doit pas afficher un animal en détresse : le doute
+       profite au compagnon, comme dans `majVie()`. */
+    verifie('valeur aberrante → ravi',      etatSante(NaN), 'ravi');
+    verifie('au-delà de 100 → borné, puis ravi', etatSante(300), 'ravi');
+}
+
+
+// ── Heure d'arrivée ─────────────────────────────────────────────────────────────
+section("Heure d'arrivée");
+{
+    const { heureArrivee: arrivee } = N;
+    // 14h00 pile, heure locale — construit par composants pour ne pas dépendre du fuseau.
+    const base = new Date(2026, 7, 25, 14, 0, 0).getTime();
+
+    verifie('dans 32 minutes', arrivee(32 / 60, base), '14:32');
+    verifie('dans 2 h 15',     arrivee(2.25, base), '16:15');
+    verifie('durée nulle → maintenant', arrivee(0, base), '14:00');
+    /* ⚠ LE PASSAGE DE MINUIT. Un trajet de nuit franchit le changement de jour :
+       c'est `Date` qui doit le gérer, surtout pas une addition sur les heures. */
+    verifie('par-dessus minuit', arrivee(11, base), '01:00');
+    /* Deux chiffres TOUJOURS, y compris avant 10 h : sans le padding, « 1:5 »
+       au lieu de « 01:05 » — et la colonne de chiffres se déforme à l'écran. */
+    verifie('padding des deux champs', arrivee(11 + 5 / 60, base), '01:05');
+    /* Un objet Date est accepté aussi bien qu'un horodatage : les deux appelants
+       (js/19 passe Date.now(), un test peut passer une Date) doivent marcher. */
+    verifie('accepte un objet Date', arrivee(1, new Date(base)), '15:00');
+
+    /* Entrées aberrantes : null, jamais « NaN:NaN » à l'écran. L'affichage sait
+       montrer « -- », il ne sait pas reconnaître une chaîne malformée. */
+    verifie('durée non numérique → null', arrivee('x', base), null);
+    verifie('durée négative → null',      arrivee(-1, base), null);
+    verifie('instant absent → null',      arrivee(1, undefined), null);
+    verifie('instant non numérique → null', arrivee(1, 'hier'), null);
 }
 
 // ── Verdict ─────────────────────────────────────────────────────────────────────

@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tortue — essai style brawler</title>
+<style>
+  body { margin:0; padding:26px; background:#1A2430; font-family:system-ui,sans-serif;
+         display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+  .c { background:#22303E; border-radius:18px; padding:16px; text-align:center; }
+  .c svg { display:block; }
+  .g { width:300px; } .m { width:104px; } .p { width:38px; }
+  .c b { display:block; margin-top:8px; font-size:13px; color:#CFE3DC; }
+</style>
+<body>
+<div class="c"><div class="g" id="g"></div><b>300 px</b></div>
+<div class="c"><div class="m" id="m"></div><b>104 px — accueil</b></div>
+<div class="c"><div class="p" id="p"></div><b>38 px — carnet</b></div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   TORTUE — essai « brawler mobile » : cerné épais, aplats très saturés,
+   ombrage en DEUX TONS francs (jamais de dégradé) et liseré de lumière en haut
+   à gauche. C'est la combinaison cerné + ombre nette + rim light qui donne le
+   relief — aucun rendu 3D n'intervient.
+--------------------------------------------------------------------------- */
+const T    = '#22392C';                                  // cerné
+const V    = '#5FD97A', VO = '#3CB65B', VR = '#A9F0BB';  // peau : clair / ombre / lumière
+const O    = '#FF9636', OO = '#DE6F1C', OR = '#FFC689';  // carapace
+const EC   = '#F2851F', ECO = '#C9600C';                 // écailles
+const OEIL = '#17242C', ROSE = '#FF7B93';
+const CREME = '#FFE4A3', CREME_O = '#EFC77E';
+
+/* Un hexagone régulier, pointe en haut. Les écailles dorsales d'une tortue
+   SONT des polygones : les dessiner en ovales donne un ballon de plage. */
+function hexa(cx, cy, r, aplati) {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 2;
+        pts.push(`${(cx + r * Math.cos(a)).toFixed(1)} ${(cy + r * (aplati || 1) * Math.sin(a)).toFixed(1)}`);
+    }
+    return 'M' + pts.join(' L') + ' Z';
+}
+
+function tortue(u) {
+    const ecaille = (d) => `<path d="${d}" fill="${EC}" stroke="${ECO}" stroke-width="4" stroke-linejoin="round"/>`;
+    return `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tortue">
+      <defs>
+        <clipPath id="cara${u}"><ellipse cx="100" cy="150" rx="76" ry="52"/></clipPath>
+        <clipPath id="tete${u}"><circle cx="100" cy="66" r="37"/></clipPath>
+        <clipPath id="plas${u}"><ellipse cx="100" cy="174" rx="37" ry="27"/></clipPath>
+        <radialGradient id="sol${u}"><stop offset="0" stop-color="#0C1A14" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#0C1A14" stop-opacity="0"/></radialGradient>
+      </defs>
+
+      <ellipse cx="100" cy="208" rx="76" ry="15" fill="url(#sol${u})"/>
+
+
+      <!-- CARAPACE -->
+      <ellipse cx="100" cy="150" rx="76" ry="52" fill="${O}" stroke="${T}" stroke-width="7"/>
+      <g clip-path="url(#cara${u})">
+        <ellipse cx="130" cy="182" rx="78" ry="56" fill="${OO}"/>
+        <!-- Cinq écailles, arrangées en dôme sur la MOITIÉ HAUTE : le bas de la
+             carapace est masqué par le plastron, y poser des écailles c'est
+             dessiner pour rien. -->
+        ${ecaille(hexa(100, 128, 27, 0.92))}
+        ${ecaille(hexa(52, 140, 20, 0.95))}
+        ${ecaille(hexa(148, 140, 20, 0.95))}
+        ${ecaille(hexa(66, 106, 16, 0.9))}
+        ${ecaille(hexa(134, 106, 16, 0.9))}
+        <!-- La facette claire de chaque écaille est EN HAUT, comme le liseré.
+             En bas, le relief s'inverserait et le dôme se lirait creux. -->
+        <path d="${hexa(100, 124, 20, 0.55)}" fill="${OR}" opacity="0.5"/>
+        <path d="${hexa(52, 136, 14, 0.6)}"  fill="${OR}" opacity="0.4"/>
+        <path d="${hexa(148, 136, 14, 0.6)}" fill="${OR}" opacity="0.4"/>
+        <path d="M34 144 C38 118 60 100 94 96" fill="none" stroke="${OR}" stroke-width="9" stroke-linecap="round"/>
+      </g>
+
+      <!-- Pattes avant : posées APRÈS la carapace et bien écartées du plastron,
+           sinon elles disparaissent sous lui. -->
+      <path d="M52 172 C28 176 18 196 30 207 C44 216 74 210 76 194 Z" fill="${V}" stroke="${T}" stroke-width="7" stroke-linejoin="round"/>
+      <path d="M148 172 C172 176 182 196 170 207 C156 216 126 210 124 194 Z" fill="${V}" stroke="${T}" stroke-width="7" stroke-linejoin="round"/>
+
+      <!-- PLASTRON — petit et BAS. En grand il avalait la carapace et la tortue
+           devenait un œuf posé sur des pattes. -->
+      <ellipse cx="100" cy="174" rx="37" ry="27" fill="${CREME}" stroke="${T}" stroke-width="7"/>
+      <g clip-path="url(#plas${u})"><ellipse cx="122" cy="192" rx="38" ry="28" fill="${CREME_O}"/></g>
+      <path d="M100 149 L100 200 M70 172 L130 172" fill="none" stroke="${CREME_O}" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+
+      <!-- TÊTE -->
+      <circle cx="100" cy="66" r="37" fill="${V}" stroke="${T}" stroke-width="7"/>
+      <g clip-path="url(#tete${u})"><ellipse cx="124" cy="88" rx="37" ry="33" fill="${VO}"/></g>
+      <path d="M74 48 C80 39 90 33 100 32" fill="none" stroke="${VR}" stroke-width="6.5" stroke-linecap="round"/>
+      <path d="${hexa(100, 44, 13, 0.85)}" fill="${VR}" stroke="${T}" stroke-width="4" stroke-linejoin="round"/>
+
+      <ellipse cx="86" cy="70" rx="10" ry="12" fill="${OEIL}"/><circle cx="89" cy="65" r="3.8" fill="#FFF"/>
+      <ellipse cx="114" cy="70" rx="10" ry="12" fill="${OEIL}"/><circle cx="117" cy="65" r="3.8" fill="#FFF"/>
+      <ellipse cx="68" cy="84" rx="9" ry="5" fill="${ROSE}" opacity="0.75"/>
+      <ellipse cx="132" cy="84" rx="9" ry="5" fill="${ROSE}" opacity="0.75"/>
+      <path d="M92 90 Q100 97 108 90" fill="none" stroke="${T}" stroke-width="5" stroke-linecap="round"/>
+    </svg>`;
+}
+
+['g', 'm', 'p'].forEach(k => { document.getElementById(k).innerHTML = tortue(k); });
+</script>
+</body>

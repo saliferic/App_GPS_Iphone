@@ -28,10 +28,18 @@
             recalculateRoute(pos.lng, pos.lat);
         }
 
+        /* Le niveau d'excès SURVIT au rechargement (23/08/2026) : c'est un réglage, pas
+           un état de trajet. Le relire ici plutôt qu'au premier rendu évite qu'un
+           `addDriver()` appelé plus tard reparte à 1 sans raison visible. */
+        function _badLevelEnregistre() {
+            const n = parseInt(localStorage.getItem('gps_bad_level'), 10);
+            return (n === 1 || n === 2 || n === 3) ? n : 1;
+        }
+
         function addDriver() {
             const color = PALETTE[drivers.length % PALETTE.length];
             const driver = {
-                id: driverIdCounter++, color: color, behavior: 'good', badLevel: 1, dist: 0,
+                id: driverIdCounter++, color: color, behavior: 'good', badLevel: _badLevelEnregistre(), dist: 0,
                 score: 0, timeHours: 0, marker: null, actualSpeed: 0, speedSmoothed: 0,
                 isSpeeding: false, hasSpeeded: false, lastCheckpoint: -1, finished: false,
                 hardBrakings: 0, hardAccels: 0, ecoScore: 100  // score éco-conduite (0-100)
@@ -39,6 +47,25 @@
             drivers.push(driver); renderDriversUI();
         }
         function updateDriverBehavior(index, behavior) { drivers[index].behavior = behavior; renderDriversUI(); }
+
+        /* Part du trajet passée au-dessus de la limite. Les trois valeurs sont celles que
+           lit la simulation (`js/19`, `chanceToSpeed`) : la constante EXCES_FRACTION du
+           noyau (`js/00`) porte les mêmes, et l'estimation de durée s'en sert. Changer un
+           pourcentage impose donc de le changer AUX TROIS ENDROITS, sinon le temps annoncé
+           avant le départ ne correspond plus à la conduite simulée. */
+        function updateDriverBadLevel(index, level) {
+            const n = parseInt(level, 10);
+            if (!(n === 1 || n === 2 || n === 3)) return;
+            drivers[index].badLevel = n;
+            /* Réglage commun à tous les conducteurs simulés : n'en régler qu'un seul
+               n'aurait aucun sens, la comparaison porte sur le style de conduite. */
+            drivers.forEach(d => { d.badLevel = n; });
+            safeLocalSet('gps_bad_level', String(n));
+            renderDriversUI();
+            // L'aperçu du trajet peut être ouvert : sa ligne « Temps avec excès » dépend
+            // de ce réglage et doit bouger tout de suite, sans recalcul d'itinéraire.
+            rafraichirPreviewTemps();
+        }
 
         function renderDriversUI() {
             const container = document.getElementById('drivers-container');
@@ -65,6 +92,12 @@
                                 <option value="good" ${d.behavior === 'good' ? 'selected' : ''}>😇 Bon conducteur</option>
                                 <option value="bad" ${d.behavior === 'bad' ? 'selected' : ''}>😈 Mauvais conducteur</option>
                             </select>
+                            ${d.behavior === 'bad' ? `
+                            <select onchange="updateDriverBadLevel(${index}, this.value)" title="Part du trajet passée au-dessus de la limite">
+                                <option value="1" ${d.badLevel === 1 ? 'selected' : ''}>20 % du temps en excès</option>
+                                <option value="2" ${d.badLevel === 2 ? 'selected' : ''}>50 % du temps en excès</option>
+                                <option value="3" ${d.badLevel === 3 ? 'selected' : ''}>80 % du temps en excès</option>
+                            </select>` : ''}
                         </div>
                     </div>
                     `;
@@ -1343,7 +1376,7 @@
             if (tab === 'profil') {
                 setTimeout(() => {
                     if (typeof renderBadgeCategoryCard === 'function') renderBadgeCategoryCard();
-                    if (typeof refreshTrophyGalleryCount === 'function') refreshTrophyGalleryCount();
+                    if (typeof rafraichirAnimauxSauves === 'function') rafraichirAnimauxSauves();
                 }, 30);
             }
 
@@ -1531,7 +1564,15 @@
             // Rendre le contenu des objectifs à l'ouverture
             if (tab === 'objectifs') renderWeeklyGoalsPanel();
             // Rafraîchir la carte badge et la galerie à l'ouverture de l'onglet profil
-            if (tab === 'profil') { renderBadgeCategoryCard(); refreshTrophyGalleryCount(); initAideConduiteUI(); }
+            if (tab === 'profil') {
+                renderBadgeCategoryCard();
+                /* typeof : js/25 est le dernier script de la page, chargé après
+                   celui-ci. L'appel a lieu à l'exécution et la fonction sera là,
+                   mais une bascule déclenchée par du code de démarrage ne doit pas
+                   pouvoir casser sur une ReferenceError. */
+                if (typeof rafraichirAnimauxSauves === 'function') rafraichirAnimauxSauves();
+                initAideConduiteUI();
+            }
 
             // La classe tab-secondary et la variable --panel-secondary-h sont désormais
             // posées plus haut (avant setPanelSnap), qui calcule la hauteur de façon
