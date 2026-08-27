@@ -50,8 +50,6 @@
 
     let vies = {};              // { cle: vie }, l'état vrai, en mémoire
     let dernierEcrit = 0;
-    let dernierPalier = null;   // pour ne repeindre la couleur qu'au changement
-    let elBarre = null, elRemplissage = null, elValeur = null;
 
     function lire() {
         try {
@@ -117,38 +115,113 @@
         </svg>`;
     }
 
-    function monter() {
-        elBarre = document.getElementById('vie-compagnon');
-        if (!elBarre) return;
-        if (!elBarre.firstElementChild) {
-            elBarre.innerHTML =
+    /* ══════════════════════════════════════════════════════════════════════
+       IL Y A PLUSIEURS JAUGES À L'ÉCRAN, PAS UNE               (27/08/2026)
+       ----------------------------------------------------------------------
+       Une dans la barre de navigation (`#vie-compagnon`), une sous le portrait
+       de la carte de rang (`#vie-compagnon-profil`) — et rien n'interdit qu'il
+       y en ait d'autres demain. Elles affichent toutes LA MÊME valeur, celle du
+       compagnon actif : ce ne sont pas deux jauges, c'est la même vue deux fois.
+
+       ⚠ ON SÉLECTIONNE PAR CLASSE, PAS PAR ID, et on ne garde AUCUNE référence
+       d'un appel à l'autre. Les anciennes variables `elBarre` / `elRemplissage`
+       pointaient sur un élément capturé au montage : une jauge ajoutée ensuite
+       (carte de rang redessinée, page ouverte plus tard) n'aurait jamais été
+       mise à jour, et sans la moindre erreur — elle serait restée à 100 %.
+       `querySelectorAll` à chaque rendu coûte quelques microsecondes et supprime
+       toute cette classe de bug.
+
+       ⚠ L'ÉTAT D'UNE JAUGE VIT SUR LA JAUGE (`dataset.niveau`), pas dans une
+       variable du module. Avec deux barres et un seul `dernierPalier`, la
+       seconde n'aurait jamais reçu sa couleur : la première ayant déjà consommé
+       le changement de palier, le test « le palier a-t-il changé ? » aurait été
+       faux pour elle.
+       ══════════════════════════════════════════════════════════════════════ */
+    function barres() {
+        return document.querySelectorAll('.vie-compagnon');
+    }
+
+    /* Pose le balisage si la jauge est encore vide et rend son remplissage.
+       `null` si l'élément n'a pas pu être garni — l'appelant passe son tour. */
+    function garnir(el) {
+        if (!el.firstElementChild) {
+            el.innerHTML =
                 `<span class="vie-coeur">${coeurSvg()}</span>` +
                 `<span class="vie-piste"><span class="vie-remplissage"></span></span>` +
                 `<span class="vie-valeur"></span>`;
+            delete el.dataset.niveau;   // balisage neuf : la couleur est à reposer
         }
-        elRemplissage = elBarre.querySelector('.vie-remplissage');
-        elValeur      = elBarre.querySelector('.vie-valeur');
-        dernierPalier = null;
+        return el.querySelector('.vie-remplissage');
+    }
+
+    function monter() {
+        const liste = barres();
+        if (!liste.length) return;
+        liste.forEach(garnir);
         rendre();
     }
 
     function rendre() {
-        if (!elRemplissage && !document.getElementById('vie-compagnon')) return;
-        if (!elRemplissage) { monter(); if (!elRemplissage) return; }
+        const liste = barres();
+        if (!liste.length) return;
 
         const v = valeur();
         const p = palierVie(v);
-        elRemplissage.style.width = v.toFixed(1) + '%';
-        if (!dernierPalier || dernierPalier.niveau !== p.niveau) {
-            dernierPalier = p;
-            elRemplissage.style.background = p.couleur;
-            /* ⚠ LE CŒUR N'EST PAS REPEINT. Il garde le rouge posé en CSS quel que soit
-               le palier : c'est le symbole de la vie, pas sa jauge. Seul le REMPLISSAGE
-               change de couleur — lui, il mesure. */
-            elBarre.dataset.niveau = p.niveau;   // le CSS s'en sert pour le battement
+        const arrondi = Math.round(v);
+        liste.forEach(function (el) {
+            const remplissage = garnir(el);
+            if (!remplissage) return;
+            remplissage.style.width = v.toFixed(1) + '%';
+            if (el.dataset.niveau !== p.niveau) {
+                remplissage.style.background = p.couleur;
+                /* ⚠ LE CŒUR N'EST PAS REPEINT. Il garde le rouge posé en CSS quel que
+                   soit le palier : c'est le symbole de la vie, pas sa jauge. Seul le
+                   REMPLISSAGE change de couleur — lui, il mesure. */
+                el.dataset.niveau = p.niveau;   // le CSS s'en sert pour le battement
+            }
+            const val = el.querySelector('.vie-valeur');
+            if (val) val.textContent = arrondi + '%';
+            /* Le `aria-label` porte le chiffre sur TOUTES les jauges, y compris celle
+               de la carte de rang où le pourcentage est masqué en CSS faute de place :
+               ce qui est retiré à l'œil ne doit pas l'être au lecteur d'écran. */
+            el.setAttribute('aria-label', 'Vie du compagnon : ' + arrondi + ' %');
+        });
+        signalerPhysique(v);
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       PRÉVENIR LE MARQUEUR GPS D'UN CHANGEMENT D'ÉTAT        (27/08/2026)
+       ----------------------------------------------------------------------
+       L'animal sur la carte prend son image blessée puis morte à mesure que la
+       jauge descend, en fondu (voir `rafraichirMarqueurCompagnon`, js/04). Ce
+       fichier n'affiche rien de tout ça : il se contente de dire QUAND l'état a
+       changé. La règle (`etatPhysiqueVie`) est dans js/00, l'image dans js/22, le
+       fondu dans js/04 — ici, rien qu'un signal.
+
+       ⚠ ON NE RAFRAÎCHIT QU'AU CHANGEMENT D'ÉTAT, pas à chaque point GPS.
+       `rendre()` est appelée des dizaines de fois par seconde en navigation ;
+       refaire le marqueur à ce rythme rejouerait le fondu sans fin.
+
+       ⚠ LA MARQUE PORTE AUSSI LE COMPAGNON. Sans lui, passer d'un hippo blessé à
+       un éléphant sain laisserait la marque sur « blesse » : l'éléphant tombant
+       ensuite sous 75 % ne changerait plus d'image, l'état étant cru inchangé. */
+    let dernierePhysique = null;
+    function signalerPhysique(v) {
+        /* Un animal du registre reste mort quoi qu'affiche la jauge — c'est le
+           seul cas où l'image ne suit pas la valeur. */
+        const marque = cleCourante() + ':' + (estMort() ? 'mort' : etatPhysiqueVie(v));
+        if (marque === dernierePhysique) return;
+        dernierePhysique = marque;
+        if (typeof window.rafraichirMarqueurCompagnon === 'function') {
+            try { window.rafraichirMarqueurCompagnon(); }
+            catch (e) { /* pas de carte à l'écran : la barre s'affiche quand même */ }
         }
-        if (elValeur) elValeur.textContent = Math.round(v) + '%';
-        elBarre.setAttribute('aria-label', 'Vie du compagnon : ' + Math.round(v) + ' %');
+        /* Les portraits aussi : le hero et la carte de rang montrent le même animal
+           que le marqueur, ils ne peuvent pas rester intacts pendant qu'il saigne. */
+        if (window.Compagnon && typeof Compagnon.rafraichirPortraits === 'function') {
+            try { Compagnon.rafraichirPortraits(); }
+            catch (e) { /* portraits absents de la page : sans conséquence */ }
+        }
     }
 
     /* Le tressaillement au moment où l'on perd de la vie. La classe est retirée
@@ -157,12 +230,17 @@
        voyant aucun changement de classe entre les deux. */
     let minuteurDegat = null;
     function signalerDegat() {
-        if (!elBarre) return;
-        elBarre.classList.remove('vie-degat');
-        void elBarre.offsetWidth;
-        elBarre.classList.add('vie-degat');
+        const liste = barres();
+        if (!liste.length) return;
+        liste.forEach(function (el) {
+            el.classList.remove('vie-degat');
+            void el.offsetWidth;
+            el.classList.add('vie-degat');
+        });
         clearTimeout(minuteurDegat);
-        minuteurDegat = setTimeout(() => elBarre && elBarre.classList.remove('vie-degat'), 400);
+        minuteurDegat = setTimeout(function () {
+            barres().forEach(el => el.classList.remove('vie-degat'));
+        }, 400);
     }
 
 
@@ -206,8 +284,62 @@
 
     document.addEventListener('DOMContentLoaded', monter);
 
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LE REGISTRE DES MORTS                                  (27/08/2026)
+       ----------------------------------------------------------------------
+       Un animal arrivé à 0 % de vie est mort, définitivement : il ne se joue
+       plus, il reste grisé dans la grille de choix avec la mention « Mort ».
+
+       ⚠ POURQUOI UN REGISTRE À PART, ET PAS SIMPLEMENT « vie === 0 ». Parce que
+       tomber à 0 en roulant N'EST PAS mourir : la mort n'est prononcée qu'à
+       L'ARRIVÉE (décision du 27/08/2026). Une barre vidée à mi-parcours peut
+       remonter — 20 km de conduite propre — et l'animal survit. Sans ce
+       registre, l'app relirait `vie === 0` à chaque ouverture et tuerait
+       rétroactivement un compagnon que le joueur a ramené au-dessus de zéro.
+       La mort est donc un FAIT DÉCLARÉ, avec un instant précis, pas une lecture
+       de la jauge.
+
+       ⚠ ET IL EST DANS SA PROPRE CLÉ, pas dans `gps_vie_compagnons`. Cette
+       dernière est une table de nombres qu'on réécrit plusieurs fois par
+       trajet ; y mêler un drapeau irréversible, c'est risquer de l'emporter au
+       premier `JSON.parse` qui échoue. Perdre une vie en cours, c'est repartir
+       à 100 % ; perdre le registre, c'est ressusciter tout le monde.
+
+       ⚠ AUCUN CHEMIN DE RÉSURRECTION N'EST EXPOSÉ, volontairement. Rendre la vie
+       à un animal se fait en effaçant la clé à la main dans le stockage — un
+       geste de débogage, pas une fonction que l'interface pourrait appeler par
+       accident.
+       ══════════════════════════════════════════════════════════════════════ */
+    const CLE_MORTS = 'gps_compagnons_morts';
+
+    function lireMorts() {
+        try {
+            const o = JSON.parse(localStorage.getItem(CLE_MORTS) || 'null');
+            return (o && typeof o === 'object') ? o : {};
+        } catch (e) { return {}; }   // registre illisible : personne n'est mort
+    }
+
+    let morts = lireMorts();
+
+    function estMort(cle) {
+        return !!morts[cle || cleCourante()];
+    }
+
+    /* Rend `true` seulement si c'est CE geste qui a tué l'animal : l'appelant
+       (js/12) s'en sert pour n'ouvrir la fenêtre de choix qu'une fois, et pas à
+       chaque arrivée suivante sur un compagnon déjà enterré. */
+    function declarerMort(cle) {
+        const k = cle || cleCourante();
+        if (morts[k]) return false;
+        morts[k] = true;
+        try { localStorage.setItem(CLE_MORTS, JSON.stringify(morts)); } catch (e) { /* non bloquant */ }
+        return true;
+    }
+
     window.VieCompagnon = {
         monter: monter, rendre: rendre, avancer: avancer, choc: choc,
-        valeur: valeur, poser: poser, enregistrer: enregistrer
+        valeur: valeur, poser: poser, enregistrer: enregistrer,
+        estMort: estMort, declarerMort: declarerMort
     };
 })();

@@ -1507,13 +1507,27 @@
 
         /* Calibration à robustesse 1 (aucun compagnon n'y est exactement : c'est le
            point de référence, pas un réglage utilisé tel quel) :
-             · dégâts — un excès franc (+20 %, sévérité 1) vide une barre pleine en
-               5 km d'affilée. Assez pour faire peur, trop long pour qu'un dépassement
-               bref soit fatal.
+             · dégâts — un excès franc (+20 %, sévérité 1) coûte 10 % de vie tous les
+               100 m, soit une barre pleine vidée en 1 km d'affilée.
+               ⚠ RÉGLAGE ÉNONCÉ EN « % PAR 100 m », le 26/08/2026, après deux essais sur
+               route (5 000 m → 2 500 m → 1 000 m). C'est la formulation qui compte : la
+               constante s'écrit en mètres pour vider la barre, mais la sensation qu'on
+               règle est celle de la descente visible pendant qu'on roule. Pour changer
+               la dureté, poser d'abord le « X % par 100 m » voulu, puis écrire
+               `VIE_MAX / (100 * 100 / X)`.
+               C'est ICI et nulle part ailleurs que se règle la sanction de vitesse —
+               `severiteExces()` module l'AMPLEUR du dépassement et la robustesse le
+               compagnon (neutralisée, voir plus bas), mais aucune des deux ne change la
+               dureté d'ensemble. Les chocs éco (VIE_CHOC_ECO) n'ont PAS bougé : c'est la
+               vitesse qu'on a jugée trop douce, pas le freinage.
              · soins — 20 km de conduite propre pour refaire une barre entière. Le
-               rapport 4:1 est délibéré : abîmer doit aller plus vite que réparer,
-               sinon la jauge ne dit plus rien. */
-        const VIE_DEGAT_PAR_METRE = VIE_MAX / 5000;
+               rapport est passé de 4:1 à 20:1 : abîmer doit aller plus vite que réparer,
+               sinon la jauge ne dit plus rien. ⚠ À ce rapport, une barre vidée sur 1 km
+               d'excès réclame 20 km de conduite propre pour revenir — et la vie est PAR
+               ANIMAL, elle ne se réinitialise pas au trajet suivant. Si les compagnons
+               se retrouvent durablement à zéro, c'est le rapport qu'il faut resserrer,
+               pas la sanction de vitesse. */
+        const VIE_DEGAT_PAR_METRE = VIE_MAX / 1000;
         const VIE_SOIN_PAR_METRE  = VIE_MAX / 20000;
 
         /* La sévérité module les dégâts selon l'AMPLEUR du dépassement : 5 km/h de trop
@@ -1539,22 +1553,30 @@
            dégâts ET multiplie les soins — les deux, sinon un compagnon fragile serait
            seulement plus lent à mourir au lieu d'être réellement plus exigeant.
 
-           L'échelle suit la troupe telle qu'elle est écrite dans js/22 : la masse
-           tranquille encaisse, le vif encaisse mal. Elle donne au passage l'ordre de
-           difficulté dans lequel on peut ouvrir les compagnons.
-             bulle 1.60 (le plus indulgent) → nima 0.50 (le plus exigeant)
-           Les deux compagnons d'A_VENIR y figurent DÉJÀ : leur vie doit exister le jour
-           où on les débloque, pas être ajoutée à ce moment-là. */
+           ⚠ NEUTRALISÉE LE 26/08/2026 — TOUTE LA TROUPE EST À 1. Décision d'étalonnage,
+           pas abandon de l'idée : tant que la dureté de base (VIE_DEGAT_PAR_METRE) n'est
+           pas calée sur route, un facteur par animal brouille la mesure — on ne sait plus
+           si la barre bouge trop peu à cause du réglage ou du compagnon choisi. Le premier
+           essai sur route s'était d'ailleurs fait avec `babi` à 1,30, ce qui adoucissait
+           les dégâts de 30 % sans que ce soit visible nulle part.
+           La table RESTE, avec ses valeurs d'origine en commentaire : rétablir la
+           difficulté, c'est recopier la colonne de droite, rien d'autre. On la rétablit
+           une fois la dureté de base jugée bonne.
+           L'échelle d'origine suivait la troupe de js/22 : la masse tranquille encaisse,
+           le vif encaisse mal — bulle 1.60 (le plus indulgent) → nima 0.50 (le plus
+           exigeant). Elle donnait au passage l'ordre de difficulté dans lequel ouvrir les
+           compagnons. Les deux compagnons d'A_VENIR y figurent DÉJÀ : leur vie doit
+           exister le jour où on les débloque, pas être ajoutée à ce moment-là. */
         const VIE_ROBUSTESSE = {
-            bulle: 1.60,   // hippopotame — « la masse tranquille, on ne le bouscule pas »
-            babi:  1.30,   // éléphanteau — compagnon par défaut, volontairement clément
-            zola:  1.10,   // lion        — « le calme du fort, rien à prouver »
-            kiri:  0.90,   // girafe      — elle voit loin, mais elle est haute et fragile
-            sam:   0.85,   // renarde     — « la maligne » : légère, mais elle esquive
-            pilou: 0.80,   // chien       — à venir
-            titi:  0.70,   // singe       — « le curieux », vif, il encaisse mal
-            raya:  0.55,   // tigre       — « le geste juste » : ne pardonne presque rien
-            nima:  0.50    // chatte      — à venir, la plus exigeante de la troupe
+            bulle: 1,   // hippopotame — « la masse tranquille » — d'origine : 1.60
+            babi:  1,   // éléphanteau — compagnon par défaut     — d'origine : 1.30
+            zola:  1,   // lion        — « le calme du fort »     — d'origine : 1.10
+            kiri:  1,   // girafe      — haute et fragile         — d'origine : 0.90
+            sam:   1,   // renarde     — « la maligne »           — d'origine : 0.85
+            pilou: 1,   // chien       — à venir                  — d'origine : 0.80
+            titi:  1,   // singe       — « le curieux »           — d'origine : 0.70
+            raya:  1,   // tigre       — « le geste juste »       — d'origine : 0.55
+            nima:  1    // chatte      — à venir                  — d'origine : 0.50
         };
         const VIE_ROBUSTESSE_DEFAUT = 1;
 
@@ -1637,6 +1659,47 @@
             if (v > VIE_SEUIL_SANTE) return 'ravi';
             if (v < VIE_SEUIL_SANTE) return 'secoue';
             return 'repos';
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════
+           L'ÉTAT PHYSIQUE DE L'ANIMAL — LA RÈGLE QUI DÉCIDE   (27/08/2026)
+           ═══════════════════════════════════════════════════════════════════
+           Trois états, et c'est la SEULE règle qui les dit : image affichée,
+           couleur du cadre, phrase de la fenêtre d'arrivée et mort définitive en
+           sortent tous. La dupliquer ailleurs, c'est se retrouver un jour avec un
+           cadre rouge sur une phrase qui dit « en bonne santé ».
+
+             · `sain`   — au-dessus de 75 %
+             · `blesse` — de 1 à 75 % inclus
+             · `mort`   — 0 %, et cette fois c'est définitif (voir js/24)
+
+           ⚠ CE N'EST PAS `etatSanteVie()`, ET LES DEUX SEUILS DIFFÈRENT EXPRÈS.
+           `etatSanteVie` (seuil 50) rend une EXPRESSION — ravi / repos / secoué —,
+           c'est-à-dire l'humeur du dessin. Celle-ci rend un ÉTAT PHYSIQUE, avec sa
+           propre échelle et une conséquence irréversible au bout. Les mélanger
+           donnerait un animal « ravi » dans un cadre orange à 60 % de vie.
+           Depuis cette date, la fenêtre d'arrivée n'appelle plus que celle-ci ;
+           `etatSanteVie` n'a plus d'appelant dans l'app et ne survit que par ses
+           tests — à retirer avec eux le jour où on tranche.
+
+           ⚠ LA MORT EST STRICTEMENT 0, PAS « PRESQUE 0 ». Le `<= 0` couvre le zéro
+           exact et rien d'autre : `majVie()` borne déjà à [0, VIE_MAX], une valeur
+           négative ne peut venir que d'un stockage trafiqué, et elle vaut mort. Un
+           seuil du genre « moins de 1 % » tuerait un animal à 0,4 % que la barre
+           affiche encore à « 0 % » arrondi — sanction définitive sur un arrondi.
+
+           ⚠ UNE VIE ILLISIBLE REND `sain`, jamais `mort`. Un `null` en stockage, une
+           chaîne, un JSON corrompu : le repli ne doit pas tuer un compagnon. Même
+           parti pris que `etatSanteVie`, avec des conséquences autrement plus
+           lourdes ici. */
+        const VIE_SEUIL_BLESSE = 75;
+        function etatPhysiqueVie(vie) {
+            const n = Number(vie);
+            if (!isFinite(n)) return 'sain';
+            const v = Math.min(VIE_MAX, Math.max(0, n));
+            if (v <= 0) return 'mort';
+            if (v <= VIE_SEUIL_BLESSE) return 'blesse';
+            return 'sain';
         }
 
 

@@ -444,12 +444,6 @@ body.theme-crepuscule .wg-km_no_speed .wg-item-fill { background: linear-gradien
 body.theme-crepuscule .wg-score_total .wg-item-fill { background: linear-gradient(90deg, var(--cr-violet), var(--cr-turq)); }
 body.theme-crepuscule .wg-item-fill.done { background: linear-gradient(90deg, var(--cr-mint), var(--cr-turq)); }
 
-body.theme-crepuscule .wg-claim-btn {
-    background: linear-gradient(135deg, #FFC578, #FF8F5C);
-    border: none; border-radius: 20px; color: #2A1226;
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
-    font-size: 17px; font-weight: 800;
-}
 body.theme-crepuscule .wg-remaining {
     background: rgba(255,179,92,0.09);
     border: 1px solid rgba(255,179,92,0.26);
@@ -496,38 +490,37 @@ body.theme-crepuscule #profil-section-title-monprofil { display: none; }
 /* --- La carte de rang. Son fond et sa bordure sont posés en inline par
    renderBadgeCategoryCard() à partir de la couleur de la catégorie : ici on ne
    décrit que la forme. --- */
-body.theme-crepuscule #badge-category-card {
+body.theme-crepuscule #compagnon-carte {
     border-radius: 26px;
     padding: 14px 16px 15px;
     margin-bottom: 12px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
-body.theme-crepuscule #badge-category-main {
+body.theme-crepuscule #compagnon-carte-rangee {
     display: flex; align-items: center; gap: 8px; margin-bottom: 13px;
 }
-body.theme-crepuscule #badge-category-portrait {
+body.theme-crepuscule #compagnon-carte-portrait {
     flex-shrink: 0;
     width: clamp(88px, 27vw, 108px);
     height: clamp(94px, 29vw, 116px);
 }
-body.theme-crepuscule #badge-category-info { flex: 1; min-width: 0; }
-body.theme-crepuscule #badge-category-kicker {
+body.theme-crepuscule #compagnon-carte-info { flex: 1; min-width: 0; }
+body.theme-crepuscule #compagnon-carte-kicker {
     display: flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 700; color: var(--cr-ink-2);
 }
-body.theme-crepuscule #badge-category-icon svg { width: 15px; height: 15px; display: block; }
-body.theme-crepuscule #badge-category-name {
+body.theme-crepuscule #compagnon-carte-etape {
     font-family: 'Baloo 2', 'Nunito', sans-serif;
     font-size: clamp(26px, 8vw, 32px);
     font-weight: 800; letter-spacing: -0.015em; line-height: 1.05;
     margin: 2px 0 3px;
 }
-body.theme-crepuscule #badge-category-sub {
+body.theme-crepuscule #compagnon-carte-sub {
     font-size: 12px; font-weight: 600; color: var(--cr-ink-2); line-height: 1.4;
 }
 /* Le prénom du profil actif : il vivait en 30 px à droite de la médaille, où il
    écrasait le nom du rang. Il redevient une étiquette discrète en haut de carte. */
-body.theme-crepuscule #badge-category-profile {
+body.theme-crepuscule #compagnon-carte-profil {
     margin-left: auto; margin-right: 0; align-self: flex-start;
     font-size: 12px; font-weight: 800; color: var(--cr-ink-2);
     background: rgba(0,0,0,0.28); border-radius: 10px; padding: 4px 9px;
@@ -648,12 +641,12 @@ body.theme-crepuscule .profil-row-btn {
 body.theme-crepuscule .profil-row-btn:hover,
 body.theme-crepuscule .profil-row-btn:active { background: var(--cr-surface-2); }
 
-body.theme-crepuscule #badge-category-card {
+body.theme-crepuscule #compagnon-carte {
     background: linear-gradient(150deg, rgba(168,139,255,0.16), rgba(255,255,255,0.03));
     border: 1px solid rgba(168,139,255,0.28);
     border-radius: 26px;
 }
-body.theme-crepuscule #badge-category-title { font-size: 12px; font-weight: 700; color: var(--cr-ink-3); }
+body.theme-crepuscule #compagnon-carte-titre { font-size: 12px; font-weight: 700; color: var(--cr-ink-3); }
 
 
 /* === 9. WIDGETS POSÉS SUR LA CARTE ========================================= */

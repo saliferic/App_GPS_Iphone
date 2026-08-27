@@ -1030,8 +1030,19 @@
             tripOverlay.style.webkitBackdropFilter = 'none';
             tripOverlay.classList.add('open', 'half');
 
-            if (modalStartCoords && modalEndCoords) { calculateTripPreview(); } 
-            else if (!modalStartCoords) {
+            /* ⚠ ON N'EXIGE PLUS `modalEndCoords` POUR LANCER LE CALCUL (27/08/2026).
+               La cellule « Où allez-vous ? » et `exactEndCoords` peuvent se désolidariser :
+               `startFreeCourse()` (js/19) remet `exactEndCoords` à null — un trajet libre
+               n'a pas de destination — sans toucher au TEXTE saisi, qui réapparaît tel quel
+               dans le panneau à la fin du trajet libre. Presser Démarrer ouvrait alors un
+               aperçu où les deux adresses étaient bien affichées, mais qui ne calculait
+               RIEN et n'affichait aucun message : ni la branche du calcul (pas de coords de
+               destination), ni celle du départ manquant (le départ, lui, était résolu).
+               Il n'y avait pourtant rien à ajouter : `calculateTripPreview()` géocode déjà
+               `modal-end-addr` quand `modalEndCoords` est nul, et signale lui-même une
+               destination introuvable. Seule cette garde l'empêchait d'être appelée. */
+            if (modalStartCoords) { calculateTripPreview(); }
+            else {
                 document.getElementById('modal-status').innerText = "Entrez un point de départ.";
                 document.getElementById('modal-status').style.color = "#f39c12";
             }
@@ -1375,7 +1386,7 @@
             }
             if (tab === 'profil') {
                 setTimeout(() => {
-                    if (typeof renderBadgeCategoryCard === 'function') renderBadgeCategoryCard();
+                    if (typeof renderCarteCompagnon === 'function') renderCarteCompagnon();
                     if (typeof rafraichirAnimauxSauves === 'function') rafraichirAnimauxSauves();
                 }, 30);
             }
@@ -1565,7 +1576,7 @@
             if (tab === 'objectifs') renderWeeklyGoalsPanel();
             // Rafraîchir la carte badge et la galerie à l'ouverture de l'onglet profil
             if (tab === 'profil') {
-                renderBadgeCategoryCard();
+                renderCarteCompagnon();
                 /* typeof : js/25 est le dernier script de la page, chargé après
                    celui-ci. L'appel a lieu à l'exécution et la fonction sera là,
                    mais une bascule déclenchée par du code de démarrage ne doit pas

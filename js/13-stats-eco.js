@@ -1189,7 +1189,7 @@
         // Éléments à masquer pendant la saisie du prénom
         const _PROFIL_MASK_IDS = [
             'profil-section-title-monprofil',
-            'badge-category-card',
+            'compagnon-carte',
             'animaux-a-sauver-section',
             'animaux-sauves-section',
             'vehicle-panel-section',
@@ -1301,7 +1301,7 @@
             _syncProfileDropdownLabel();
             updateProfileSummary();
             // Recharger badges et objectifs liés au nouveau profil actif
-            renderBadgeCategoryCard();
+            renderCarteCompagnon();
             renderWeeklyGoalsPanel();
             updateWeeklyGoalsButton();
             // Rafraîchir la galerie (re-render si ouverte, sinon juste le compteur)
@@ -1385,7 +1385,7 @@
         }, 2900);
         // Initialiser badges et objectifs APRÈS chargement des profils (activeProfileId connu)
         updateWeeklyGoalsButton();
-        renderBadgeCategoryCard();
+        renderCarteCompagnon();
 
         async function requestWakeLock() {
             try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 

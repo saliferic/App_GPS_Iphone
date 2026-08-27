@@ -45,25 +45,29 @@
            Choisir une destination met forcément fin au mode libre : `startCourse()`
            réinitialise distance, score et éco-conduite. Sans avertissement, les points
            accumulés disparaissaient sans que le conducteur comprenne pourquoi. On pose
-           donc la question AVANT d'ouvrir la recherche, en annonçant ce qui sera encaissé,
-           puis on laisse `stopCourse()` faire son travail habituel : crédit des points,
+           donc la question AVANT d'ouvrir la recherche, en rappelant ce qui a déjà été
+           parcouru, puis on laisse `stopCourse()` faire son travail habituel : crédit des points,
            badges, objectifs, retour au panneau Itinéraire d'où l'utilisateur saisira sa
            nouvelle destination.
            ⚠ ELLE N'ANNONCE PLUS DE COFFRE BONUS sur un trajet sans faute (25/08/2026) :
            le coffre à butin a été supprimé (voir js/12). Le sans-faute n'est plus détecté
-           ici du tout — c'était le seul usage qu'en faisait cette fenêtre. */
+           ici du tout — c'était le seul usage qu'en faisait cette fenêtre.
+           ⚠⚠ ELLE N'ANNONCE PLUS DE POINTS NON PLUS (27/08/2026), pour la même raison que
+           la fenêtre d'arrivée (js/12, ARRIVEE_SANTE) : depuis que la barre de vie a
+           remplacé le score dans #nav-bottom-bar et que le classement compte des ANIMAUX
+           SAUVÉS, « vous encaissez 0.82 pts » racontait un jeu qui n'existe plus. Cette
+           fenêtre était le dernier endroit à l'avoir gardé. Les points continuent d'être
+           calculés et crédités (total du profil, objectifs) — ils ne se CÉLÈBRENT plus.
+           Ce qui reste est ce que la question avait de vraiment utile : la distance déjà
+           parcourue, pour situer ce qu'on s'apprête à clore. D'où le style `neutre`
+           systématique — le fond vert était celui d'un gain. */
         function openFreeCourseEnd() {
             const d = drivers[0];
-            const gains  = clampTripScore(d ? d.score : 0);
+            const km = d ? d.dist : 0;
             const gainEl = document.getElementById('freecourse-end-gain');
 
-            if (gains > 0) {
-                gainEl.classList.remove('neutre');
-                gainEl.innerHTML = `Vous encaissez <b>${gains.toFixed(2)} pts</b> sur ${d.dist.toFixed(1)} km.`;
-            } else {
-                gainEl.classList.add('neutre');
-                gainEl.innerHTML = `Aucun point à encaisser sur ce trajet.<br>Votre total reste intact 🛡️`;
-            }
+            gainEl.classList.add('neutre');
+            gainEl.innerHTML = `Trajet libre en cours : <b>${km.toFixed(1)} km</b> parcourus.`;
             document.getElementById('freecourse-end-overlay').classList.add('open');
         }
 

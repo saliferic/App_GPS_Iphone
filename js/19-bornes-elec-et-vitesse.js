@@ -1249,6 +1249,11 @@
                 _navOverlayRestoreContent();
             }
             const genuinelyArrived = drivers.length > 0 && !!drivers[0].finished; // capturé avant d'être écrasé ci-dessous
+            /* Trajet libre = course sans itinéraire calculé, la définition de
+               `isFreeCourseActive()` (js/09). Capturé ICI, comme le précédent, et pour la
+               même raison : `fullRouteLine` est remis à `null` une trentaine de lignes
+               plus bas, bien avant qu'on ouvre la fenêtre de fin. */
+            const etaitTrajetLibre = !fullRouteLine;
             /* La vie du compagnon est couchée sur le disque ICI, sans attendre le délai
                d'écriture différée de js/24 : la fin du trajet est le moment où l'état
                doit être définitivement acquis, quoi qu'il arrive à l'application ensuite. */
@@ -1421,6 +1426,19 @@
 
             document.getElementById('btn-start').disabled = false; document.getElementById('mode-switch').disabled = false; document.getElementById('btn-free').disabled = false;
             document.getElementById('nav-bottom-bar').classList.remove('visible');
+            /* ═══ LA BARRE DE TRAJET PART, LE PANNEAU REDESCEND AVEC ELLE (27/08/2026) ═══
+               `setPanelSnap()` (js/08) ancre #ui-panel AU-DESSUS de #nav-bottom-bar par un
+               `bottom` INLINE en pixels tant que celle-ci est visible. Rien ne levait cet
+               inline en fin de trajet : `stopCourse()` rouvre le panneau (plus haut) mais
+               ne repasse jamais par `setPanelSnap()`. Le panneau restait donc suspendu à la
+               hauteur de la barre disparue, avec une bande de carte coincée entre lui et la
+               barre d'onglets.
+               Le symptôme ne se voit qu'en sortie de TRAJET LIBRE, seul cas où le panneau
+               Itinéraire est déployé PENDANT la course (c'est de là qu'on met fin au mode
+               libre) : ailleurs il est rouvert alors que l'inline n'a jamais été posé.
+               Vider l'inline rend la main à la règle CSS `bottom: var(--panel-bottom-offset)`,
+               qui colle le panneau à la barre d'onglets. */
+            document.getElementById('ui-panel').style.bottom = '';
             document.getElementById('nav-speed-display').classList.remove('visible');
             document.getElementById('nav-speed-display').classList.remove('over-limit');
             const _limitBadge = document.getElementById('speed-limit-badge');
@@ -1446,20 +1464,29 @@
                    parfaite n'a plus de fenêtre à elle : elle n'ouvre donc plus rien.
                ⚠ `isPerfectRun` sert encore, mais plus ici : il alimente l'objectif
                hebdomadaire « km sans excès » (`updateWeeklyGoalsAfterTrip`, deux lignes
-               plus bas) et l'historique des trajets. C'est une MISSION, pas un bonus. */
+               plus bas) et l'historique des trajets. C'est une MISSION, pas un bonus.
+
+               ⚠⚠ ET UN TROISIÈME CAS DEPUIS LE 27/08/2026 : LA FIN D'UN TRAJET LIBRE.
+               La vie du compagnon descend aussi quand on roule sans destination, et
+               c'est à l'arrivée que se prononce sa mort (voir showArrivalSummary,
+               js/12). Sans cette branche, un animal pouvait tomber à 0 % en trajet libre
+               sans qu'aucun écran ne le dise, puis « mourir en silence » à la fin du
+               trajet guidé suivant — sanction définitive rattachée au mauvais trajet.
+               Un trajet libre n'arrive nulle part : `genuinelyArrived` y est faux par
+               construction, d'où le second terme plutôt qu'un assouplissement du
+               premier. Le titre de la fenêtre s'adapte, le bilan est le même. */
             if(drivers.length > 0) {
                 drivers[0].finished = true;
-                if (genuinelyArrived) {
-                    tenterSansBruit(() => showArrivalSummary(), 'arrivee/summary');
+                if (genuinelyArrived || etaitTrajetLibre) {
+                    tenterSansBruit(() => showArrivalSummary(etaitTrajetLibre), 'arrivee/summary');
                 }
             }
             releaseWakeLock();
 
-            /* ⚠ APRÈS l'ouverture de la fenêtre de fin, jamais avant. `showBadgeEarnedToast`
-               regarde si une fenêtre de fin (coffre OU arrivée) est ouverte : si elle l'est,
-               le badge attend son tour ; sinon il s'affiche sur-le-champ — par-dessus la
-               fenêtre qu'on vient d'ouvrir. Déplacer cette ligne plus haut ramènerait
-               exactement la superposition que ce découpage supprime. */
+            /* Le report des missions de la semaine, APRÈS l'ouverture de la fenêtre de
+               fin. L'ordre importait tant qu'une modale de badge pouvait partir d'ici et
+               se poser par-dessus (retirée le 27/08/2026) ; il importe encore : cet appel
+               écrit le parcours de l'animal, que la fenêtre d'arrivée vient de lire. */
             updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun);
 
             map.easeTo({ bearing: 0, duration: 500 });
@@ -2065,10 +2092,6 @@
             if (userPanningResumeTimer) { clearTimeout(userPanningResumeTimer); userPanningResumeTimer = null; }
             showRecenterBtn(false);
             initTenMinForTrip(); // initialiser la feature 10min pour ce trajet
-
-            // Réinitialiser l'état badge en attente pour ce nouveau trajet
-            _pendingBadgeModal = false;
-            _pendingBadgeTotal = 0;
 
             if (!precomputedRoute) return statusBox.innerText = "Veuillez d'abord calculer l'itinéraire.";
             if (drivers.length === 0) return statusBox.innerText = "Ajoutez au moins un conducteur.";

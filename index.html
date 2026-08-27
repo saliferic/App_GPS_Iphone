@@ -319,18 +319,13 @@
         <button id="badge-video-skip" onclick="passerVideo()">Passer ›</button>
     </div>
 
-    <!-- Modal Badge Débloqué (affiché après fermeture du coffre) -->
-    <div id="badge-unlocked-modal" onclick="if(event.target===this)closeBadgeUnlockedModal()">
-        <div id="badge-unlocked-box">
-            <button onclick="closeBadgeUnlockedModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#4a5568;font-size:20px;cursor:pointer;line-height:1;padding:4px;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#4a5568'">✕</button>
-            <span id="badge-unlocked-icon">🏅</span>
-            <div id="badge-unlocked-label">Objectifs de la semaine</div>
-            <div id="badge-unlocked-title">Badge obtenu !</div>
-            <div id="badge-unlocked-sub"></div>
-            <div id="badge-unlocked-category"></div>
-            <button id="badge-unlocked-close" onclick="closeBadgeUnlockedModal()">Super, merci !</button>
-        </div>
-    </div>
+    <!-- La modale « Catégorie Bronze débloquée ! » (#badge-unlocked-modal) a été
+         RETIRÉE le 27/08/2026 avec tout le système de badges — voir l'en-tête de
+         js/12-gamification.js. Une semaine bouclée fait avancer le PARCOURS de
+         l'animal ; l'annoncer par une médaille par-dessus la fenêtre d'arrivée
+         racontait une seconde récompense qui n'existait pas.
+         Ne pas confondre avec #badge-video-modal juste au-dessus : celui-là est le
+         lecteur vidéo partagé, il garde son nom d'origine et sert toujours. -->
 
     <!-- Modal hors ligne -->
     <div id="offline-modal">
@@ -962,15 +957,25 @@
                  sauf la ligne de sélection pendant la création d'un compte. Le renommer
                  obligerait à toucher cette liste pour un gain nul. Le titre de section
                  lui-même est masqué en CSS : la carte se présente toute seule. -->
-            <div class="profil-section-title" id="profil-section-title-monprofil">Ma catégorie</div>
+            <div class="profil-section-title" id="profil-section-title-monprofil">Mon compagnon</div>
 
-            <div id="badge-category-card">
-                <div id="badge-category-main">
-                    <!-- Le portrait est dessiné par Compagnon.rang() ; le picto de la
-                         catégorie (`#badge-category-icon`) est posé par
-                         renderBadgeCategoryCard(). Les deux vivent en JS parce qu'ils
-                         changent de couleur avec la catégorie atteinte. -->
-                    <!-- Cliquable : c'est l'entrée vers la fiche de CET animal — d'où il
+            <!-- ═══ LA CARTE DU COMPAGNON ═══                          (27/08/2026)
+                 Elle s'appelait `#badge-category-card` et montrait un rang (Bronze,
+                 Argent…) assis sur un nombre de badges. Les badges retirés, elle montre
+                 le PARCOURS de l'animal — l'étape en cours et ce qu'elle demande —
+                 rempli par `renderCarteCompagnon()` (js/12).
+
+                 ⚠ SONT PARTIS AVEC LES BADGES, ne pas les remettre sans mécanique
+                 derrière : `#badge-progress-bar-wrap` (la barre de progression de
+                 catégorie), `#badge-count-row` (les pastilles ● ● ● et « 1 / 3 badges »)
+                 et `#badge-category-icon` (le picto de catégorie dans le chapeau). La
+                 progression de l'animal se lit dans le texte, et sa vie sous lui. -->
+            <div id="compagnon-carte">
+                <div id="compagnon-carte-rangee">
+                    <!-- Le portrait est dessiné par Compagnon.portrait() (js/22), SANS
+                         médaille depuis le retrait des badges.
+
+                         Cliquable : c'est l'entrée vers la fiche de CET animal — d'où il
                          vient, pourquoi il est en cage, où en est son parcours
                          (js/26-identite-compagnon.js). Toucher un animal montre l'animal.
 
@@ -979,26 +984,27 @@
                          personne ne devinait qu'un portrait ouvrait une liste, et se faire
                          remplacer son compagnon en le touchant disait le contraire du
                          geste. Ne pas rebrancher le choix ici. -->
-                    <div id="badge-category-portrait" role="button" tabindex="0"
-                         aria-label="Voir qui est mon compagnon"></div>
-                    <div id="badge-category-info">
-                        <div id="badge-category-kicker">
-                            <span id="badge-category-icon"></span>
-                            <span id="badge-category-kicker-txt">Mon rang</span>
-                        </div>
-                        <div id="badge-category-name" style="color:#cd7f32;">Bronze</div>
-                        <div id="badge-category-sub">0 badge obtenu</div>
+                    <!-- Le portrait et la vie de l'animal forment une colonne : la jauge
+                         appartient à CET animal, pas à la carte.
+                         Le pourcentage chiffré est masqué ici (CSS) : la colonne fait une
+                         centaine de pixels, cœur + jauge + « 100 % » n'y tiennent pas. Le
+                         chiffre reste dans l'`aria-label`, posé par js/24. -->
+                    <div id="compagnon-carte-colonne">
+                        <div id="compagnon-carte-portrait" role="button" tabindex="0"
+                             aria-label="Voir qui est mon compagnon"></div>
+                        <div id="vie-compagnon-profil" class="vie-compagnon" role="img"
+                             aria-label="Vie du compagnon"></div>
                     </div>
-                    <!-- Prénom du profil actif — rempli par renderBadgeCategoryCard()
+                    <div id="compagnon-carte-info">
+                        <div id="compagnon-carte-kicker">
+                            <span id="compagnon-carte-kicker-txt">Mon compagnon</span>
+                        </div>
+                        <div id="compagnon-carte-etape">Le Sauvetage</div>
+                        <div id="compagnon-carte-sub">Ouvrir la cage.</div>
+                    </div>
+                    <!-- Prénom du profil actif — rempli par renderCarteCompagnon()
                          (js/12), masqué tant qu'aucun profil n'est sélectionné. -->
-                    <div id="badge-category-profile" style="display:none;"></div>
-                </div>
-                <div id="badge-progress-bar-wrap">
-                    <div id="badge-progress-bar-fill" style="width:0%;background:#cd7f32;"></div>
-                </div>
-                <div id="badge-count-row">
-                    <div id="badge-count-icons"></div>
-                    <div id="badge-progress-label">0 / 3 badges</div>
+                    <div id="compagnon-carte-profil" style="display:none;"></div>
                 </div>
             </div>
 
@@ -1012,14 +1018,14 @@
                 <div id="compagnon-identite-body"></div>
             </div>
 
-            <!-- Le chiffre qui résume le profil. Rempli par renderBadgeCategoryCard() —
+            <!-- Le chiffre qui résume le profil. Rempli par renderCarteCompagnon() —
                  donc rafraîchi par tous les chemins qui changent de profil.
 
                  ⚠ LA TUILE « POINTS AU TOTAL » A ÉTÉ RETIRÉE (26/08/2026). Elle affichait
                  le cumul brut de l'ancien système de score ; le même nombre reste lisible
                  entre parenthèses dans le sélecteur de profil juste en dessous, et la
                  progression se raconte désormais en animaux sortis de cage.
-                 ⚠ #profil-stat-points N'EXISTE DONC PLUS : renderBadgeCategoryCard()
+                 ⚠ #profil-stat-points N'EXISTE DONC PLUS : renderCarteCompagnon()
                  teste sa présence avant d'écrire dedans. -->
             <div class="profil-stats profil-stats-solo" id="profil-stats">
                 <div class="profil-stat eco">
@@ -1517,7 +1523,12 @@
         <!-- La vie du compagnon. Contenu injecté par js/24-vie-compagnon.js : le cœur
              pixel, la piste et la valeur. Volontairement AU-DESSUS des trois compteurs
              — c'est l'enjeu du trajet, les chiffres n'en sont que le détail. -->
-        <div id="vie-compagnon" role="img" aria-label="Vie du compagnon"></div>
+        <!-- ⚠ LA CLASSE, PAS L'ID, EST CE QUI FAIT VIVRE LA JAUGE : js/24 alimente
+             TOUTES les `.vie-compagnon` de la page (il y en a une seconde sous le
+             portrait de la carte de rang). L'id ne sert plus qu'à la mise en page
+             propre à la barre de navigation. Retirer la classe laisserait une barre
+             figée à 100 %, sans erreur. -->
+        <div id="vie-compagnon" class="vie-compagnon" role="img" aria-label="Vie du compagnon"></div>
         <div class="nav-stats-row">
             <button id="nav-google-close" onclick="stopCourse()" title="Terminer la navigation">✕</button>
             <!-- Les points du trajet ont quitté cette place le 25/08/2026 : la barre de
@@ -1871,7 +1882,7 @@
     <script src="js/25-animaux-sauves.js"></script>
     <!-- Après js/22 (dessin, nom, histoire) et js/12 (où en est le parcours) : la fiche
          « qui est cet animal » ne fait que les interroger. Elle s'accroche à
-         #badge-category-portrait au DOMContentLoaded — si le portrait manque, elle ne
+         #compagnon-carte-portrait au DOMContentLoaded — si le portrait manque, elle ne
          monte pas et le reste de l'app est identique. -->
     <script src="js/26-identite-compagnon.js"></script>
 

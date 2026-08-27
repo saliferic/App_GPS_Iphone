@@ -806,7 +806,7 @@ Sept animaux dessinés (Babi, Bulle, Titi, Zola, Kiri, Raya, **Sam** la renarde,
 
 ### Les compagnons sont EN IMAGE (26/08/2026)
 
-Les sept sont passés des tracés SVG à des PNG dessinés hors de l'app (`Images/Animals/Elephant/` — nommés par ESPÈCE : `Elephant.PNG`, `Hippo_Neutre.PNG`, `Singe.png`, `Lion.png`, `Girafe.png`, `Tigre.png`, `Renard.png`). Le dessin reste une propriété **par animal** (`dessin` / `interieur` dans `COMPAGNONS`) : un futur compagnon pourrait revenir à un tracé sans rien défaire.
+Les sept sont passés des tracés SVG à des PNG dessinés hors de l'app (`Images/Animals/Normal/` — nommés par ESPÈCE : `Elephant.PNG`, `Hippo_Neutre.PNG`, `Singe.png`, `Lion.png`, `Girafe.png`, `Tigre.png`, `Renard.png`). Le dessin reste une propriété **par animal** (`dessin` / `interieur` dans `COMPAGNONS`) : un futur compagnon pourrait revenir à un tracé sans rien défaire.
 
 - **⚠ CE QUE L'IMAGE COÛTE** : une image est FIXE, les quatre états ne changent plus le visage. Ce qui sauve la lecture, ce sont les **accessoires** (larme, zzz, étoiles), calques posés par-dessus et pilotés par l'état — d'où les ancres déclarées par animal dans `IMAGES`.
 - **⚠ LE CALAGE NE SE FAIT PAS À L'ŒIL** : `x` / `y` se calculent sur la **boîte englobante alpha** du PNG, de façon que les pieds tombent sur `y ≈ 358` (ligne de sol commune) et le dessin soit centré sur `x = 160`. **Seuil alpha 64, pas 8** : plusieurs PNG traînent quelques centaines de pixels quasi transparents dans les marges (séquelles de réencodage) qui, au seuil 8, élargissent la boîte de ~100 px et faussent tout le calage.

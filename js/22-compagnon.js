@@ -19,7 +19,7 @@
      Compagnon.phrase('cle', {...})— la même phrase, en texte, sans la bulle
      Compagnon.dessin('ravi')      — le SVG du compagnon, à poser où l'on veut
      Compagnon.clairiere(el, {...})— dessine la clairière du carnet
-     Compagnon.rang(el, {...})     — le portrait de rang du Profil (avec médaille)
+     Compagnon.portrait(el, {...}) — le portrait du compagnon en tête du Profil
    ============================================================================ */
 
 (function () {
@@ -586,6 +586,22 @@
        Refaire ce calcul à chaque nouvelle image plutôt que de recopier les
        chiffres de Babi — deux PNG n'ont jamais la même marge interne.
 
+       ⚠ `boite` EST CETTE BOÎTE ENGLOBANTE, ÉCRITE NOIR SUR BLANC (27/08/2026).
+       Elle ne vivait qu'en commentaire de fin de ligne, donc aucun code ne
+       pouvait s'en servir. Le marqueur GPS en a besoin : il recadre le PNG sur
+       ses pixels visibles (`viewBox` posé sur `boite`), faute de quoi un animal
+       de 30 px se retrouverait dessiné dans un carré de 512 dont un bon tiers
+       est transparent — deux fois trop petit et décentré.
+       Seuil alpha 64, PAS 8 : plus bas, les pixels parasites laissés par le
+       réencodage élargissent la boîte d'une centaine de pixels (même piège que
+       `tools/verif-cadrage.js`). Les six dernières correspondent exactement au
+       commentaire d'origine ; celle de Babi non (449×400 à 27,67 mesuré contre
+       425×400 à 41,64 annoncé) — `Elephant.PNG` a vraisemblablement été
+       remplacé depuis. Son calage de hero (`x`/`y`/`taille`) n'a PAS été
+       retouché pour autant : il est réglé à l'œil sur le rendu actuel, et le
+       corriger « au calcul » déplacerait un animal que rien ne signale comme
+       mal posé.
+
        ⚠ LA CASSE DU NOM DE FICHIER EST SIGNIFIANTE. Windows ne fait pas la
        différence entre `.PNG` et `.png`, Android SI. Un chemin qui marche sur
        le bureau peut donc rendre l'animal INVISIBLE dans l'APK — et sans la
@@ -646,71 +662,170 @@
 
     const IMAGES = {
         babi: {
-            fichier: 'Images/Animals/Elephant/Elephant.PNG',
+            fichier: 'Images/Animals/Normal/Elephant.PNG',
+            boite: { x: 27, y: 67, w: 449, h: 400 },
             x: -6.6, y: 53.0, taille: 336.5,   // contenu 425×400 à 41,64
             sol: { cx: 160, rx: 74 },
             larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]]
         },
         bulle: {
-            fichier: 'Images/Animals/Elephant/Hippo_Neutre.PNG',
+            fichier: 'Images/Animals/Normal/Hippo_Neutre.PNG',
+            boite: { x: 73, y: 58, w: 362, h: 407 },
+            /* Le seul animal qui ait ses trois états au 27/08/2026. Les six autres
+               n'ont pas de `variantes` : ils affichent leur image Normal quel que soit
+               leur état physique — voir `variante()` juste sous cette table. */
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesser/Hippo_Blesser.PNG',
+                          boite: { x: 73, y: 58, w: 362, h: 407 } },
+                mort:   { fichier: 'Images/Animals/Dead/Hippo_dead.PNG',
+                          boite: { x: 75, y: 59, w: 361, h: 427 } }
+            },
             x: -6.9, y: 52.4, taille: 336.5,   // contenu 362×407 à 73,58
             sol: { cx: 160, rx: 63 },
             larme: [114, 181], zzz: [265, 98], etoiles: [[60, 106, 13], [258, 94, 10]]
         },
         titi: {
-            fichier: 'Images/Animals/Elephant/Singe.png',
+            fichier: 'Images/Animals/Normal/Singe.png',
+            boite: { x: 33, y: 48, w: 439, h: 416 },
             x: -5.9, y: 53.0, taille: 336.5,   // contenu 439×416 à 33,48
             sol: { cx: 160, rx: 76 },
             larme: [128, 212], zzz: [270, 100], etoiles: [[32, 106, 13], [292, 94, 10]]
         },
         zola: {
-            fichier: 'Images/Animals/Elephant/Lion.png',
+            fichier: 'Images/Animals/Normal/Lion.png',
+            boite: { x: 85, y: 49, w: 369, h: 417 },
             x: -17.1, y: 51.7, taille: 336.5,  // contenu 369×417 à 85,49
             sol: { cx: 160, rx: 64 },
             larme: [120, 211], zzz: [252, 100], etoiles: [[44, 104, 13], [274, 92, 10]]
         },
         kiri: {
-            fichier: 'Images/Animals/Elephant/Girafe.png',
+            fichier: 'Images/Animals/Normal/Girafe.png',
+            boite: { x: 70, y: 28, w: 355, h: 438 },
             x: -2.7, y: 51.7, taille: 336.5,   // contenu 355×438 à 70,28
             sol: { cx: 160, rx: 62 },
             larme: [121, 211], zzz: [250, 88], etoiles: [[48, 96, 13], [272, 84, 10]]
         },
         raya: {
-            fichier: 'Images/Animals/Elephant/Tigre.png',
+            fichier: 'Images/Animals/Normal/Tigre.png',
+            boite: { x: 58, y: 41, w: 390, h: 423 },
             x: -6.3, y: 53.0, taille: 336.5,   // contenu 390×423 à 58,41
             sol: { cx: 160, rx: 68 },
             larme: [109, 168], zzz: [262, 96], etoiles: [[36, 102, 13], [284, 90, 10]]
         },
         sam: {
-            fichier: 'Images/Animals/Elephant/Renard.png',
+            fichier: 'Images/Animals/Normal/Renard.png',
+            boite: { x: 77, y: 46, w: 357, h: 418 },
             x: -7.9, y: 53.0, taille: 336.5,   // contenu 357×418 à 77,46
             sol: { cx: 160, rx: 62 },
             larme: [120, 212], zzz: [250, 98], etoiles: [[46, 102, 13], [274, 90, 10]]
         }
     };
 
-    function dessinImageInterieur(cle, etat) {
+    /* ══════════════════════════════════════════════════════════════════════
+       L'IMAGE À AFFICHER POUR UN ÉTAT PHYSIQUE               (27/08/2026)
+       ----------------------------------------------------------------------
+       Rend toujours quelque chose d'affichable : `{ fichier, boite, x, y, taille }`.
+
+       ⚠ UNE VARIANTE MANQUANTE REND L'IMAGE NORMALE, elle ne rend jamais rien.
+       Seul l'hippo a ses trois états aujourd'hui — l'éléphant, qui est pourtant
+       le compagnon par défaut, n'en a aucun. La mécanique ne peut donc pas être
+       suspendue à la présence d'un fichier : la couleur du cadre et la phrase de
+       la fenêtre d'arrivée disent l'état même quand l'image ne le dit pas. Le
+       jour où un PNG est ajouté dans `Blesser/` ou `Dead/`, il suffit de le
+       déclarer dans `variantes` — rien d'autre à toucher.
+
+       ⚠ LE CALAGE D'UNE VARIANTE EST CALCULÉ, PAS RECOPIÉ. Les `x`/`y` déclarés
+       plus haut valent pour l'image Normal et pour elle seule : l'hippo mort est
+       couché, sa boîte alpha fait 427 px de haut contre 407 — recopier le calage
+       de l'hippo debout le ferait flotter de 13 px au-dessus du sol. La formule
+       est celle qui a servi à établir les valeurs déclarées (pieds sur y = 358,
+       centré sur x = 160) et elle les reproduit à 0,1 px près pour l'hippo : on
+       ne la vérifie donc pas à l'œil, on la vérifie sur `bulle`.
+       ⚠ Les valeurs déclarées ne sont PAS recalculées pour autant : celles de
+       Babi datent d'un `Elephant.PNG` remplacé depuis (voir l'en-tête d'IMAGES),
+       les recalculer déplacerait un animal que personne ne signale comme mal posé.
+       ══════════════════════════════════════════════════════════════════════ */
+    const SOL_Y = 358, CENTRE_X = 160;
+
+    /* ══════════════════════════════════════════════════════════════════════
+       L'ÉTAT PHYSIQUE VU DEPUIS ICI                          (27/08/2026)
+       ----------------------------------------------------------------------
+       Le PORTRAIT du compagnon actif doit être raccord avec sa barre de vie :
+       à 2 % de vie, la carte de rang montrait un hippo intact au-dessus d'une
+       jauge presque vide. Un module qui dessine ne peut pas ignorer l'état de
+       ce qu'il dessine.
+
+       ⚠ CETTE VALEUR N'EST PAS APPLIQUÉE D'OFFICE PARTOUT — voir `variante()`,
+       qui garde `sain` par défaut. Elle n'est posée que sur les PORTRAITS du
+       compagnon actif (`rang`, `etat`, `Compagnon.dessin`). Les décors (clairière,
+       parcours) en sont exclus DÉLIBÉRÉMENT : « RIEN NE MEURT ICI » est une règle
+       de voix écrite plus bas, un animal blessé au bord de l'eau la casserait.
+       La grille de choix (`catalogue`) en est exclue aussi : elle dit déjà la mort
+       par son grisé et sa mention.
+
+       ⚠ LA VIE N'EST LISIBLE QUE POUR LE COMPAGNON ACTIF. `VieCompagnon.valeur()`
+       ne rend que la sienne ; pour un autre animal, seul le registre des morts est
+       consultable. D'où les deux branches — un animal qui n'est pas le courant est
+       `mort` ou `sain`, jamais `blesse`. */
+    function physiqueCourant(cle) {
+        const k = cle || courant;
+        try {
+            if (!window.VieCompagnon) return 'sain';
+            if (typeof VieCompagnon.estMort === 'function' && VieCompagnon.estMort(k)) return 'mort';
+            if (k === courant && typeof VieCompagnon.valeur === 'function'
+                && typeof etatPhysiqueVie === 'function') {
+                return etatPhysiqueVie(VieCompagnon.valeur());
+            }
+        } catch (e) { /* module absent ou stockage illisible : l'animal reste sain */ }
+        return 'sain';
+    }
+
+    function variante(cle, physique) {
+        const im = IMAGES[cle] || IMAGES.babi;
+        const v = (physique && physique !== 'sain' && im.variantes) ? im.variantes[physique] : null;
+        if (!v) return { fichier: im.fichier, boite: im.boite, x: im.x, y: im.y, taille: im.taille };
+        const b = v.boite;
+        const s = im.taille / 512;
+        return {
+            fichier: v.fichier, boite: b, taille: im.taille,
+            x: CENTRE_X - (b.x + b.w / 2) * s,
+            y: SOL_Y     - (b.y + b.h) * s
+        };
+    }
+
+    function dessinImageInterieur(cle, etat, physique) {
         const im = IMAGES[cle];
+        const v  = variante(cle, physique);
+        /* ⚠ AUCUN ACCESSOIRE SUR UNE VARIANTE. Larme, zzz et étoiles sont des calques
+           posés à des ancres relevées sur l'image NORMALE — sur un hippo couché, la
+           larme tomberait à côté du visage. Et ils n'ont rien à y ajouter : une image
+           blessée dit déjà qu'elle est blessée, une larme sur un animal mort serait
+           de trop. Les accessoires restent donc l'affaire de l'image d'origine, la
+           seule dont les ancres soient mesurées. */
+        const surVariante = v.fichier !== im.fichier;
         let signe = '';
-        if (etat === 'assoupi')     signe = zzz(im.zzz[0], im.zzz[1], '#F2C489');
-        else if (etat === 'secoue') signe = larme(im.larme[0], im.larme[1]);
-        else if (etat === 'ravi')   signe = etoiles(im.etoiles);
+        if (surVariante)                 signe = '';
+        else if (etat === 'assoupi')     signe = zzz(im.zzz[0], im.zzz[1], '#F2C489');
+        else if (etat === 'secoue')      signe = larme(im.larme[0], im.larme[1]);
+        else if (etat === 'ravi')        signe = etoiles(im.etoiles);
 
         /* L'ombre au sol est dessinée ICI et pas incluse dans le PNG : elle doit
            rester SOUS le corps quand il respire (`.cp-body` fait grandir l'animal
            depuis ses pieds). Incluse dans l'image, elle enflerait avec lui, ce qui
            ne se produit pas dans la nature. */
+        /* L'ombre au sol : elle marque le sol, elle ne suit donc PAS la variante.
+           Un animal couché s'étale, mais il pose son poids au même endroit. */
         return `
             <ellipse cx="${im.sol.cx}" cy="356" rx="${im.sol.rx}" ry="12" fill="#0d0a22" opacity="0.5"/>
             <g class="cp-body">
-                <image href="${RACINE}${im.fichier}" xlink:href="${RACINE}${im.fichier}"
-                       x="${im.x}" y="${im.y}" width="${im.taille}" height="${im.taille}"/>
+                <image href="${RACINE}${v.fichier}" xlink:href="${RACINE}${v.fichier}"
+                       x="${v.x}" y="${v.y}" width="${v.taille}" height="${v.taille}"/>
             </g>
             ${signe}`;
     }
 
-    function dessinerImage(cle, etat) {
-        return `<svg class="cp-svg" viewBox="6 42 308 330" aria-hidden="true">${dessinImageInterieur(cle, etat)}</svg>`;
+    function dessinerImage(cle, etat, physique) {
+        return `<svg class="cp-svg" viewBox="6 42 308 330" aria-hidden="true">${dessinImageInterieur(cle, etat, physique)}</svg>`;
     }
 
     const COMPAGNONS = {
@@ -728,19 +843,16 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Je note.`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine en moyenne — j'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste}, et je calerai tes défis sur toi.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il ne peut pas monter plus haut. Tu l\'as mené au bout.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a encore poussé au bord de l'eau. Ça vient."
                                         : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Trajet tout en douceur. Je m\'en souviendrai.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un défi de moins. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Je te l\'ajoute.'
+                defi_valide:    (v) => `Un défi de moins. Il t'en reste ${v.reste}.`
             },
             decor: 'point_eau',
-            dessin:    (e) => dessinerImage('babi', e),
-            interieur: (e) => dessinImageInterieur('babi', e)
+            dessin:    (e, p) => dessinerImage('babi', e, p),
+            interieur: (e, p) => dessinImageInterieur('babi', e, p)
         },
 
         bulle: {
@@ -758,20 +870,17 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. C'est régulier.`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine en moyenne. J'ai calé tes défis dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il est au bout. Tu l\'y as mené.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a ouvert sur le fleuve cette semaine. Ce n'est pas grave."
                                         : `${v.pousses} nénuphar${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Tranquille, ce trajet. Ça me va.',
                 // (voir A_VENIR pour les compagnons de la troupe pas encore dessinés)
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de moins. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Je le range.'
+                defi_valide:    (v) => `Un de moins. Il t'en reste ${v.reste}.`
             },
             decor: 'fleuve',
-            dessin:    (e) => dessinerImage('bulle', e),
-            interieur: (e) => dessinImageInterieur('bulle', e)
+            dessin:    (e, p) => dessinerImage('bulle', e, p),
+            interieur: (e, p) => dessinImageInterieur('bulle', e, p)
         },
 
         titi: {
@@ -789,18 +898,15 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. On varie un peu ?`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il est tout en haut. Impossible de grimper plus.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a encore mûri cette semaine. Ça vient."
                                         : `${v.pousses} fruit${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Joli trajet. Tout en souplesse.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Je le mets sur le bracelet.'
+                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e) => dessinerImage('titi', e),
-            interieur: (e) => dessinImageInterieur('titi', e)
+            dessin:    (e, p) => dessinerImage('titi', e, p),
+            interieur: (e, p) => dessinImageInterieur('titi', e, p)
         },
         zola: {
             nom: 'Zola',
@@ -817,18 +923,15 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Solide.`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il est au sommet. Rien au-dessus.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien ne s'est allumé cette semaine. Ça viendra."
                                         : `${v.pousses} étoile${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Trajet propre. Rien à dire.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu.'
+                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e) => dessinerImage('zola', e),
-            interieur: (e) => dessinImageInterieur('zola', e)
+            dessin:    (e, p) => dessinerImage('zola', e, p),
+            interieur: (e, p) => dessinImageInterieur('zola', e, p)
         },
         kiri: {
             nom: 'Kiri',
@@ -845,18 +948,15 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Tu tiens le rythme.`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il est tout en haut. Je ne vois rien au-dessus.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a encore poussé. La semaine est longue."
                                         : `${v.pousses} feuille${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Trajet anticipé de bout en bout.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Je le vois venir de loin.'
+                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e) => dessinerImage('kiri', e),
-            interieur: (e) => dessinImageInterieur('kiri', e)
+            dessin:    (e, p) => dessinerImage('kiri', e, p),
+            interieur: (e, p) => dessinImageInterieur('kiri', e, p)
         },
         raya: {
             nom: 'Raya',
@@ -873,18 +973,15 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Régulier.`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => "Il est au maximum. C'est exact.",
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a ouvert cette semaine. Ce n'est pas un reproche."
                                         : `${v.pousses} fleur${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Trajet net. Pas un geste de trop.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Bien joué.'
+                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e) => dessinerImage('raya', e),
-            interieur: (e) => dessinImageInterieur('raya', e)
+            dessin:    (e, p) => dessinerImage('raya', e, p),
+            interieur: (e, p) => dessinImageInterieur('raya', e, p)
         },
         sam: {
             nom: 'Sam',
@@ -905,18 +1002,15 @@
                 objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Toujours les mêmes routes ?`,
                 carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
                 carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                rang_progres:   (v) => `Encore ${v.reste} badge${v.reste > 1 ? 's' : ''} et il passe ${v.suivant}.`,
-                rang_max:       () => 'Il est au bout. Plus rien après, j\'ai vérifié.',
                 clairiere:      (v) => v.pousses === 0
                                         ? "Rien n'a encore percé sous les fougères. Ça vient."
                                         : `${v.pousses} baie${v.pousses > 1 ? 's' : ''} sur ${v.total} cette semaine`,
                 trajet_doux:    () => 'Trajet sans accroc. Bien joué.',
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`,
-                badge:          () => 'Badge obtenu. Je le mets de côté.'
+                defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e) => dessinerImage('sam', e),
-            interieur: (e) => dessinImageInterieur('sam', e)
+            dessin:    (e, p) => dessinerImage('sam', e, p),
+            interieur: (e, p) => dessinImageInterieur('sam', e, p)
         }
     };
 
@@ -981,11 +1075,26 @@
        rechargement — le choix paraîtrait ne pas avoir été pris en compte. */
     function choisir(cle) {
         if (!COMPAGNONS[cle] || cle === courant) return false;
+        /* ⚠ UN ANIMAL MORT NE SE REJOUE PAS, et la garde est ICI plutôt que chez le
+           seul appelant connu : `choisir()` est l'unique porte d'entrée du changement
+           de compagnon, la grille de choix n'est qu'un de ses chemins (il y a aussi la
+           console, une reprise de session, et ce qu'on écrira demain). Le registre vit
+           dans js/24, chargé APRÈS ce fichier — d'où le `typeof`. Registre absent :
+           personne n'est mort, on laisse passer. */
+        if (window.VieCompagnon && typeof VieCompagnon.estMort === 'function'
+            && VieCompagnon.estMort(cle)) return false;
         courant = cle;
         try { localStorage.setItem('gps_compagnon', cle); } catch (e) { /* non bloquant */ }
         etat(etatCourant);
-        if (typeof window.renderBadgeCategoryCard === 'function') {
-            try { window.renderBadgeCategoryCard(); } catch (e) { /* la carte se repeindra seule */ }
+        if (typeof window.renderCarteCompagnon === 'function') {
+            try { window.renderCarteCompagnon(); } catch (e) { /* la carte se repeindra seule */ }
+        }
+        /* Le marqueur de position porte l'animal (js/04) : il doit changer tout de
+           suite, pas au trajet suivant. Même précaution que la ligne au-dessus — la
+           fonction peut manquer (planche d'expérimentation), et son absence ne doit
+           surtout pas empêcher le changement de compagnon, déjà enregistré. */
+        if (typeof window.rafraichirMarqueurCompagnon === 'function') {
+            try { window.rafraichirMarqueurCompagnon(); } catch (e) { /* le marqueur se refera au prochain trajet */ }
         }
         return true;
     }
@@ -1419,34 +1528,27 @@
     }
 
     /* ======================================================================
-       LE PORTRAIT DE RANG (onglet Profil)
-       Le compagnon avec la médaille de la catégorie autour du cou. La couleur
-       vient de la table des catégories (js/12) : c'est ELLE qui décide, pas ce
-       module — bronze, argent, or… changent là-bas et se répercutent ici sans
-       qu'on y touche.
+       LE PORTRAIT DU COMPAGNON (onglet Profil)
+       L'animal dans son halo de couleur, en tête de la carte de profil.
 
-       ⚠ C'est le compagnon qui porte le rang, pas une pastille dans un coin :
-       une médaille posée sur un animal se lit d'un coup d'œil et donne envie de
-       la faire changer de couleur. Ne pas la remplacer par un badge flottant.
+       ⚠ ELLE S'APPELAIT `rang()` ET PORTAIT UNE MÉDAILLE (retirée le 27/08/2026).
+       Le disque autour du cou gravait le nombre de badges et prenait la couleur de
+       la catégorie — Bronze, Argent, Or. Le système de badges supprimé (voir js/12),
+       la médaille ne disait plus rien : elle décorait un rang qui n'existe plus.
+       NE PAS LA REMETTRE pour « habiller » le portrait. Ce que l'animal a acquis se
+       lit dans son parcours, à côté de lui, et sur sa barre de vie en dessous.
+
+       ⚠ LA COULEUR VIENT DE L'APPELANT, avec l'accent du compagnon pour repli : la
+       carte de profil passe la teinte de l'animal (js/12), et c'est la seule chose
+       qui reste de l'ancien code couleur.
        ====================================================================== */
 
-    /* infos : { couleur, chiffre (le nombre de badges, gravé sur la médaille) } */
-    function rang(cible, infos) {
+    /* infos : { couleur, physique } — `physique` omis, l'état réel de l'animal. */
+    function portrait(cible, infos) {
         const el = typeof cible === 'string' ? document.getElementById(cible) : cible;
         if (!el) return;
         infos = infos || {};
         const couleur = infos.couleur || COMPAGNONS[courant].accent;
-        const chiffre = (infos.chiffre === null || infos.chiffre === undefined) ? '' : String(infos.chiffre);
-
-        /* La médaille est dessinée APRÈS le corps, donc par-dessus : le ruban part
-           des épaules et le disque retombe sur le ventre clair. */
-        const medaille = `
-            <g class="cp-medaille">
-                <path d="M122 234 L152 286 M198 234 L168 286" stroke="${couleur}" stroke-width="13" stroke-linecap="round" opacity="0.9"/>
-                <circle cx="160" cy="300" r="32" fill="${couleur}" stroke="#FFF0DC" stroke-width="6.5"/>
-                <circle cx="160" cy="300" r="20" fill="none" stroke="#2A1226" stroke-width="4" opacity="0.45"/>
-                <text x="160" y="312" text-anchor="middle" font-size="29" font-weight="800" fill="#2A1226">${chiffre}</text>
-            </g>`;
 
         el.innerHTML = `
             <svg class="cp-svg cp-rang" viewBox="6 42 308 330" aria-hidden="true">
@@ -1458,8 +1560,7 @@
                     </radialGradient>
                 </defs>
                 <circle class="cp-halo" cx="160" cy="170" r="152" fill="url(#cp-halo-grad)"/>
-                ${COMPAGNONS[courant].interieur('ravi')}
-                ${medaille}
+                ${COMPAGNONS[courant].interieur('ravi', infos.physique || physiqueCourant())}
             </svg>`;
     }
 
@@ -2283,7 +2384,24 @@
         const cible = document.getElementById('compagnon-dessin');
         if (!cible) return;
         etatCourant = nouvel;
-        cible.innerHTML = COMPAGNONS[courant].dessin(nouvel);
+        /* Le hero suit lui aussi l'état physique : c'est le même animal que celui
+           de la carte de rang, il ne peut pas être intact à un endroit et blessé à
+           l'autre. Voir `physiqueCourant()`. */
+        cible.innerHTML = COMPAGNONS[courant].dessin(nouvel, physiqueCourant());
+    }
+
+    /* Redessine les portraits du compagnon actif après un changement d'état
+       physique. Appelée par js/24 au franchissement d'un seuil de vie, et par lui
+       seul : ce module ne surveille pas la jauge, il se contente d'obéir.
+
+       ⚠ APPELÉE AU CHANGEMENT D'ÉTAT, PAS À CHAQUE POINT GPS. Elle refait deux
+       innerHTML et, via la carte de rang, tout le calcul des badges — trois fois
+       par trajet au maximum (sain → blessé → mort), jamais en continu. */
+    function rafraichirPortraits() {
+        if (document.getElementById('compagnon-dessin')) etat(etatCourant);
+        if (typeof window.renderCarteCompagnon === 'function') {
+            try { window.renderCarteCompagnon(); } catch (e) { /* la carte se repeindra seule */ }
+        }
     }
 
     /* La phrase seule, en texte : la bulle d'accueil n'est pas le seul endroit
@@ -2302,10 +2420,18 @@
         if (texte) bulle.textContent = texte;
     }
 
-    window.Compagnon = { monter: monter, etat: etat, dit: dit, phrase: phrase, rang: rang,
+    window.Compagnon = { monter: monter, etat: etat, dit: dit, phrase: phrase, portrait: portrait,
                          choisir: choisir, catalogue: catalogue,
+                         rafraichirPortraits: rafraichirPortraits,
                          cle: function () { return courant; },
-                         dessin: function (e) { return COMPAGNONS[courant].dessin(e || etatCourant); },
+                         /* `physique` ('sain' | 'blesse' | 'mort', voir etatPhysiqueVie
+                            dans js/00) choisit la VARIANTE d'image ; `e` reste
+                            l'expression.
+                            ⚠ OMIS, ON PREND L'ÉTAT RÉEL DU COMPAGNON, plus l'image
+                            Normal (changé le 27/08/2026) : un portrait intact au-dessus
+                            d'une barre de vie à 2 % se lisait comme un bug. Passer
+                            explicitement 'sain' pour forcer l'animal indemne. */
+                         dessin: function (e, physique) { return COMPAGNONS[courant].dessin(e || etatCourant, physique || physiqueCourant()); },
                          clairiere: clairiere, nom: function () { return COMPAGNONS[courant].nom; },
                          parcours: parcours, parcoursEtape: parcoursEtape, vignetteCage: vignetteCage,
                          fiche: fiche, texteSauve: texteSauve,
@@ -2313,6 +2439,17 @@
                          especeDe: function (cle) { return (COMPAGNONS[cle] || COMPAGNONS[courant]).espece; },
                          accentDe: function (cle) { return (COMPAGNONS[cle] || COMPAGNONS[courant]).accent; },
                          histoire: histoire,
+                         /* Le PNG brut et sa boîte englobante, pour qui veut poser
+                            l'animal ailleurs que dans le gabarit du hero — le marqueur
+                            GPS (js/04) est le premier. On rend le chemin DÉJÀ préfixé
+                            par la racine : l'appelant n'a pas à savoir d'où ce module a
+                            été chargé. `null` pour un compagnon sans image, plutôt
+                            qu'un objet à moitié rempli que l'appelant croirait valide. */
+                         image: function (cle, physique) {
+                             if (!IMAGES[cle || courant]) return null;
+                             const v = variante(cle || courant, physique);
+                             return { fichier: RACINE + v.fichier, boite: v.boite };
+                         },
                          genre: function (cle) { return genreDe(cle || courant); },
                          video: function (cle, moment) { return videoDe(cle || courant, moment); },
                          get etatCourant() { return etatCourant; } };

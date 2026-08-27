@@ -332,19 +332,191 @@
             waypointTempMarkers = [];
         }
 
+        /* ═══ LE MARQUEUR DE POSITION PORTE LE COMPAGNON CHOISI    (27/08/2026) ═══
+
+           Le point bleu est devenu l'animal qu'on est en train de sauver : c'est le
+           même personnage que le hero du panneau, la barre de vie et la fenêtre
+           d'arrivée: le montrer avancer sur la carte est ce qui relie le trajet au
+           parcours. Il suit la sélection (`Compagnon.cle()`) — aucun réglage de plus à
+           proposer, l'éléphant ou l'hippo selon ce qui est choisi dans Objectifs.
+
+           ⚠ LE POINT BLEU ET SON ONDE SONT MASQUÉS, PAS SUPPRIMÉS — c'est le point à
+           ne pas défaire (revu le 27/08/2026 : ils dépassaient sous les pattes, et deux
+           repères de position pour un seul conducteur c'est un de trop). Ils restent
+           dans le balisage parce qu'ils sont le REPLI : un PNG introuvable ne lève
+           AUCUNE erreur, il ne dessine rien. Les retirer ferait disparaître la position
+           du conducteur en pleine navigation, en silence, sur une simple casse de chemin.
+           D'où `_animalCharge` : le point n'est masqué (`.has-animal`) qu'une fois
+           l'image RÉELLEMENT chargée, vérifiée par un `Image()` hors écran. Tant qu'on
+           ne sait pas, ou si le chargement échoue, le point bleu tient sa place.
+           Un `onerror` sur le `<image>` SVG ne suffirait pas : il n'est pas émis de
+           façon fiable d'un moteur à l'autre, et surtout jamais quand le fichier existe
+           mais n'est pas une image.
+
+           ⚠ L'ANIMAL EST RECADRÉ SUR SA BOÎTE ALPHA, pas posé tel quel. Les PNG sont
+           des carrés de 512 dont un bon tiers est transparent : posé brut, la bête
+           ferait deux tiers de la taille demandée et flotterait au-dessus du point.
+           Le `viewBox` posé sur `boite` (js/22) découpe les pixels visibles, et le
+           rapport largeur/hauteur en est déduit — aucune déformation possible, aucune
+           valeur à régler à la main pour un futur compagnon.
+
+           ⚠ TAILLE_ANIMAL_PX EST LE SEUL RÉGLAGE. Une seule constante pour les trois
+           marqueurs (position hors trajet, conducteur, trajet libre) : ils doivent
+           rester de la même taille, c'est le même animal qui passe de l'un à l'autre
+           quand le trajet démarre. */
+        const TAILLE_ANIMAL_PX = 75;
+
+        /* Chemin d'image → true (chargée) / false (échec) / absent (on ne sait pas
+           encore). Par CHEMIN et non par compagnon : deux clés peuvent pointer le même
+           fichier, et c'est le fichier qui charge ou non. */
+        const _animalCharge = {};
+
+        function precharger(chemin) {
+            if (chemin in _animalCharge) return;
+            const img = new Image();
+            img.onload  = () => { _animalCharge[chemin] = true;  rafraichirMarqueurCompagnon(); };
+            img.onerror = () => { _animalCharge[chemin] = false; logAppError('marqueurGPS/image', new Error('introuvable : ' + chemin)); };
+            img.src = chemin;
+        }
+
+        /* ═══ L'ÉTAT PHYSIQUE DU COMPAGNON, LU EN DIRECT           (27/08/2026) ═══
+
+           L'animal sur la carte change d'image PENDANT le trajet : sain au-dessus de
+           75 %, blessé en dessous, mort à 0. C'est la sanction rendue visible là où
+           le conducteur regarde déjà — la barre de vie est en bas de l'écran, lui est
+           au milieu de la route.
+
+           ⚠ L'ICÔNE MORTE S'AFFICHE DÈS QUE LA JAUGE TOUCHE 0, ALORS QUE LA MORT N'EST
+           PRONONCÉE QU'À L'ARRIVÉE (voir le registre des morts, js/24). Elle « ment »
+           donc parfois : une barre vidée en route peut remonter et l'animal survivre.
+           C'EST VOULU, et c'est le point à ne pas « corriger » : sans seconde chance
+           visible, un joueur à 0 se dirait perdu pour perdu et cesserait de surveiller
+           sa vitesse. Voir l'animal mort puis pouvoir le regagner est ce qui tient la
+           conduite jusqu'au bout du trajet.
+
+           L'état est LU ici et non poussé par js/24 : ce module ne dépend alors de rien
+           (`typeof window.VieCompagnon`), et une planche d'expérimentation sans barre de
+           vie affiche simplement l'animal sain. */
+        function physiqueCourant() {
+            if (typeof window.VieCompagnon === 'undefined') return 'sain';
+            return tenterSansBruit(function () {
+                if (typeof VieCompagnon.estMort === 'function' && VieCompagnon.estMort()) return 'mort';
+                if (typeof etatPhysiqueVie !== 'function' || typeof VieCompagnon.valeur !== 'function') return 'sain';
+                return etatPhysiqueVie(VieCompagnon.valeur());
+            }, 'marqueurGPS/physique') || 'sain';
+        }
+
+        /* L'image à poser sur le marqueur, ou `null` s'il n'y a rien d'affichable —
+           auquel cas le point bleu reste seul.
+
+           ⚠ REPLI SUR L'IMAGE NORMALE, PAS SUR LE POINT BLEU. Tous les animaux n'ont
+           pas leurs variantes `Blesser/` et `Dead/` (seul l'hippo au 27/08/2026), et
+           une variante déclarée peut mettre un instant à charger. Retomber sur le point
+           bleu ferait clignoter la position du conducteur à chaque passage de seuil :
+           on garde l'animal sain, qui est faux sur l'état mais juste sur la position.
+           Quand la variante finit par charger, `precharger()` rappelle le rafraîchis-
+           sement et le fondu la met en place. */
+        function imageMarqueur() {
+            if (typeof window.Compagnon === 'undefined' || typeof Compagnon.image !== 'function') return null;
+            const phys = physiqueCourant();
+            let im = tenterSansBruit(() => Compagnon.image(null, phys), 'marqueurGPS/image');
+            if (!im || !im.boite || !im.boite.w || !im.boite.h) return null;
+            precharger(im.fichier);
+            if (_animalCharge[im.fichier] !== true && phys !== 'sain') {
+                const normal = tenterSansBruit(() => Compagnon.image(), 'marqueurGPS/image');
+                if (normal && normal.boite && normal.boite.w && normal.boite.h) {
+                    precharger(normal.fichier);
+                    if (_animalCharge[normal.fichier] === true) im = normal;
+                }
+            }
+            // Pas encore chargée (ou en échec) : on laisse le point bleu seul à l'écran.
+            return (_animalCharge[im.fichier] === true) ? im : null;
+        }
+
+        function svgMarqueur(im) {
+            const b = im.boite;
+            const h = TAILLE_ANIMAL_PX;
+            const w = Math.round(h * (b.w / b.h));
+            /* `width`/`height` en attributs et non en CSS : la propriété `aspect-ratio`
+               qu'il faudrait sinon n'est pas garantie sur la WebView de l'APK, et un
+               SVG sans dimension y retombe sur 300×150 — l'animal deviendrait un
+               rectangle étiré au travers de l'écran. */
+            /* `data-fichier` : c'est lui qui dit si l'image affichée est déjà la bonne.
+               Sans ce repère, le rafraîchissement rejouerait un fondu à chaque appel. */
+            return `<svg class="pulse-marker-animal" data-fichier="${im.fichier}"
+                         width="${w}" height="${h}"
+                         viewBox="${b.x} ${b.y} ${b.w} ${b.h}" aria-hidden="true">
+                        <image href="${im.fichier}" xlink:href="${im.fichier}"
+                               x="0" y="0" width="512" height="512"/>
+                    </svg>`;
+        }
+
+        function compagnonMarkerSvg() {
+            const im = imageMarqueur();
+            return im ? svgMarqueur(im) : '';
+        }
+
         // Marqueur conducteur (point pulsant coloré), remplace le pattern L.divIcon répété.
         function createPulseMarkerEl(color) {
             const el = document.createElement('div');
+            const animal = compagnonMarkerSvg();
             el.innerHTML = `
-                <div class="pulse-marker-container">
+                <div class="pulse-marker-container${animal ? ' has-animal' : ''}">
                     <div class="pulse-marker-ring" style="background-color:${color};"></div>
                     <div class="pulse-marker-dot" style="background-color:${color};"></div>
+                    ${animal}
                 </div>`;
             return el.firstElementChild;
         }
         function addDriverMarker(lng, lat, color) {
             return new mapboxgl.Marker({ element: createPulseMarkerEl(color), anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
         }
+
+        /* Changer de compagnon doit se voir sur la carte SANS attendre le trajet
+           suivant. Les marqueurs Mapbox portent un élément DOM figé, construit une
+           fois : on ne le reconstruit pas (il faudrait recréer le marqueur et perdre
+           sa position), on remplace seulement le SVG à l'intérieur.
+           Appelée par `Compagnon.choisir()` (js/22) via `typeof window.…`, comme la
+           carte de badges — ce module est chargé APRÈS js/04 mais l'inverse n'est pas
+           vrai, et la fonction peut manquer sur une planche d'expérimentation. */
+        /* Le fondu entre deux états. Doit rester DISCRET : c'est un changement d'état,
+           pas un effet — l'animal ne doit pas attirer l'œil du conducteur au moment où
+           il change. Même durée en CSS (`.pulse-marker-animal`), les deux doivent
+           bouger ensemble sinon l'ancienne image est retirée avant la fin du fondu. */
+        const DUREE_FONDU_MS = 700;
+
+        function rafraichirMarqueurCompagnon() {
+            const im = imageMarqueur();
+            document.querySelectorAll('.pulse-marker-container').forEach(c => {
+                const presents = c.querySelectorAll('.pulse-marker-animal');
+                c.classList.toggle('has-animal', !!im);
+                if (!im) { presents.forEach(e => e.remove()); return; }
+
+                /* Déjà la bonne image à l'écran : on ne touche à rien. La vie bouge à
+                   chaque point GPS, cette fonction peut donc être appelée très souvent. */
+                const dessus = presents[presents.length - 1];
+                if (dessus && dessus.dataset.fichier === im.fichier
+                    && !dessus.classList.contains('cp-sort')) return;
+
+                /* Les deux images coexistent le temps du fondu : l'ancienne s'efface,
+                   la nouvelle apparaît par-dessus. Les retirer d'abord ferait passer le
+                   point bleu entre les deux — un clignotement en pleine navigation. */
+                presents.forEach(e => {
+                    if (e.classList.contains('cp-sort')) return;
+                    e.classList.add('cp-sort');
+                    setTimeout(() => e.remove(), DUREE_FONDU_MS);
+                });
+                c.insertAdjacentHTML('beforeend', svgMarqueur(im));
+                const neuf = c.lastElementChild;
+                neuf.classList.add('cp-entre');
+                /* Reflow forcé, sinon le navigateur voit l'élément naître directement
+                   opaque et ne joue aucune transition. `getBoundingClientRect()` et non
+                   `offsetWidth` : ce dernier n'existe pas sur un élément SVG. */
+                void neuf.getBoundingClientRect();
+                neuf.classList.remove('cp-entre');
+            });
+        }
+        window.rafraichirMarqueurCompagnon = rafraichirMarqueurCompagnon;
 
         /* Point de passage UNIQUE pour thème / trafic / bâtiments 3D. Deux raisons :
            — `setStyle()` détruit toutes les sources et couches, donc on ne le déclenche que

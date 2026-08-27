@@ -58,9 +58,16 @@
                 const val = localStorage.getItem(key);
                 if (val !== null) snapshot[key] = val;
             });
-            // Clés par profil (badges + objectifs)
+            /* Clés par profil : objectifs de la semaine, et badges d'anciennes versions.
+               ⚠ `salif_gps_badges` EST RECOPIÉ ALORS QUE PLUS RIEN NE LE LIT. Le système
+               de badges a été retiré le 27/08/2026 (voir js/12), mais la clé dort encore
+               dans le stockage des utilisateurs : un export qui la laisserait tomber
+               ferait de l'import un chemin de PERTE de données, silencieux. Le nom est
+               écrit en clair ici depuis que la constante `BADGE_KEY` a disparu avec le
+               reste — ne pas le déduire d'une variable, il n'y en a plus. */
+            const CLE_BADGES_DORMANTE = 'salif_gps_badges';
             profiles.forEach(p => {
-                const bKey = `${BADGE_KEY}_${p.id}`;
+                const bKey = `${CLE_BADGES_DORMANTE}_${p.id}`;
                 const gKey = `gps_weekly_goals_${p.id}`;
                 const bVal = localStorage.getItem(bKey);
                 const gVal = localStorage.getItem(gKey);
@@ -68,9 +75,9 @@
                 if (gVal) snapshot[gKey] = gVal;
             });
             // Rétrocompat : clés globales non-profilées
-            const legacyBadge = localStorage.getItem(BADGE_KEY);
+            const legacyBadge = localStorage.getItem(CLE_BADGES_DORMANTE);
             const legacyGoals = localStorage.getItem('gps_weekly_goals');
-            if (legacyBadge) snapshot[BADGE_KEY] = legacyBadge;
+            if (legacyBadge) snapshot[CLE_BADGES_DORMANTE] = legacyBadge;
             if (legacyGoals) snapshot['gps_weekly_goals'] = legacyGoals;
             return snapshot;
         }
@@ -182,14 +189,18 @@
                         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                     });
                     const profiles = JSON.parse(data['gps_profiles'] || '[]');
-                    const badges = JSON.parse(data['salif_gps_badges'] || '{"total":0}');
                     const profileNames = profiles.map(p => p.name).join(', ') || 'aucun';
 
+                    /* La ligne « 🏅 Badges : N » a été retirée le 27/08/2026 avec le
+                       système qu'elle comptait. Rien ne la remplace : le nombre d'animaux
+                       sauvés vit dans `salif_gps_parcours`, qui est importé comme le
+                       reste — l'annoncer ici demanderait de le décompter à la main dans
+                       une fenêtre de confirmation, pour une information que la page
+                       « Animaux sauvés » donne déjà après l'import. */
                     const confirmed = confirm(
                         `Importer ce profil ?\n\n` +
                         `📅 Exporté le : ${exportDate}\n` +
-                        `👤 Profils : ${profileNames}\n` +
-                        `🏅 Badges : ${badges.total}\n\n` +
+                        `👤 Profils : ${profileNames}\n\n` +
                         `⚠️ Tes données actuelles seront remplacées.`
                     );
                     if (!confirmed) { input.value = ''; return; }
@@ -211,7 +222,7 @@
                        aux anciennes. */
                     tenterSansBruit(() => loadPlacesFromStorage(), 'import/lieuxFixes');
                     renderDriversUI();
-                    renderBadgeCategoryCard();
+                    renderCarteCompagnon();
                     renderWeeklyGoalsPanel();
                     updateWeeklyGoalsButton();
 

@@ -170,13 +170,16 @@
                l'utilisateur ne rouvre jamais l'onglet Objectifs. */
             synchroniserParcours();
             updateWeeklyGoalsButton();
-            console.log('[Badge] goals après trajet:', data.goals.map(g => `${g.id}: ${g.progress}/${g.target}`), '— bonusClaimed:', data.bonusClaimed, '— allCompleted:', allGoalsCompleted(data));
-            // Attribution du badge si les 3 objectifs viennent d'être complétés.
-            // On appelle awardWeeklyBadge() immédiatement (pas de setTimeout) :
-            // si la fenêtre d'arrivée est ouverte à ce moment, showBadgeEarnedToast pose
-            // _pendingBadgeModal=true et la modale part à sa fermeture (closeArrivalSummary).
+            /* ⚠ RIEN N'EST « ATTRIBUÉ » ICI DEPUIS LE RETRAIT DES BADGES (27/08/2026).
+               La semaine complétée déclenchait `awardWeeklyBadge()`, qui posait une
+               modale « Catégorie Bronze débloquée ! » par-dessus la fenêtre d'arrivée.
+               La récompense d'une mission bouclée est désormais l'ÉTAPE de parcours que
+               `synchroniserParcours()` vient d'écrire deux lignes plus haut — l'animal
+               avance vers sa liberté, il n'y a pas de médaille à décerner en plus. */
             if (allGoalsCompleted(data) && !data.bonusClaimed) {
-                awardWeeklyBadge();
+                data.bonusClaimed = true;
+                saveWeeklyGoals(data);
+                renderCarteCompagnon();
             }
             return data;
         }
@@ -313,23 +316,33 @@
                `Compagnon.clairiere()` existe toujours et n'est plus appelée. */
             renderParcoursPanel();
 
+            /* ⚠ IL N'Y A PLUS RIEN À « RÉCUPÉRER » À LA FIN D'UNE SEMAINE (27/08/2026).
+               Ce bloc portait le bouton « RÉCUPÉRER MON BADGE » puis, une fois la
+               médaille retirée du carnet (25/08/2026), une phrase d'attente qui la
+               promettait encore. Les deux sont parties avec le système de badges : ce
+               qu'une mission bouclée rapporte est une ÉTAPE du parcours, et le bloc
+               juste au-dessus (`renderParcoursPanel()`) la montre déjà en grand.
+               L'élément est VIDÉ et non retiré du HTML : il tient la place d'un futur
+               message de fin de semaine, et le vider ici efface un bouton laissé par
+               une version précédente de l'app. */
             const bonusEl = document.getElementById('weekly-goals-bonus-panel');
             if (!bonusEl) return;
-            if (allGoalsCompleted(data) && !data.bonusClaimed) {
-                bonusEl.innerHTML = `<button class="wg-claim-btn" onclick="claimWeeklyBonus()">🏅 RÉCUPÉRER MON BADGE</button>`;
-            } else if (allGoalsCompleted(data) && data.bonusClaimed) {
-                /* 25/08/2026 — La carte « Badge obtenu ! » (médaille + catégorie) a été
-                   SUPPRIMÉE. Depuis le parcours en trois étapes, la récompense de la
-                   semaine n'est plus une médaille mais une étape franchie, et le bloc
-                   du parcours, juste au-dessus, la montre déjà en grand. Répéter une
-                   médaille dessous racontait deux récompenses pour une seule semaine.
-                   Le badge lui-même n'est pas supprimé : il continue d'alimenter le
-                   rang de l'onglet Profil (voir awardWeeklyBadge). */
+            if (allGoalsCompleted(data)) {
                 bonusEl.innerHTML = '';
             } else {
                 const remaining = data.goals.filter(g => g.progress < g.target).length;
-                bonusEl.innerHTML = `<div class="wg-remaining">🏅 Complétez les ${remaining} objectif${remaining > 1 ? 's' : ''} restant${remaining > 1 ? 's' : ''} pour obtenir votre badge de la semaine !</div>`;
+                bonusEl.innerHTML = `<div class="wg-remaining">Encore ${remaining} mission${remaining > 1 ? 's' : ''} et ${nomCompagnon()} franchit une étape.</div>`;
             }
+        }
+
+        /* Le prénom de l'animal en cours, pour les phrases de l'interface. Repli sur
+           « votre compagnon » : une phrase sans prénom vaut mieux qu'un « undefined ». */
+        function nomCompagnon() {
+            if (window.Compagnon && typeof Compagnon.nom === 'function') {
+                const n = tenterSansBruit(() => Compagnon.nom(), 'carteCompagnon/nom');
+                if (n) return n;
+            }
+            return 'votre compagnon';
         }
 
         function closeWeeklyGoalsModal() {
@@ -342,34 +355,36 @@
             }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // === SYSTÈME DE BADGES & CATÉGORIES ===
-        // ═══════════════════════════════════════════════════════════
+        /* ══════════════════════════════════════════════════════════════════════
+           LE SYSTÈME DE BADGES A ÉTÉ RETIRÉ                      (27/08/2026)
+           ----------------------------------------------------------------------
+           Sont partis d'un bloc : `BADGE_KEY`, `BADGE_CATEGORIES` (Bronze → Ange),
+           `loadBadges`/`saveBadges`, `getBadgeCategory`/`getNextCategory`,
+           `CAT_PICTOS`, `awardWeeklyBadge`, `showBadgeUnlockedModal`,
+           `_showBadgeModalUI`, `closeBadgeUnlockedModal`, `showBadgeEarnedToast`,
+           `claimWeeklyBonus`, les drapeaux `_pendingBadgeModal`/`_pendingBadgeTotal`,
+           la modale `#badge-unlocked-modal`, la barre de progression et les pastilles
+           de la carte de profil.
 
-        const BADGE_KEY = 'salif_gps_badges';
-        function _badgeKey() { return activeProfileId ? `${BADGE_KEY}_${activeProfileId}` : BADGE_KEY; }
+           POURQUOI. La mécanique du jeu a changé : on ne collectionne plus des
+           médailles, on boucle des missions pour LIBÉRER UN ANIMAL. Le parcours en
+           trois étapes (juste au-dessus) était devenu la vraie progression, et le
+           badge ne servait plus qu'à alimenter un rang décoratif — deux compteurs de
+           la même semaine, dont un qui ne menait nulle part.
 
-        const BADGE_CATEGORIES = [
-            { name: 'Bronze',   icon: '🥉', color: '#cd7f32', min: 0,  max: 2  },
-            { name: 'Argent',   icon: '🥈', color: '#a8a9ad', min: 3,  max: 5  },
-            { name: 'Or',       icon: '🥇', color: '#f5c518', min: 6,  max: 8  },
-            { name: 'Platine',  icon: '🔷', color: '#00b4d8', min: 9,  max: 11 },
-            { name: 'Diamant',  icon: '💎', color: '#8be8fd', min: 12, max: 14 },
-            { name: 'Élite',    icon: '🔥', color: '#ff6b35', min: 15, max: 17 },
-            { name: 'Champion', icon: '🏆', color: '#ffd700', min: 18, max: 20 },
-            { name: 'Ange',     icon: '👼', color: '#e0aaff', min: 21, max: 23 },
-        ];
+           ⚠ LA CLÉ `salif_gps_badges` N'EST PAS EFFACÉE DU STOCKAGE, volontairement.
+           Elle n'est plus jamais lue ni écrite ; la laisser dormir coûte quelques
+           octets et garde un retour en arrière possible. Ne pas ajouter de nettoyage
+           au démarrage : ce serait la seule ligne de tout ce retrait qui détruirait
+           des données. L'export de profil (js/02) la recopie encore telle quelle,
+           pour la même raison.
 
-        function loadBadges() {
-            try {
-                const raw = localStorage.getItem(_badgeKey());
-                return raw ? JSON.parse(raw) : { total: 0, weeks: [] };
-            } catch(e) { return { total: 0, weeks: [] }; }
-        }
-
-        function saveBadges(data) {
-            localStorage.setItem(_badgeKey(), JSON.stringify(data));
-        }
+           ⚠ CE QUI RESTE ET QU'IL NE FAUT PAS CONFONDRE avec le système parti : le
+           lecteur vidéo s'appelle toujours `#badge-video-modal` (il ne sert plus
+           qu'aux vidéos d'ANIMAL — cage et libération), et l'app garde plusieurs
+           « badges » d'interface sans aucun rapport : `#speed-limit-badge`,
+           `#nav-waypoint-badge`, `#nav-badge-goals`, `.route-alt-badge`.
+           ══════════════════════════════════════════════════════════════════════ */
 
         // ═══════════════════════════════════════════════════════════
         // === LE PARCOURS DU COMPAGNON ===
@@ -523,70 +538,6 @@
         }
 
 
-        /* Le picto de la catégorie, en SVG. Les emojis de `BADGE_CATEGORIES` sont
-           CONSERVÉS : ils servent aux toasts, à la galerie et aux notifications, où
-           un caractère suffit. Ici, en tête de page et à côté du portrait, il fallait
-           un dessin qui prenne la couleur de la catégorie et garde exactement la même
-           taille d'un téléphone à l'autre — ce qu'un emoji, rendu par la police
-           système, ne fait pas.
-           Le trait vaut `currentColor` : la couleur est posée une fois sur le
-           conteneur, à partir de `cat.color`. */
-        const CAT_PICTOS = {
-            Bronze:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14.5" r="7"/><path d="M9 7.5 7 3M15 7.5 17 3"/></svg>',
-            Argent:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14.5" r="7"/><path d="M9 7.5 7 3M15 7.5 17 3"/><path d="M12 11.5v6"/></svg>',
-            Or:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14.5" r="7"/><path d="M9 7.5 7 3M15 7.5 17 3"/><circle cx="12" cy="14.5" r="2.6"/></svg>',
-            Platine:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 12l-9 9-9-9Z"/></svg>',
-            Diamant:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9Z"/><path d="M3 9h18M9 3 6 9l6 12M15 3l3 6-6 12"/></svg>',
-            'Élite':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s5 5 5 9a5 5 0 0 1-10 0c0-1.6.8-3.2 1.8-4.5C9.6 8.7 10 10 11 10c1.4 0 1-3 1-8Z"/><path d="M12 22a4 4 0 0 0 4-4c0-2-2-3.5-4-5.5-2 2-4 3.5-4 5.5a4 4 0 0 0 4 4Z"/></svg>',
-            Champion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M7 5.5H4.5V8a3 3 0 0 0 3 3M17 5.5h2.5V8a3 3 0 0 1-3 3"/><path d="M12 14v3M9 20h6"/></svg>',
-            Ange:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="4" rx="4.5" ry="1.8"/><circle cx="12" cy="10.5" r="3"/><path d="M9 15c-2.5-2-6-2-6 1s3.5 3.5 6 1.5M15 15c2.5-2 6-2 6 1s-3.5 3.5-6 1.5"/><path d="M8.5 21a3.5 3.5 0 0 1 7 0"/></svg>'
-        };
-
-        function getBadgeCategory(total) {
-            for (let i = BADGE_CATEGORIES.length - 1; i >= 0; i--) {
-                if (total >= BADGE_CATEGORIES[i].min) return BADGE_CATEGORIES[i];
-            }
-            return BADGE_CATEGORIES[0];
-        }
-
-        function getNextCategory(current) {
-            const idx = BADGE_CATEGORIES.findIndex(c => c.name === current.name);
-            return idx < BADGE_CATEGORIES.length - 1 ? BADGE_CATEGORIES[idx + 1] : null;
-        }
-
-        // Attribuer le badge de la semaine (appelé dès les 3 objectifs complétés)
-        function awardWeeklyBadge() {
-            const goals = loadWeeklyGoals();
-            console.log('[Badge] awardWeeklyBadge — bonusClaimed:', goals.bonusClaimed);
-            if (goals.bonusClaimed) {
-                const badges = loadBadges();
-                console.log('[Badge] déjà réclamé, affichage modal seul — total:', badges.total);
-                showBadgeEarnedToast(badges.total);
-                return;
-            }
-
-            goals.bonusClaimed = true;
-            saveWeeklyGoals(goals);
-
-            const badges = loadBadges();
-            const weekId = getWeekId();
-            console.log('[Badge] weekId:', weekId, '— weeks déjà en mémoire:', badges.weeks);
-            if (!badges.weeks.includes(weekId)) {
-                badges.weeks.push(weekId);
-                badges.total += 1;
-                saveBadges(badges);
-            }
-            /* Le parcours n'avance PLUS ici : depuis le 25/08/2026 c'est chaque
-               mission qui franchit une étape, pas la semaine entière. La
-               troisième mission a donc déjà libéré l'animal quand on arrive ici
-               (voir synchroniserParcours). */
-            console.log('[Badge] total après attribution:', badges.total);
-
-            renderBadgeCategoryCard();
-            updateWeeklyGoalsButton();
-            renderWeeklyGoalsPanel();
-            showBadgeEarnedToast(badges.total);
-        }
 
         /* ═══ LE LECTEUR DE VIDÉO — UN SEUL, POUR TOUTE L'APP ═══ (25/08/2026)
 
@@ -676,134 +627,80 @@
             if (modal) modal.classList.remove('visible');
         }
 
-        // Modal badge débloqué — affiché séquentiellement après fermeture du coffre
-        let _pendingBadgeModal = false; // flag : un badge attend d'être affiché après le coffre
 
-        function showBadgeUnlockedModal(newTotal) {
-            const cat = getBadgeCategory(newTotal);
-            const prevCat = getBadgeCategory(newTotal - 1);
-            const isNewCategory = prevCat.name !== cat.name || newTotal === 1;
+        /* ══════════════════════════════════════════════════════════════════════
+           LA CARTE DU COMPAGNON, EN TÊTE DE L'ONGLET PROFIL      (27/08/2026)
+           ----------------------------------------------------------------------
+           Elle s'appelait `renderBadgeCategoryCard()` et montrait un RANG (Bronze,
+           Argent…) calculé sur le nombre de badges. Les badges retirés, elle montre
+           ce qui reste la vraie progression de l'app : où en est l'animal sur son
+           parcours de libération.
 
-            _showBadgeModalUI(newTotal, isNewCategory);
-        }
+             portrait + jauge de vie | prénom de l'animal
+                                     | l'étape en cours, en grand
+                                     | ce qu'elle demande
 
-        function _showBadgeModalUI(newTotal, isNewCategory) {
-            const cat = getBadgeCategory(newTotal);
-            if (isNewCategory === undefined) {
-                const prevCat = getBadgeCategory(newTotal - 1);
-                isNewCategory = prevCat.name !== cat.name || newTotal === 1;
-            }
+           ⚠ LA COULEUR VIENT DE L'ANIMAL, plus de la catégorie. `Compagnon.accentDe()`
+           donne la teinte du compagnon actif : la carte change d'aspect quand on
+           change d'animal, pas quand on monte un rang qui n'existe plus.
 
-            const iconEl  = document.getElementById('badge-unlocked-icon');
-            const titleEl = document.getElementById('badge-unlocked-title');
-            const subEl   = document.getElementById('badge-unlocked-sub');
-            const catEl   = document.getElementById('badge-unlocked-category');
-            const boxEl   = document.getElementById('badge-unlocked-box');
+           ⚠ ELLE APPELLE `synchroniserParcours()` ET NON `etapesCompagnon()`. La
+           différence compte : la synchronisation reporte les missions bouclées de la
+           semaine sur la fiche de l'animal. Une lecture seule montrerait la carte en
+           retard d'une mission tant que l'onglet Objectifs n'aurait pas été ouvert.
+           L'opération est idempotente par construction, l'appeler ici est sans risque.
+           ══════════════════════════════════════════════════════════════════════ */
+        function renderCarteCompagnon() {
+            const nameEl   = document.getElementById('compagnon-carte-etape');
+            const subEl    = document.getElementById('compagnon-carte-sub');
+            const cardEl   = document.getElementById('compagnon-carte');
+            const kickerEl = document.getElementById('compagnon-carte-kicker-txt');
 
-            iconEl.textContent  = isNewCategory ? cat.icon : '🏅';
-            titleEl.textContent = isNewCategory ? `Catégorie ${cat.name} débloquée !` : 'Badge obtenu !';
-            titleEl.style.color = cat.color;
-            subEl.textContent   = `${newTotal} badge${newTotal > 1 ? 's' : ''} au total · Semaine complétée 🎯`;
+            if (!nameEl) return;
 
-            catEl.textContent      = `${cat.icon} ${cat.name}`;
-            catEl.style.background = cat.color + '22';
-            catEl.style.color      = cat.color;
-            catEl.style.border     = `1px solid ${cat.color}55`;
+            const acquises = synchroniserParcours();
+            const libre    = acquises >= PARCOURS_ETAPES;
+            const etape    = Math.min(PARCOURS_ETAPES, acquises + 1);
 
-            if (boxEl) {
-                boxEl.style.border    = `1px solid ${cat.color}44`;
-                boxEl.style.boxShadow = `0 16px 48px rgba(0,0,0,0.9), 0 0 32px ${cat.color}22`;
-            }
+            /* Teinte de l'animal, avec un repli neutre : la carte doit rester lisible
+               même si le module compagnon manque (planche d'expérimentation). */
+            const couleur = (window.Compagnon && typeof Compagnon.accentDe === 'function')
+                ? (tenterSansBruit(() => Compagnon.accentDe(), 'carteCompagnon/accent') || '#A88BFF')
+                : '#A88BFF';
 
-            /* ⚠ PLUS DE VIDÉO DE MÉDAILLE ICI (25/08/2026). Le bouton proposait
-               « 🎬 Voir ma récompense » sur chaque nouvelle catégorie, et lançait
-               la vidéo de la catégorie. Ces vidéos sont retirées : la récompense
-               d'un parcours mené au bout, ce n'est plus une médaille qui tourne
-               sur elle-même, c'est l'animal qu'on libère. Sa vidéo se lancera à
-               sa place, et elle est propre à l'ANIMAL, pas à la catégorie — le
-               lecteur générique `jouerVideo()` est prêt pour ça.
-               Un seul bouton reste donc, et il ferme. */
-            const closeBtn = document.getElementById('badge-unlocked-close');
-            closeBtn.textContent = 'Super, merci !';
-            closeBtn.onclick = closeBadgeUnlockedModal;
-
-            document.getElementById('badge-unlocked-modal').classList.add('visible');
-            _pendingBadgeModal = false;
-        }
-
-        function closeBadgeUnlockedModal() {
-            document.getElementById('badge-unlocked-modal').classList.remove('visible');
-            renderBadgeCategoryCard();
-        }
-
-        // Conserver pour compatibilité interne (appelé depuis awardWeeklyBadge)
-        function showBadgeEarnedToast(newTotal) {
-            /* ⚠ UN BADGE NE PART JAMAIS PAR-DESSUS LA FENÊTRE D'ARRIVÉE (21/08/2026).
-               Le test d'origine ne regardait que le coffre à butin : sur un trajet arrivé
-               sans conduite parfaite, aucun coffre ne s'ouvrait — la modale de badge
-               partait donc « immédiatement », c'est-à-dire par-dessus la fenêtre d'arrivée
-               que `stopCourse()` venait d'ouvrir deux lignes plus haut.
-               Le coffre supprimé (25/08/2026), il ne reste qu'une fenêtre à surveiller, et
-               c'est `closeArrivalSummary()` qui libère le badge en attente. */
-            const arrivee = document.getElementById('arrival-modal-overlay');
-            const finOuverte = !!(arrivee && arrivee.classList.contains('open'));
-            console.log('[Badge] showBadgeEarnedToast — total:', newTotal, '— fenêtre de fin ouverte:', finOuverte);
-            // Toujours stocker le total en attente — closeArrivalSummary l'affichera si la
-            // fenêtre de fin est ouverte, sinon on l'affiche immédiatement
-            _pendingBadgeTotal = newTotal;
-            if (finOuverte) {
-                _pendingBadgeModal = true;
-                console.log('[Badge] → badge mis en attente (_pendingBadgeModal=true)');
-            } else {
-                _pendingBadgeModal = false;
-                showBadgeUnlockedModal(newTotal);
-            }
-        }
-        let _pendingBadgeTotal = 0;
-
-        // Rendu de la carte catégorie dans l'onglet Profil
-        function renderBadgeCategoryCard() {
-            const badges = loadBadges();
-            const total = badges.total;
-            const cat = getBadgeCategory(total);
-            const next = getNextCategory(cat);
-
-            const iconEl   = document.getElementById('badge-category-icon');
-            const nameEl   = document.getElementById('badge-category-name');
-            const subEl    = document.getElementById('badge-category-sub');
-            const pipsEl   = document.getElementById('badge-count-icons');
-            const barEl    = document.getElementById('badge-progress-bar-fill');
-            const labelEl  = document.getElementById('badge-progress-label');
-            const cardEl   = document.getElementById('badge-category-card');
-            const kickerEl = document.getElementById('badge-category-kicker-txt');
-
-            if (!iconEl) return;
-
-            /* Le picto de la catégorie : innerHTML et non textContent — c'est un SVG
-               depuis le 24/08/2026, plus un emoji (voir CAT_PICTOS). */
-            iconEl.innerHTML     = CAT_PICTOS[cat.name] || CAT_PICTOS.Bronze;
-            iconEl.style.color   = cat.color;
-            nameEl.textContent   = cat.name;
-            nameEl.style.color   = cat.color;
             if (cardEl) {
-                cardEl.style.borderColor = cat.color + '55';
-                /* Le fond de la carte prend la teinte du rang : c'est le seul élément de
-                   la page qui change d'aspect en montant de catégorie. */
-                cardEl.style.background = 'linear-gradient(150deg, ' + cat.color + '26, rgba(255,255,255,0.03))';
+                cardEl.style.borderColor = couleur + '55';
+                cardEl.style.background  = 'linear-gradient(150deg, ' + couleur + '26, rgba(255,255,255,0.03))';
             }
 
-            /* Le portrait : le compagnon porte la médaille de la catégorie, le nombre de
-               badges gravé dessus. Le sous-titre passe dans sa voix (« Encore 3 badges et
-               il passe Argent. ») — l'ancien « 0 badge obtenu » disait la même chose que
-               la médaille juste à côté. */
-            if (window.Compagnon) {
-                Compagnon.rang('badge-category-portrait', { couleur: cat.color, chiffre: total });
-                if (kickerEl) kickerEl.textContent = 'Rang de ' + Compagnon.nom();
-                subEl.textContent = next
-                    ? Compagnon.phrase('rang_progres', { reste: next.min - total, suivant: next.name })
-                    : Compagnon.phrase('rang_max');
+            /* L'étape en gros, ce qu'elle demande en dessous — les deux textes sont
+               ceux du module compagnon (`parcoursEtape`), pas des phrases écrites ici :
+               le carnet affiche exactement les mêmes, ils ne peuvent pas diverger. */
+            const lib = (window.Compagnon && typeof Compagnon.parcoursEtape === 'function')
+                ? tenterSansBruit(() => Compagnon.parcoursEtape(etape), 'carteCompagnon/etape')
+                : null;
+
+            nameEl.style.color = couleur;
+            if (libre) {
+                nameEl.textContent = nomCompagnon() + ' est libre';
+                subEl.textContent  = 'Son parcours est allé au bout.';
             } else {
-                subEl.textContent = `${total} badge${total > 1 ? 's' : ''} obtenu${total > 1 ? 's' : ''}`;
+                nameEl.textContent = lib ? lib.titre : `Étape ${etape} / ${PARCOURS_ETAPES}`;
+                subEl.textContent  = lib ? lib.sous  : '';
+            }
+
+            if (window.Compagnon) {
+                /* Le portrait, SANS médaille : elle disait le rang, qui n'existe plus.
+                   Voir `Compagnon.portrait()` (js/22), ex-`rang()`. */
+                Compagnon.portrait('compagnon-carte-portrait', { couleur: couleur });
+                /* La jauge de vie posée sous le portrait. Elle est alimentée en continu
+                   par js/24 pendant la navigation, mais la carte peut être ouverte hors
+                   trajet ou après un changement de compagnon : on la (re)pose ici pour
+                   qu'elle affiche la vie du bon animal dès l'ouverture de « Moi ». */
+                if (window.VieCompagnon && typeof VieCompagnon.monter === 'function') {
+                    tenterSansBruit(() => VieCompagnon.monter(), 'carteCompagnon/vie');
+                }
+                if (kickerEl) kickerEl.textContent = 'Le parcours de ' + Compagnon.nom();
             }
 
             /* Les chiffres du profil. `profiles` / `activeProfileId` vivent dans js/13,
@@ -815,7 +712,7 @@
             const ptsEl = document.getElementById('profil-stat-points');
             if (ptsEl) {
                 const actifPts = tenterSansBruit(
-                    () => profiles.find(p => p.id === activeProfileId), 'badgeCard/points');
+                    () => profiles.find(p => p.id === activeProfileId), 'carteCompagnon/points');
                 const pts = actifPts ? actifPts.totalPoints : 0;
                 ptsEl.textContent = Math.round(pts).toLocaleString('fr-FR');
             }
@@ -825,57 +722,27 @@
                    le Profil est une vue d'ensemble. Sans trajet noté, un tiret — annoncer
                    100 laisserait croire à une conduite parfaite qui n'a jamais eu lieu. */
                 const notes = tenterSansBruit(
-                    () => getTripHistory().filter(t => t.ecoScore != null), 'badgeCard/eco') || [];
+                    () => getTripHistory().filter(t => t.ecoScore != null), 'carteCompagnon/eco') || [];
                 ecoEl.textContent = notes.length
                     ? String(Math.round(notes.reduce((n, t) => n + t.ecoScore, 0) / notes.length))
                     : '—';
             }
 
             /* Prénom du profil actif dans la carte. Posé ICI et nulle part ailleurs :
-               `renderBadgeCategoryCard()` est déjà rappelée par TOUS les chemins qui
+               `renderCarteCompagnon()` est déjà rappelée par TOUS les chemins qui
                changent de profil — `selectProfile()` (js/13), l'import de profil (js/02),
                l'ouverture de l'onglet Profil (js/14) — alors qu'un rafraîchissement écrit
-               à part en aurait forcément raté un. Les badges affichés étant eux-mêmes
-               ceux du profil actif, le nom et le contenu de la carte ne peuvent pas
+               à part en aurait forcément raté un. Le parcours affiché étant lui aussi
+               celui du profil actif, le nom et le contenu de la carte ne peuvent pas
                diverger. `profiles` / `activeProfileId` vivent dans js/13, chargé après
                celui-ci : lecture au runtime uniquement, jamais au chargement. */
-            const profilEl = document.getElementById('badge-category-profile');
+            const profilEl = document.getElementById('compagnon-carte-profil');
             if (profilEl) {
                 const actif = tenterSansBruit(
-                    () => profiles.find(p => p.id === activeProfileId), 'badgeCard/profilActif');
+                    () => profiles.find(p => p.id === activeProfileId), 'carteCompagnon/profilActif');
                 profilEl.textContent   = actif ? actif.name : '';
                 profilEl.style.display = actif ? '' : 'none';
             }
-
-            // Pips (badges dans la catégorie en cours)
-            const earnedInCat = total - cat.min;
-            const sizeOfCat   = cat.max - cat.min + 1;
-            pipsEl.innerHTML   = '';
-            pipsEl.style.color = cat.color;
-            for (let i = 0; i < sizeOfCat; i++) {
-                const pip = document.createElement('div');
-                pip.className = 'badge-pip' + (i < earnedInCat ? ' earned' : '');
-                pip.style.color = cat.color;
-                pip.style.borderColor = cat.color;
-                pip.textContent = i < earnedInCat ? '✓' : '';
-                pipsEl.appendChild(pip);
-            }
-
-            // Barre de progression
-            if (next) {
-                const pct = Math.round((earnedInCat / sizeOfCat) * 100);
-                barEl.style.width      = pct + '%';
-                barEl.style.background = `linear-gradient(90deg, ${cat.color}, ${next.color})`;
-                labelEl.textContent    = `${earnedInCat} / ${sizeOfCat} badges`;
-            } else {
-                barEl.style.width      = '100%';
-                barEl.style.background = cat.color;
-                labelEl.textContent    = 'Catégorie maximale';
-            }
-        }
-
-        function claimWeeklyBonus() {
-            awardWeeklyBadge();
         }
 
         /* ═══ GALERIE DES TROPHÉES — RETIRÉE (26/08/2026) ═══
@@ -884,9 +751,10 @@
            montraient les huit catégories de `BADGE_CATEGORIES` — le décompte de l'ancien
            système, celui d'avant les parcours d'animaux.
 
-           ⚠ `BADGE_CATEGORIES` N'A PAS DISPARU POUR AUTANT : la carte de rang en tête de
-           l'onglet Profil (`renderBadgeCategoryCard()`) s'en sert toujours, et le
-           classement en ligne aussi. C'est la VITRINE qui est partie, pas les badges.
+           `BADGE_CATEGORIES` a suivi le 27/08/2026, avec tout le système de badges :
+           la carte de tête de l'onglet Profil montre désormais le PARCOURS de l'animal
+           (voir `renderCarteCompagnon()`), et le classement en ligne compte des animaux
+           sauvés depuis le 25/08/2026. Plus rien ne lit ce décompte.
 
            Ce qui la remplace : « Animaux sauvés », js/25-animaux-sauves.js. Les trois
            appelants de `refreshTrophyGalleryCount()` (js/13 au changement de profil,
@@ -965,7 +833,7 @@
             if (window.Compagnon && Compagnon.choisir) Compagnon.choisir('babi');
             renderWeeklyGoalsPanel();
             updateWeeklyGoalsButton();
-            if (typeof renderBadgeCategoryCard === 'function') renderBadgeCategoryCard();
+            if (typeof renderCarteCompagnon === 'function') renderCarteCompagnon();
             /* Le classement compte des animaux sauvés : il vient d'en perdre. */
             if (typeof clAnimauxMaj === 'function') {
                 try { clAnimauxMaj(); } catch (e) { logAppError('classement/animauxMaj', e); }
@@ -1019,41 +887,39 @@
             synchroniserParcours();
             renderWeeklyGoalsPanel();
             updateWeeklyGoalsButton();
-            if (typeof renderBadgeCategoryCard === 'function') renderBadgeCategoryCard();
+            if (typeof renderCarteCompagnon === 'function') renderCarteCompagnon();
 
             console.log('[Debug] Objectifs de la semaine forcés :', data.goals.map(g => `${g.id}: ${g.progress}/${g.target}`));
         }
 
-        // ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
-        function _debugFillGoals95() {
-            // 1. Réinitialiser badge de la semaine (pour pouvoir rejouer)
-            const badges = loadBadges();
-            const weekId = getWeekId();
-            badges.weeks = badges.weeks.filter(w => w !== weekId);
-            if (badges.total > 0) badges.total -= 1;
-            saveBadges(badges);
+        /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
+           Met les trois missions de la semaine à 100 % et reporte le résultat sur le
+           parcours de l'animal.
 
-            // 2. Mettre les objectifs à 100% directement (pas 95%) et bonusClaimed=false
+           ⚠ IL NE DÉCLENCHE PLUS AUCUNE FENÊTRE (27/08/2026). Il remettait le badge de
+           la semaine à zéro puis rappelait `awardWeeklyBadge()` pour faire apparaître
+           « Catégorie Bronze débloquée ! » — c'était son objet même. Les badges retirés,
+           ce qu'il montre est l'étape franchie : le carnet et la carte du profil se
+           repeignent, et rien ne s'ouvre par-dessus l'écran. */
+        function _debugFillGoals95() {
             const data = loadWeeklyGoals();
             data.goals.forEach(g => { g.progress = g.target; });
+            /* `bonusClaimed` n'est plus une récompense en attente, seulement le drapeau
+               qui empêche de recompter deux fois une semaine complétée. On le remet à
+               faux pour que le prochain trajet rejoue le passage « semaine bouclée ». */
             data.bonusClaimed = false;
             saveWeeklyGoals(data);
 
+            const etapes = synchroniserParcours();
             renderWeeklyGoalsPanel();
-            renderBadgeCategoryCard();
+            renderCarteCompagnon();
             updateWeeklyGoalsButton();
 
-            console.log('[Debug] Objectifs à 100%, badge semaine réinitialisé. activeProfileId:', activeProfileId);
+            console.log('[Debug] Objectifs à 100%. activeProfileId:', activeProfileId);
             console.log('[Debug] Goals:', data.goals.map(g => `${g.id}: ${g.progress}/${g.target}`));
-            console.log('[Debug] Badges:', loadBadges());
+            console.log('[Debug] Parcours du compagnon — étapes acquises :', etapes, '/', PARCOURS_ETAPES);
 
-            // 3. Déclencher immédiatement le flow badge
-            setTimeout(() => {
-                console.log('[Debug] → appel awardWeeklyBadge()');
-                awardWeeklyBadge();
-            }, 300);
-
-            document.getElementById('status').innerText = '🧪 DEBUG : flow badge déclenché directement !';
+            document.getElementById('status').innerText = `🧪 DEBUG : missions à 100 % — étape ${Math.min(PARCOURS_ETAPES, etapes)} / ${PARCOURS_ETAPES}`;
             document.getElementById('status').style.color = '#f39c12';
         }
 
@@ -1137,30 +1003,58 @@
            par-dessus l'autre en fin de trajet, personne ne lit la première.
 
            RÉPARTITION DES RÔLES, la même que pour la barre de vie (voir js/24) :
-             · le noyau dit dans quel ÉTAT la vie restante met l'animal (`etatSanteVie`) ;
-             · js/22 fournit le DESSIN de cet état et le NOM de l'animal ;
-             · ici, on ne fait que poser l'un et l'autre à l'écran.
+             · le noyau dit dans quel ÉTAT PHYSIQUE la vie restante met l'animal
+               (`etatPhysiqueVie`) ;
+             · js/22 fournit l'IMAGE de cet état et le NOM de l'animal ;
+             · js/24 tient le registre des morts ;
+             · ici, on ne fait que poser tout ça à l'écran.
            Aucun seuil ne doit être écrit dans cette fonction. */
-        /* La phrase de fin de trajet, par état. Volontairement au singulier de l'animal :
-           « Babi est en bonne santé » dit quelque chose, « ton compagnon va bien » ne dit
-           rien. Le tutoiement suit le reste de l'app.
+
+        /* Vrai tant qu'une fenêtre d'arrivée annonçant une mort n'a pas été refermée :
+           c'est elle qui doit ouvrir la grille de choix derrière elle. Un drapeau plutôt
+           qu'un test refait à la fermeture, parce qu'à ce moment-là le compagnon courant
+           peut déjà avoir changé.
+           ⚠ DÉCLARÉ AVANT SON USAGE, pas après : un `let` de portée script est en zone
+           morte tant que sa ligne n'a pas été évaluée — piège que ce fichier a déjà payé
+           avec `userPanningResumeTimer` (voir plus bas). */
+        let _deuilEnAttente = false;
+
+        /* ═══ TROIS ÉTATS PHYSIQUES, TROIS PHRASES            (27/08/2026) ═══
+           Volontairement au singulier de l'animal : « Babi est en bonne santé » dit
+           quelque chose, « ton compagnon va bien » ne dit rien. Le tutoiement suit le
+           reste de l'app.
 
            ⚠ LE `e` D'ACCORD N'EST PAS UN DÉTAIL : la troupe compte des femelles (Kiri,
-           Raya, Sam), et « Sam est secoué » sur le nom d'un personnage qu'on vient de
-           choisir se voit du premier coup d'œil. Le genre est DÉCLARÉ dans js/22
-           (`Compagnon.genre()`), jamais deviné d'après le nom.
+           Raya, Sam), et « Sam est décédé » sur le nom d'un personnage qu'on vient de
+           choisir se voit du premier coup d'œil — d'autant plus sur la phrase qui
+           annonce sa mort. Le genre est DÉCLARÉ dans js/22 (`Compagnon.genre()`),
+           jamais deviné d'après le nom. Deux accords dans la phrase de mort
+           (« décédée », « jouée »), aucun dans celle du blessé : « il faudra » y est
+           impersonnel, ce n'est pas l'animal qui doit faire attention, c'est le
+           conducteur.
            « Tu es bien arrivé » reste au masculin : c'est le conducteur, et l'app ne lui
-           a jamais demandé son genre. */
-        const ARRIVEE_SANTE = {
-            ravi:   (nom)    => `Tu es bien arrivé — ${nom} est en bonne santé.`,
-            repos:  (nom)    => `Tu es bien arrivé — ${nom} tient le coup.`,
-            secoue: (nom, e) => `Tu es bien arrivé — ${nom} est secoué${e}.`
+           a jamais demandé son genre.
+
+           ⚠ LES TROIS CLÉS SONT CELLES DE `etatPhysiqueVie`, au mot près. Une clé qui
+           ne tomberait pas juste rendrait `undefined` et afficherait une fenêtre muette
+           — pas une erreur, juste une phrase qui manque. */
+        const ARRIVEE_PHYSIQUE = {
+            sain:   (nom)    => `Tu es bien arrivé — ${nom} est en bonne santé.`,
+            blesse: (nom, e) => `Tu es bien arrivé — ${nom} a eu quelques bobos en route. `
+                              + `Il faudra faire attention la prochaine fois.`,
+            mort:   (nom, e) => `Tu es bien arrivé — malheureusement ${nom} est décédé${e} `
+                              + `et ne pourra plus être jou${e ? 'ée' : 'é'}.`
         };
 
         /* Plus aucun paramètre : les points ne sont plus affichés (25/08/2026), et le
            `chest` du second argument n'a plus d'objet depuis le retrait du coffre. Tout
            ce que la fenêtre montre, elle va le chercher elle-même. */
-        function showArrivalSummary() {
+        /* `libre` : le trajet s'est terminé SANS destination. Seul le titre change —
+           « arrivée à destination » serait faux —, le bilan de l'animal est le même.
+           C'est le choix du 27/08/2026 : la vie descend aussi en trajet libre, et sans
+           cette fenêtre un compagnon pourrait y tomber à 0 % sans que rien ne le dise,
+           puis « mourir en silence » au trajet suivant. */
+        function showArrivalSummary(libre) {
             const overlay = document.getElementById('arrival-modal-overlay');
             if (!overlay) return;
 
@@ -1168,48 +1062,111 @@
                `VieCompagnon.enregistrer()` avant d'en arriver ici, et rien ne la remet à
                100 % entre deux trajets. On la lit, on ne la touche pas. */
             const vie   = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
-            const etat  = etatSanteVie(vie);
             const nom   = (window.Compagnon && Compagnon.nom) ? Compagnon.nom() : 'ton compagnon';
+            const cle   = (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : null;
+
+            /* ⚠ UN COMPAGNON DÉJÀ MORT RESTE MORT, quelle que soit sa jauge. Sans cette
+               reprise du registre, rouvrir l'app sur un animal enterré (dont la vie en
+               stockage vaut 0) rejouerait « il vient de mourir » à chaque arrivée — et,
+               pire, un `poser()` de débogage le montrerait ressuscité. Le registre fait
+               foi, la jauge ne fait que l'alimenter. */
+            const dejaMort = !!(window.VieCompagnon && VieCompagnon.estMort && VieCompagnon.estMort(cle));
+            const etat     = dejaMort ? 'mort' : etatPhysiqueVie(vie);
+
+            /* ⚠ LA MORT EST DÉCLARÉE ICI, ET NULLE PART AILLEURS. C'est le seul endroit
+               de l'app qui constate la fin d'un trajet en connaissant la vie finale :
+               tomber à 0 en roulant n'est pas mourir, la barre peut remonter avant
+               d'arriver (voir le registre dans js/24). `declarerMort()` ne rend `true`
+               qu'au geste qui tue vraiment, ce qui évite de rouvrir la fenêtre de choix
+               à chaque arrivée suivante sur le même animal. */
+            let vientDeMourir = false;
+            if (etat === 'mort' && window.VieCompagnon && VieCompagnon.declarerMort) {
+                vientDeMourir = VieCompagnon.declarerMort(cle);
+            }
+            _deuilEnAttente = (etat === 'mort');
 
             const portrait = document.getElementById('arrival-modal-compagnon');
             const sous     = document.getElementById('arrival-modal-sub');
             const note     = document.getElementById('arrival-modal-note');
+            const titre    = document.getElementById('arrival-modal-title');
+            const icone    = document.getElementById('arrival-modal-icon');
+
+            if (titre) titre.textContent = libre ? 'Trajet terminé' : 'Arrivée à destination';
+            if (icone) icone.textContent = libre ? '🧭' : '🏁';
 
             if (portrait) {
                 /* `innerHTML` avec un SVG fabriqué par js/22 : aucune donnée extérieure
-                   n'entre ici, contrairement aux pseudos du classement. */
-                portrait.innerHTML = (window.Compagnon && Compagnon.dessin) ? Compagnon.dessin(etat) : '';
+                   n'entre ici, contrairement aux pseudos du classement.
+                   ⚠ DEUX ARGUMENTS, PAS UN. Le premier reste l'EXPRESSION (accessoires
+                   posés sur l'image normale), le second choisit la VARIANTE d'image.
+                   Un animal blessé ou mort a sa propre image, donc pas d'expression à
+                   lui donner — d'où le 'repos' neutre : js/22 ignore de toute façon les
+                   accessoires dès qu'une variante est en jeu. */
+                const expression = etat === 'sain' ? 'ravi' : 'repos';
+                portrait.innerHTML = (window.Compagnon && Compagnon.dessin)
+                    ? Compagnon.dessin(expression, etat) : '';
                 portrait.dataset.etat = etat;
                 portrait.setAttribute('aria-label', `${nom} — vie ${Math.round(vie)} %`);
             }
             const accord = (window.Compagnon && Compagnon.genre && Compagnon.genre() === 'f') ? 'e' : '';
-            if (sous) sous.textContent = (ARRIVEE_SANTE[etat] || ARRIVEE_SANTE.repos)(nom, accord);
+            if (sous) sous.textContent = (ARRIVEE_PHYSIQUE[etat] || ARRIVEE_PHYSIQUE.sain)(nom, accord);
             /* La vie chiffrée en petit sous la phrase : c'est d'elle que sort l'état, et
-               sans elle « secoué » ne dit pas de combien on est passé à côté. */
-            if (note) note.textContent = `Vie : ${Math.round(vie)} %`;
-            /* Le bouton ne dit plus qu'une chose depuis qu'il n'y a plus rien derrière. */
+               sans elle « quelques bobos » ne dit pas de combien on est passé à côté.
+               Sur un animal mort le chiffre n'a plus rien à mesurer : on annonce ce qui
+               vient à la place, c'est-à-dire le choix d'un autre compagnon. */
+            if (note) note.textContent = etat === 'mort'
+                ? 'Choisis un autre animal pour continuer.'
+                : `Vie : ${Math.round(vie)} %`;
+            /* Le bouton ne dit plus qu'une chose depuis qu'il n'y a plus rien derrière —
+               sauf sur une mort, où il annonce ce qu'il va ouvrir. */
             const btn = document.getElementById('arrival-modal-close');
-            if (btn) btn.textContent = 'Terminé';
+            if (btn) btn.textContent = etat === 'mort' ? 'Choisir un autre animal' : 'Terminé';
+
+            /* La couleur du cadre, du bouton et de la phrase tient dans cette seule
+               classe : vert / orange / rouge. Posée sur la fenêtre et pas sur chaque
+               élément, pour que le CSS reste le seul endroit qui décide des teintes. */
+            const boite = document.getElementById('arrival-modal');
+            if (boite) boite.className = 'arrivee-' + etat;
 
             overlay.classList.add('open');
             playAudioSequence(['reached_destination.ogg']);
+            if (vientDeMourir) logAppError('compagnon/mort', new Error('compagnon mort : ' + cle));
         }
 
-        /* Fermer cette fenêtre, c'est aussi laisser passer le badge qui attendait derrière
-           elle, s'il y en a un.
-           ⚠ IL N'Y A PLUS QU'UNE SEULE CHOSE EN ATTENTE depuis le retrait du coffre
-           (25/08/2026) : ce mécanisme gérait une FILE de deux fenêtres — coffre puis
-           badge — et c'est `closeLootModal()` qui libérait le second. Le coffre parti,
-           c'est ici et nulle part ailleurs que le badge est libéré ; sans cette branche,
-           un badge gagné pendant un trajet ne s'afficherait jamais. */
+
+        /* Fermer la fenêtre d'arrivée est le dernier maillon de la fin de trajet.
+
+           ⚠ IL N'Y A PLUS RIEN EN FILE D'ATTENTE DERRIÈRE ELLE (27/08/2026). Ce
+           mécanisme a porté une file de trois fenêtres — coffre, puis badge, puis
+           deuil — chacune libérant la suivante à sa fermeture. Le coffre est parti le
+           25/08/2026, le badge le 27 : il ne reste que le deuil, appelé directement.
+           Si une fenêtre de fin de trajet revient un jour, c'est ICI qu'elle se
+           chaîne, et nulle part ailleurs. */
         function closeArrivalSummary() {
             document.getElementById('arrival-modal-overlay')?.classList.remove('open');
-            if (_pendingBadgeTotal > 0) {
-                const totalToShow = _pendingBadgeTotal;
-                _pendingBadgeModal = false;
-                _pendingBadgeTotal = 0;
-                setTimeout(() => showBadgeUnlockedModal(totalToShow), 400);
-            }
+            ouvrirChoixApresDeuil();
+        }
+
+        /* ═══ APRÈS LA MORT, ON CHOISIT                        (27/08/2026) ═══
+           Rien ne se joue sans compagnon : la grille des animaux à sauver s'ouvre
+           d'office, et le mort y figure grisé avec la mention « Mort » — voir js/23.
+
+           ⚠ LE DÉLAI N'EST PAS COSMÉTIQUE : la fenêtre d'arrivée se ferme par un retrait
+           de classe, avec sa transition. Ouvrir la grille dans le même souffle ferait
+           apparaître la seconde sous la première encore visible.
+
+           ⚠ ET LE DRAPEAU EST REMIS À FAUX QUOI QU'IL ARRIVE, même si la fenêtre de choix
+           n'existe pas (planche d'expérimentation, module absent). Un deuil resté en
+           attente rouvrirait la grille à la fin du trajet SUIVANT, sur un compagnon en
+           pleine forme. */
+        function ouvrirChoixApresDeuil() {
+            if (!_deuilEnAttente) return;
+            _deuilEnAttente = false;
+            setTimeout(() => {
+                if (typeof window.openCompagnonPicker === 'function') {
+                    tenterSansBruit(() => window.openCompagnonPicker(), 'deuil/choix');
+                }
+            }, 400);
         }
 
         /* ⚠ `rollLoot()`, `onChestClick()` et `closeLootModal()` ONT ÉTÉ SUPPRIMÉS

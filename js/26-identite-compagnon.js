@@ -103,7 +103,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        const portrait = document.getElementById('badge-category-portrait');
+        const portrait = document.getElementById('compagnon-carte-portrait');
         if (!portrait) return;
         portrait.addEventListener('click', ouvrir);
         portrait.addEventListener('keydown', function (ev) {

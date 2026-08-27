@@ -48,6 +48,7 @@ function chargerNoyau() {
         'VIE_MAX', 'VIE_DEGAT_PAR_METRE', 'VIE_SOIN_PAR_METRE', 'VIE_ROBUSTESSE',
         'severiteExces', 'robustesseCompagnon', 'majVie', 'vieApresChoc', 'palierVie',
         'VIE_SEUIL_SANTE', 'etatSanteVie',
+        'VIE_SEUIL_BLESSE', 'etatPhysiqueVie',
         'heureArrivee',
     ];
     const retour = `\n;return { ${noms.join(', ')} };`;
@@ -1214,30 +1215,56 @@ section('Vie du compagnon');
        NaN : la jauge deviendrait un `width: NaN%` silencieux. */
     verifie('compagnon inconnu → robustesse 1', robustesseCompagnon('licorne'), 1);
     verifie('clé absente → robustesse 1',       robustesseCompagnon(undefined), 1);
-    verifie('bulle est le plus robuste',
-        Math.max.apply(null, Object.keys(VIE_ROBUSTESSE).map(k => VIE_ROBUSTESSE[k])), VIE_ROBUSTESSE.bulle);
+    /* ⚠ ROBUSTESSE NEUTRALISÉE LE 26/08/2026 : toute la troupe est à 1 le temps de caler
+       la dureté de base sur route (cf. VIE_ROBUSTESSE dans le noyau). Ce test remplace
+       « bulle est le plus robuste » — un `Math.max` aurait continué à passer sur des
+       valeurs toutes égales, sans rien prouver du tout. Il tombera le jour où on
+       rétablira l'échelle, et c'est exactement ce qu'on veut : le rétablissement doit
+       être un geste conscient qui repasse ici. */
+    verifie('robustesse neutralisée : toute la troupe à 1',
+        Object.keys(VIE_ROBUSTESSE).every(k => VIE_ROBUSTESSE[k] === 1), true);
     /* Les deux compagnons d'A_VENIR (js/22) ont déjà leur vie : sans ça, les
        débloquer les ferait tomber sur la robustesse par défaut sans que rien ne
        le signale. */
     verifie('nima a une robustesse',  typeof VIE_ROBUSTESSE.nima,  'number');
     verifie('pilou a une robustesse', typeof VIE_ROBUSTESSE.pilou, 'number');
 
-    /* La calibration annoncée dans le noyau : 5 km d'excès franc vident une barre
-       pleine à robustesse 1. Ce test est le garde-fou du réglage — le changer doit
-       être un geste conscient, pas un effet de bord. */
-    verifie('5 km d\'excès à +20 % vident la barre (robustesse 1)',
-        majVie(VIE_MAX, 5000, { enExces: true, vitesse: 60, limite: 50 }), 0);
+    /* La calibration annoncée dans le noyau : 10 % de vie par 100 m d'excès franc à
+       robustesse 1, soit une barre pleine vidée en 1 km (26/08/2026, cf.
+       VIE_DEGAT_PAR_METRE). Ce test est le garde-fou du réglage — le changer doit être
+       un geste conscient, pas un effet de bord.
+       ⚠ C'est la PREMIÈRE assertion qui tient le réglage, pas la seconde : « vide la
+       barre » reste vrai pour toute pente plus raide que la bonne (le résultat est
+       borné à 0), donc seule une mesure qui ne touche pas la borne distingue le bon
+       réglage d'un dix fois trop dur. On mesure donc sur 100 m, l'unité même dans
+       laquelle le réglage est énoncé. */
+    verifie('100 m d\'excès à +20 % coûtent 10 % de vie (robustesse 1)',
+        majVie(VIE_MAX, 100, { enExces: true, vitesse: 60, limite: 50 }), 90);
+    verifie('1 km d\'excès à +20 % vide la barre (robustesse 1)',
+        majVie(VIE_MAX, 1000, { enExces: true, vitesse: 60, limite: 50 }), 0);
     verifie('20 km propres refont la barre (robustesse 1)',
         majVie(0, 20000, { enExces: false }), VIE_MAX);
 
-    /* Un animal fragile encaisse plus et se soigne moins : les deux, sinon il
-       serait seulement plus lent à mourir au lieu d'être plus exigeant. */
-    const degatRaya  = VIE_MAX - majVie(VIE_MAX, 1000, { enExces: true, vitesse: 60, limite: 50, compagnon: 'raya' });
-    const degatBulle = VIE_MAX - majVie(VIE_MAX, 1000, { enExces: true, vitesse: 60, limite: 50, compagnon: 'bulle' });
-    verifie('le tigre encaisse plus que l\'hippopotame', degatRaya > degatBulle, true);
+    /* Tant que la robustesse est neutralisée, deux compagnons doivent se comporter
+       EXACTEMENT pareil — c'est la vérification que la neutralisation traverse bien
+       `majVie()` des deux côtés, dégâts ET soins. Le mécanisme lui-même n'a pas été
+       retiré du noyau : la paire d'assertions d'origine (« le tigre encaisse plus /
+       se soigne moins que l'hippopotame », avec `>` et `<`) est à remettre telle
+       quelle le jour où on rétablit l'échelle.
+       ⚠ MESURER SUR 100 m, PAS SUR 1 km : depuis le réglage du 26/08/2026, 1 km d'excès
+       met tout le monde à 0 par bornage, et deux zéros sont égaux quoi qu'on fasse à la
+       robustesse — l'assertion passerait même si la neutralisation était incomplète. */
+    const degatRaya  = VIE_MAX - majVie(VIE_MAX, 100, { enExces: true, vitesse: 60, limite: 50, compagnon: 'raya' });
+    const degatBulle = VIE_MAX - majVie(VIE_MAX, 100, { enExces: true, vitesse: 60, limite: 50, compagnon: 'bulle' });
+    verifie('robustesse neutralisée : tous encaissent pareil', degatRaya, degatBulle);
     const soinRaya  = majVie(0, 1000, { enExces: false, compagnon: 'raya' });
     const soinBulle = majVie(0, 1000, { enExces: false, compagnon: 'bulle' });
-    verifie('le tigre se soigne moins vite que l\'hippopotame', soinRaya < soinBulle, true);
+    verifie('robustesse neutralisée : tous se soignent pareil', soinRaya, soinBulle);
+    /* Le compagnon ne change plus rien, mais il ne doit pas non plus DÉCALER le
+       résultat par rapport au calcul sans compagnon (une clé neutralisée et une clé
+       inconnue doivent tomber sur la même valeur). */
+    verifie('un compagnon neutralisé équivaut à pas de compagnon',
+        degatRaya, VIE_MAX - majVie(VIE_MAX, 100, { enExces: true, vitesse: 60, limite: 50 }));
 
     /* Le bornage. Une vie ne sort jamais de [0, 100] : au-delà, `width` en CSS
        déborderait la piste, en deçà elle passerait derrière le cœur. */
@@ -1287,6 +1314,30 @@ section('Vie du compagnon');
        profite au compagnon, comme dans `majVie()`. */
     verifie('valeur aberrante → ravi',      etatSante(NaN), 'ravi');
     verifie('au-delà de 100 → borné, puis ravi', etatSante(300), 'ravi');
+
+    /* ═══ L'ÉTAT PHYSIQUE (27/08/2026) — la règle qui décide de l'image, de la
+       couleur du cadre et de la MORT DÉFINITIVE. Ses seuils ne sont pas ceux de
+       `etatSanteVie` ci-dessus, et c'est voulu : l'un dit l'humeur, l'autre l'état
+       du corps. Voir le noyau. */
+    const { VIE_SEUIL_BLESSE: SEUIL_B, etatPhysiqueVie: physique } = N;
+    verifie('vie pleine → sain',                  physique(100), 'sain');
+    verifie('juste au-dessus de 75 → sain',       physique(75.1), 'sain');
+    /* ⚠ LA BORNE 75 EST BLESSÉE, PAS SAINE. « entre 1 et 75 % » inclut 75. */
+    verifie('75 pile → blessé (borne incluse)',   physique(SEUIL_B), 'blesse');
+    verifie('1 % → blessé',                       physique(1), 'blesse');
+    /* ⚠ 0,4 % EST BLESSÉ, PAS MORT, alors que la barre affiche « 0 % » arrondi.
+       Une sanction définitive ne se déclenche pas sur un arrondi d'affichage. */
+    verifie('0,4 % → blessé malgré l\'affichage', physique(0.4), 'blesse');
+    verifie('0 pile → mort',                      physique(0), 'mort');
+    /* Une vie négative ne peut venir que d'un stockage trafiqué : elle vaut mort,
+       comme le zéro qu'elle a dépassé. */
+    verifie('valeur négative → mort',             physique(-5), 'mort');
+    /* ⚠ ET SURTOUT : une vie ILLISIBLE ne tue pas. Un JSON corrompu ne doit pas
+       supprimer un compagnon — le doute lui profite, comme partout ailleurs. */
+    verifie('valeur aberrante → sain, jamais mort', physique(NaN), 'sain');
+    verifie('vie absente → sain',                 physique(undefined), 'sain');
+    verifie('chaîne illisible → sain',            physique('abcd'), 'sain');
+    verifie('au-delà de 100 → borné, puis sain',  physique(300), 'sain');
 }
 
 

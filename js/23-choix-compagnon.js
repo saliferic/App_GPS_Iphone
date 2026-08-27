@@ -41,6 +41,17 @@
            chose que l'app. */
         const sauve = (cle) => (typeof window.compagnonEstSauve === 'function')
             ? window.compagnonEstSauve(cle) : false;
+
+        /* ⚠ LES MORTS RESTENT LISTÉS, CONTRAIREMENT AUX SAUVÉS (27/08/2026). Les deux
+           sortent du jeu, mais pas pour la même raison : un animal sauvé a sa page à lui
+           (« Animaux sauvés », js/25) et sa disparition d'ici est une bonne nouvelle
+           qu'on va lire ailleurs. Un animal mort n'a de page nulle part, et l'escamoter
+           serait le plus mauvais des retours — le joueur verrait sa troupe rétrécir sans
+           qu'aucun écran ne dise pourquoi. Il reste donc à sa place, grisé, avec ce qui
+           lui est arrivé écrit dessus. Registre tenu par js/24 (voir CLE_MORTS), chargé
+           APRÈS ce fichier : d'où le `typeof`, comme partout ailleurs. */
+        const mort = (cle) => (window.VieCompagnon && typeof VieCompagnon.estMort === 'function')
+            ? VieCompagnon.estMort(cle) : false;
         const nbSauves = (typeof window.nbAnimauxSauves === 'function')
             ? window.nbAnimauxSauves() : 0;
         const ouverts = OUVERTS_AU_DEPART + nbSauves;
@@ -63,7 +74,13 @@
                ⚠ `c.actif` force l'ouverture : un animal choisi avant cette règle
                (ou par une version antérieure) ne doit jamais se retrouver
                verrouillé sous le joueur qui est en train de le sauver. */
-            const ouvert = c.debloque && (i < ouverts || c.actif);
+            /* ⚠ LA MORT L'EMPORTE SUR TOUT LE RESTE, y compris sur `c.actif`. Un animal
+               mort est encore le compagnon COURANT au moment où la grille s'ouvre —
+               c'est même le cas nominal, la fenêtre s'ouvre juste après son décès. Sans
+               ce `&& !estMort`, la clause « `c.actif` force l'ouverture » le rendrait
+               cliquable et on pourrait le rechoisir. */
+            const estMort = c.debloque && mort(c.cle);
+            const ouvert  = c.debloque && !estMort && (i < ouverts || c.actif);
 
             /* Une case verrouillée n'est PAS un bouton : ni `role`, ni `tabindex`,
                ni curseur main. Rendre cliquable ce qui ne répond pas est la
@@ -77,23 +94,33 @@
                restants décrivent tous une SITUATION, pas l'animal — aucun n'a donc à
                s'accorder en genre. « SauvéE », le seul qui s'accordait, est parti avec
                les cartes des animaux sauvés ; on le retrouve dans js/25. */
-            const etat = !c.debloque ? 'Bientôt'
-                       : !ouvert     ? 'À découvrir'
-                       : c.actif     ? 'En cours'
-                       :               'En cage';
+            const etat = estMort      ? 'Mort'
+                       : !c.debloque  ? 'Bientôt'
+                       : !ouvert      ? 'À découvrir'
+                       : c.actif      ? 'En cours'
+                       :                'En cage';
 
             /* Tout animal encore listé ici est dessiné DANS sa cage. Les compagnons
                pas encore jouables gardent leur silhouette grise : ils ne sont pas en
-               cage, ils ne sont pas encore là du tout. */
+               cage, ils ne sont pas encore là du tout.
+               ⚠ UN MORT GARDE SA VIGNETTE EN CAGE, avec son image NORMALE : la carte
+               rappelle l'animal qu'on avait entrepris de sauver, elle ne rejoue pas sa
+               mort en miniature. C'est le grisé et le mot « Mort » qui l'annoncent, et
+               ça suffit — l'image du cadavre appartient à la fenêtre d'arrivée, où elle
+               a un sens et où on ne la revoit pas ensuite. */
             const vignette = c.debloque ? Compagnon.vignetteCage(c.cle) : c.vignette;
 
             /* Le grisé de `.cpx-verrou` sert aux deux verrous — pas encore
                dessiné, et pas encore ouvert — parce qu'ils disent la même chose
                au joueur : pas maintenant. Seul le libellé les distingue. */
+            /* ⚠ UN MORT N'EST PAS `cpx-actif`, même s'il est encore le compagnon
+               courant : le liseré de l'animal en cours dirait « c'est celui que tu
+               joues » sur une carte qui annonce le contraire. */
             const classes = [
                 'cpx-carte',
-                c.actif   ? 'cpx-actif' : '',
-                ouvert    ? ''          : 'cpx-verrou'
+                (c.actif && !estMort) ? 'cpx-actif'  : '',
+                ouvert                ? ''           : 'cpx-verrou',
+                estMort               ? 'cpx-mort'   : ''
             ].filter(Boolean).join(' ');
 
             return `
@@ -101,7 +128,7 @@
                      aria-label="${c.nom}, ${c.espece} — ${etat}">
                     <div class="cpx-vignette" style="--cpx-accent:${c.accent}">
                         ${vignette}
-                        ${ouvert ? '' : '<span class="cpx-cadenas" aria-hidden="true">🔒</span>'}
+                        ${(ouvert || estMort) ? '' : '<span class="cpx-cadenas" aria-hidden="true">🔒</span>'}
                     </div>
                     <div class="cpx-nom">${c.nom}</div>
                     <div class="cpx-espece">${c.espece}</div>
