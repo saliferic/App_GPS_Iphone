@@ -431,6 +431,7 @@
            CSS ne fait que s'ajouter, et son retrait rend la main à ce qui existait — là
            où écrire puis restaurer un style inline écraserait leur décision. */
         body.gas-scan-open #ui-panel { display: none !important; }
+        body.parking-scan-open #ui-panel { display: none !important; }
 
         #hotbox {
             position: fixed; inset: 0; z-index: 2400; display: none;
@@ -861,6 +862,88 @@
         #gas-scan-list .gas-card-dist { color: #28a745; font-weight: 700; }
         #gas-scan-list .gas-station-card.focused {
             border-color: rgba(255,140,0,0.55); background: rgba(255,140,0,0.08);
+        }
+
+        /* === FEUILLE PARKINGS (js/27) === Copie conforme de #gas-scan-sheet,
+           teinte cyan (#26c6da) pour ne pas se confondre avec l'orange stations
+           ni le bleu bornes. Pas de chips filtres/tri : un seul curseur de rayon. */
+        #parking-scan-sheet {
+            position: fixed; left: 0; right: 0; z-index: 1600;
+            bottom: var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px)));
+            display: none; flex-direction: column;
+            height: var(--parking-scan-h, var(--sheet-h, calc(50dvh - var(--panel-bottom-offset, 64px))));
+            max-height: calc(100dvh - var(--panel-bottom-offset, calc(64px + env(safe-area-inset-bottom, 0px))) - 60px);
+            background: linear-gradient(180deg, #0d1420 0%, #0a0e17 100%);
+            border-top: 1px solid rgba(38,198,218,0.22);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.7);
+            transform: translateY(110%); transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+        }
+        #parking-scan-sheet.open { display: flex; }
+        #parking-scan-sheet.shown { transform: translateY(0); }
+        #parking-scan-sheet.shown.collapsed { transform: translateY(var(--parking-scan-collapsed-y, 60vh)); }
+        #parking-scan-sheet::before {
+            content: ''; position: absolute; top: 7px; left: 50%;
+            transform: translateX(-50%); width: 40px; height: 4px;
+            background: rgba(38,198,218,0.3); border-radius: 2px; pointer-events: none;
+        }
+        #parking-scan-head {
+            display: flex; align-items: center; gap: 8px;
+            padding: clamp(14px, 3.5vw, 18px) clamp(12px, 4vw, 18px) clamp(6px, 2vw, 10px);
+            cursor: grab; user-select: none; flex-shrink: 0;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #parking-scan-head:active { cursor: grabbing; }
+        #parking-scan-title {
+            flex: 1; text-align: center;
+            font-size: clamp(10px, 3vw, 12px); font-weight: 800;
+            text-transform: uppercase; letter-spacing: 2px; color: #e2e8f0;
+        }
+        #parking-scan-chevron { font-size: 13px; color: #26c6da; transition: transform 0.25s; }
+        #parking-scan-sheet.collapsed #parking-scan-chevron { transform: rotate(180deg); }
+        #parking-scan-close {
+            background: none; border: none; color: #4a5568; font-size: 17px;
+            cursor: pointer; padding: 0 2px; line-height: 1;
+        }
+        #parking-scan-close:hover { color: #f85149; }
+        #parking-scan-body {
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
+            padding: 0 clamp(12px, 4vw, 18px) clamp(12px, 3.5vw, 16px);
+        }
+        #parking-scan-radius-row {
+            display: flex; align-items: center; gap: clamp(8px, 2.5vw, 12px);
+            margin-bottom: clamp(8px, 2.2vw, 11px);
+        }
+        #parking-scan-radius-row input[type=range] {
+            flex: 1; accent-color: #26c6da; height: 22px; cursor: pointer;
+        }
+        #parking-scan-radius-val {
+            font-size: clamp(10px, 3vw, 12px); font-weight: 800; color: #26c6da;
+            min-width: 4.2em; text-align: right;
+        }
+        #parking-scan-status {
+            font-size: clamp(9px, 2.6vw, 11px); color: #4a5568;
+            text-align: center; margin-bottom: 8px; font-style: italic;
+        }
+        @media (max-height: 600px) and (orientation: landscape) {
+            #parking-scan-sheet {
+                top: 0; bottom: auto; left: 0; right: auto;
+                width: 380px; max-width: 52vw;
+                height: calc(100vh - var(--panel-bottom-offset, 64px));
+                max-height: calc(100vh - var(--panel-bottom-offset, 64px));
+                border-radius: 0 15px 15px 0;
+                border-top: none; border-right: 1px solid rgba(38,198,218,0.22);
+                transform: translateX(-110%);
+            }
+            #parking-scan-sheet.shown { transform: translateX(0); }
+            #parking-scan-sheet.shown.collapsed { transform: translateX(0); }
+            #parking-scan-sheet::before { display: none; }
+        }
+        #parking-scan-list { display: flex; flex-direction: column; gap: 7px; }
+        #parking-scan-list .gas-card-dist { color: #26c6da; font-weight: 700; }
+        #parking-scan-list .gas-station-card.focused {
+            border-color: rgba(38,198,218,0.55); background: rgba(38,198,218,0.08);
         }
 
         /* Invite d'apprentissage du geste hotbox, affichée tant que celui-ci n'a jamais
@@ -2777,6 +2860,11 @@
             border: 1px solid rgba(0,140,255,0.28); background: rgba(0,140,255,0.07);
             font-size: clamp(11px, 3vw, 12px); font-weight: 800;
             letter-spacing: 1.2px; text-transform: uppercase; color: #c9d1d9;
+            /* ⚠ SUR UNE SEULE LIGNE, TOUJOURS. Dans l'en-tête du carnet la pastille est
+               un item de flex étroit, à côté d'un titre qui prend toute la largeur :
+               sans ceci « 3j 9h » se coupait en deux et la pastille devenait un petit
+               bloc vertical. C'est une durée, elle se lit d'un trait. */
+            white-space: nowrap;
         }
         /* La puce herite d'un `margin-right` prevu pour un titre : dans une pastille reglee
            par `gap`, il ajoutait un decalage a droite du point. */
@@ -2934,18 +3022,6 @@
         }
         #compagnon-carte-sub {
             font-size: 12px; color: #8892b0; font-weight: 600;
-        }
-        /* Prénom du profil actif, à droite de la médaille : savoir SUR QUEL PROFIL on
-           joue est la première question que pose cette carte, puisque badges, points et
-           objectifs sont cloisonnés par profil. `margin-left:auto` le pousse au bord,
-           `min-width:0` + ellipsis pour qu'un prénom long rétrécisse au lieu de pousser
-           la médaille hors du cadre. Masqué quand aucun profil n'est actif (js/12) —
-           un libellé « aucun profil » dirait la même chose que la liste juste dessous. */
-        #compagnon-carte-profil {
-            margin-left: auto; margin-right: 35px; flex-shrink: 1; min-width: 0;
-            font-size: 30px; font-weight: 800; letter-spacing: 0.3px;
-            color: #c9d1d9; text-align: right;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         #stats-pill-btn {
             width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;

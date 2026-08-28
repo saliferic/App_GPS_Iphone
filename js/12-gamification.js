@@ -11,10 +11,25 @@
            un objectif que l'appli ne peut pas se permettre de tolérer. Seules des mesures
            qui ne se contournent pas en enchaînant les trajets restent : km parcourus,
            points accumulés. */
+        // Seuils des deux missions de vie ci-dessous — un seul endroit à changer.
+        const VIE_SEUIL_HAUT = 90;
+        const VIE_SEUIL_SEMAINE = 50;
+
         const WEEKLY_GOAL_TEMPLATES = [
             { id: 'km_no_speed',   text: 'Parcourir {v} km sans excès de vitesse',       unit: 'km',     min: 50,  max: 200, step: 25 },
             { id: 'km_total',      text: 'Parcourir {v} km au total',                     unit: 'km',     min: 80,  max: 300, step: 20 },
             { id: 'score_total',   text: 'Accumuler {v} points sur la semaine',            unit: 'pts',    min: 20,  max: 80,  step: 5 },
+            /* ⚠ 'vie_haute' compte des KM, pas des trajets — même garde-fou que la
+               note ci-dessus. Un trajet ne rapporte sa distance que si la vie n'est
+               JAMAIS descendue sous VIE_SEUIL_HAUT pendant toute sa durée (voir
+               updateWeeklyGoalsAfterTrip) : c'est km_no_speed, avec la vie du
+               compagnon comme condition au lieu de la vitesse. */
+            { id: 'vie_haute',     text: `Parcourir {v} km sans jamais descendre sous ${VIE_SEUIL_HAUT}% de vie`, unit: 'km', min: 20, max: 100, step: 10 },
+            /* 'vie_seuil' n'est PAS incrémentale : elle vaut 1 (en cours) tant que la
+               vie n'est jamais tombée sous VIE_SEUIL_SEMAINE cette semaine, et bascule
+               à 0 (échec définitif, jusqu'à lundi) dès le premier franchissement. Voir
+               surChangementVie() plus bas. */
+            { id: 'vie_seuil',     text: `Ne jamais descendre sous ${VIE_SEUIL_SEMAINE}% de vie du compagnon`, unit: 'bool', min: 1, max: 1, step: 1 },
         ];
 
         function getWeekId() {
@@ -120,12 +135,20 @@
             return picked.map(tpl => {
                 const steps = Math.floor((tpl.max - tpl.min) / tpl.step);
                 const target = tpl.min + Math.floor(Math.random() * (steps + 1)) * tpl.step;
+                /* 'vie_seuil' démarre déjà « réussie » (1/1) si la vie du compagnon
+                   n'est pas DÉJÀ sous le seuil au moment du tirage — sans quoi un
+                   animal amoché depuis la semaine précédente validerait une mission
+                   qu'il a en réalité déjà ratée. */
+                const vieActuelle = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
+                const progress = tpl.id === 'vie_seuil'
+                    ? (vieActuelle < VIE_SEUIL_SEMAINE ? 0 : 1)
+                    : 0;
                 return {
                     id: tpl.id,
                     text: tpl.text.replace('{v}', target),
                     unit: tpl.unit,
                     target,
-                    progress: 0,
+                    progress,
                     adaptive: baseline !== null && (tpl.id === 'km_total' || tpl.id === 'km_no_speed')
                 };
             });
@@ -152,14 +175,18 @@
             localStorage.setItem(key, JSON.stringify(data));
         }
 
-        function updateWeeklyGoalsAfterTrip(distKm, score, isPerfect) {
+        function updateWeeklyGoalsAfterTrip(distKm, score, isPerfect, vieMinTrajet) {
             recordWeeklyKm(distKm); // enregistrer dans l'historique baseline
             const data = loadWeeklyGoals();
+            /* Vie jamais fournie par les anciens appelants (aucun avant ce jour) :
+               100 par défaut, comme si le trajet avait préservé le compagnon. */
+            const vieMin = (typeof vieMinTrajet === 'number') ? vieMinTrajet : 100;
             data.goals.forEach(g => {
                 switch(g.id) {
                     case 'km_no_speed':   if (isPerfect) g.progress += distKm; break;
                     case 'km_total':      g.progress += distKm; break;
                     case 'score_total':   g.progress += score; break;
+                    case 'vie_haute':     if (vieMin >= VIE_SEUIL_HAUT) g.progress += distKm; break;
                 }
                 // Plafonner la progression au target
                 g.progress = Math.min(g.progress, g.target);
@@ -187,6 +214,44 @@
         function allGoalsCompleted(data) {
             return data.goals.every(g => g.progress >= g.target);
         }
+
+        /* ═══ SUIVI CONTINU DE LA MISSION 'vie_seuil' ═══
+           Contrairement aux autres missions, celle-ci ne se met pas à jour en fin de
+           trajet : elle doit voir un franchissement au moment même où il a lieu,
+           trajet libre ou guidé, peu importe si le carnet est ouvert. Elle s'abonne
+           donc aux changements de vie du compagnon (VieCompagnon.onChangement, js/24)
+           plutôt que d'être appelée depuis updateWeeklyGoalsAfterTrip.
+
+           ⚠ ON NE RÉAGIT QU'AU FRANCHISSEMENT VERS LE BAS, jamais à chaque appel :
+           `VieCompagnon.avancer()` tourne plusieurs fois par seconde en navigation,
+           relire/réécrire le stockage à ce rythme serait pur gâchis alors que
+           l'état « déjà sous le seuil » ne change pas entre deux appels. */
+        let _vieAuDessusDuSeuil = true;
+        function surChangementVie(v) {
+            const sousSeuil = v < VIE_SEUIL_SEMAINE;
+            if (sousSeuil === !_vieAuDessusDuSeuil) return; // pas de changement d'état
+            _vieAuDessusDuSeuil = !sousSeuil;
+            if (!sousSeuil) return; // remonter au-dessus n'efface pas un échec déjà acquis
+            const data = loadWeeklyGoals();
+            const g = data.goals.find(x => x.id === 'vie_seuil');
+            if (!g || g.progress === 0) return; // pas de mission cette semaine, ou déjà ratée
+            g.progress = 0;
+            saveWeeklyGoals(data);
+            updateWeeklyGoalsButton();
+        }
+
+        (function attacherSuiviVieQuandPret() {
+            function lancer() {
+                if (window.VieCompagnon && typeof VieCompagnon.onChangement === 'function') {
+                    VieCompagnon.onChangement(surChangementVie);
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', lancer, { once: true });
+            } else {
+                setTimeout(lancer, 0);
+            }
+        })();
 
         function updateWeeklyGoalsButton() {
             const data = loadWeeklyGoals();
@@ -218,7 +283,9 @@
             done:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>',
             km_total:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5 4.7 9a2 2 0 0 1 1.9-1.4h10.8A2 2 0 0 1 19.3 9L21 14.5v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M6.5 14h.01M17.5 14h.01"/></svg>',
             km_no_speed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M9.5 11.5 11.5 14l3.5-4"/></svg>',
-            score_total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12Z"/></svg>'
+            score_total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12Z"/></svg>',
+            vie_haute:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M6 14h4l1.5-3 2 5 1.5-2h3"/></svg>',
+            vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>'
         };
 
         function renderWeeklyGoalsPanel() {
@@ -276,9 +343,12 @@
                 /* Valeur atteinte et cible séparées : c'est le chiffre de gauche qui
                    change, et le mettre en avant permet de suivre sa progression sans lire
                    la phrase entière. */
-                const valeur = g.unit === 'trajets' ? String(Math.floor(g.progress)) : g.progress.toFixed(1);
-                const total  = g.unit === 'km' ? `/ ${g.target} km`
-                             : g.unit === 'pts' ? `/ ${g.target} pts`
+                const valeur = g.unit === 'bool'    ? (done ? 'Oui' : 'Non')
+                             : g.unit === 'trajets'  ? String(Math.floor(g.progress))
+                             : g.progress.toFixed(1);
+                const total  = g.unit === 'km'   ? `/ ${g.target} km`
+                             : g.unit === 'pts'  ? `/ ${g.target} pts`
+                             : g.unit === 'bool' ? 'cette semaine'
                              : `/ ${g.target} trajets`;
                 const adaptatif = g.adaptive ? '<span class="wg-tag">sur mesure</span>' : '';
                 /* L'emblème n'est JAMAIS vide : icône de la famille d'objectif tant que
@@ -727,22 +797,6 @@
                     ? String(Math.round(notes.reduce((n, t) => n + t.ecoScore, 0) / notes.length))
                     : '—';
             }
-
-            /* Prénom du profil actif dans la carte. Posé ICI et nulle part ailleurs :
-               `renderCarteCompagnon()` est déjà rappelée par TOUS les chemins qui
-               changent de profil — `selectProfile()` (js/13), l'import de profil (js/02),
-               l'ouverture de l'onglet Profil (js/14) — alors qu'un rafraîchissement écrit
-               à part en aurait forcément raté un. Le parcours affiché étant lui aussi
-               celui du profil actif, le nom et le contenu de la carte ne peuvent pas
-               diverger. `profiles` / `activeProfileId` vivent dans js/13, chargé après
-               celui-ci : lecture au runtime uniquement, jamais au chargement. */
-            const profilEl = document.getElementById('compagnon-carte-profil');
-            if (profilEl) {
-                const actif = tenterSansBruit(
-                    () => profiles.find(p => p.id === activeProfileId), 'carteCompagnon/profilActif');
-                profilEl.textContent   = actif ? actif.name : '';
-                profilEl.style.display = actif ? '' : 'none';
-            }
         }
 
         /* ═══ GALERIE DES TROPHÉES — RETIRÉE (26/08/2026) ═══
@@ -821,7 +875,15 @@
            bouclées à ce qui a DÉJÀ été compté. Vider le seul parcours laisserait
            trois missions bouclées face à un compteur à zéro — l'animal serait
            re-libéré dans la seconde, au premier rendu du carnet. Les deux vont
-           donc ensemble ou pas du tout. */
+           donc ensemble ou pas du tout.
+
+           ⚠ ET IL RESSUSCITE LES MORTS, avec leur vie remise à neuf (27/08/2026).
+           Une mort est DÉFINITIVE dans le jeu, sans aucun recours — c'est ce qui
+           donne son poids à la barre de vie. Un animal tué pendant les essais était
+           donc perdu pour de bon, et il fallait aller effacer `gps_compagnons_morts`
+           à la main dans le stockage du navigateur pour continuer à travailler.
+           C'est la seule porte de résurrection de l'app, elle est ici et elle part
+           avec ce bouton. Ne pas la rebrancher ailleurs. */
         function _debugRemettreEnCage() {
             try { localStorage.removeItem(_parcoursKey()); } catch (e) { /* rien à défaire */ }
 
@@ -829,6 +891,13 @@
             data.goals.forEach(g => { g.progress = 0; });
             data.bonusClaimed = false;
             saveWeeklyGoals(data);
+
+            /* AVANT `choisir('babi')`, et l'ordre n'est pas indifférent : `choisir()`
+               REFUSE un animal du registre des morts (js/22). Babi tué pendant un essai,
+               le bouton laisserait le compagnon courant inchangé sans rien signaler. */
+            if (window.VieCompagnon && typeof VieCompagnon.ressusciterTout === 'function') {
+                tenterSansBruit(() => VieCompagnon.ressusciterTout(), 'debug/ressusciter');
+            }
 
             if (window.Compagnon && Compagnon.choisir) Compagnon.choisir('babi');
             renderWeeklyGoalsPanel();
@@ -838,7 +907,7 @@
             if (typeof clAnimauxMaj === 'function') {
                 try { clAnimauxMaj(); } catch (e) { logAppError('classement/animauxMaj', e); }
             }
-            console.log('[Debug] Troupe remise en cage, objectifs à zéro, compagnon = Babi.');
+            console.log('[Debug] Troupe remise en cage : parcours effacé, objectifs à zéro, morts ressuscités, vies à 100 %, compagnon = Babi.');
         }
 
         /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
@@ -869,7 +938,11 @@
                place : le libellé (« Parcourir {v} km… ») reste écrit à UN seul endroit,
                et une semaine stockée avec d'anciens identifiants de mission — il en a
                existé quatre, retirés le 18/08/2026 — est repartie proprement. */
-            data.goals = WEEKLY_GOAL_TEMPLATES.map(tpl => {
+            /* ⚠ FILTRÉ sur les gabarits que _DEBUG_CIBLES_LEGERES sait chiffrer.
+               Sans ce filtre, 'vie_haute'/'vie_seuil' (ajoutés depuis) entreraient
+               dans la boucle avec une cible `undefined` — target NaN, texte à
+               "undefined". Ce bouton reste pensé pour les 3 missions d'origine. */
+            data.goals = WEEKLY_GOAL_TEMPLATES.filter(tpl => tpl.id in _DEBUG_CIBLES_LEGERES).map(tpl => {
                 const cible = _DEBUG_CIBLES_LEGERES[tpl.id];
                 const avant = data.goals.find(g => g.id === tpl.id);
                 return {

@@ -662,14 +662,26 @@
 
     const IMAGES = {
         babi: {
-            fichier: 'Images/Animals/Normal/Elephant.PNG',
-            boite: { x: 27, y: 67, w: 449, h: 400 },
-            x: -6.6, y: 53.0, taille: 336.5,   // contenu 425×400 à 41,64
-            sol: { cx: 160, rx: 74 },
+            /* ⚡ Même bascule PNG → webp animé que Bulle (28/08/2026) : la boîte
+               alpha ci-dessous est celle du NOUVEAU fichier (mesurée au seuil 64,
+               canvas 256×256 ramené à l'échelle 512 du reste de la table — voir
+               tools/_alpha-bbox.js), pas recopiée du PNG comme ça l'avait été
+               pour l'hippo. `taille` est recalculée pour que la hauteur apparente
+               du personnage ne bouge pas (mêmes pieds, même centre horizontal). */
+            fichier: 'Images/Animals/Gif/Elephant.webp',
+            boite: { x: 106, y: 130, w: 304, h: 340 },
+            x: -39.5, y: -5.5, taille: 395.9,   // contenu 304×340 à 106,130
+            sol: { cx: 160, rx: 59 },
             larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]]
         },
         bulle: {
-            fichier: 'Images/Animals/Normal/Hippo_Neutre.PNG',
+            /* ⚡ TEST ANIMATION — remplace temporairement le PNG statique pour
+               vérifier si <image> en SVG anime bien un WebP dans le WebView Android.
+               Passé du gif (7,9 Mo) au webp (362 Ko) le 28/08/2026 : même image,
+               poids ÷23 — le gif restait dans le dossier pour comparaison.
+               Le calage (boite/x/y/taille) reste celui du PNG : à recalibrer si
+               l'animation a un cadrage différent (voir la note plus haut sur le calage). */
+            fichier: 'Images/Animals/Gif/Hippo.webp',
             boite: { x: 73, y: 58, w: 362, h: 407 },
             /* Le seul animal qui ait ses trois états au 27/08/2026. Les six autres
                n'ont pas de `variantes` : ils affichent leur image Normal quel que soit
@@ -680,7 +692,10 @@
                 mort:   { fichier: 'Images/Animals/Dead/Hippo_dead.PNG',
                           boite: { x: 75, y: 59, w: 361, h: 427 } }
             },
-            x: -6.9, y: 52.4, taille: 336.5,   // contenu 362×407 à 73,58
+            /* +25% (test gif) : taille scalée depuis 336.5, x/y recalculés pour garder
+               les pieds et le centre horizontal au même endroit qu'avant (sinon l'animal
+               s'enfonce dans le sol ou flotte au-dessus de l'ombre). */
+            x: -49.0, y: -31.7, taille: 420.6,   // contenu 362×407 à 73,58 (×1.25)
             sol: { cx: 160, rx: 63 },
             larme: [114, 181], zzz: [265, 98], etoiles: [[60, 106, 13], [258, 94, 10]]
         },

@@ -344,7 +344,24 @@ body.theme-crepuscule .carnet-hero {
    au-dessus de la liste (styles.css le pose encore). Dans l'en-tête c'est un item
    de flex : cette marge basse ne le déplace pas, mais elle gonfle la hauteur de la
    ligne pour rien. */
-body.theme-crepuscule .carnet-hero #weekly-goals-timer-panel { margin-bottom: 0; }
+body.theme-crepuscule .carnet-hero #weekly-goals-timer-panel {
+    margin-bottom: 0;
+    /* ⚠ NE JAMAIS LA LAISSER RÉTRÉCIR. Le titre à côté prend toute la largeur qu'il
+       peut : sans ceci, la pastille était comprimée et « 3j 9h » se cassait en deux
+       lignes. Avec `white-space: nowrap` (styles.css), c'est le titre qui cède. */
+    flex-shrink: 0;
+    /* ⚠ CE DÉCALAGE EST MESURÉ, PAS DEVINÉ, et ce n'est pas de l'espacement.
+       L'en-tête aligne ses deux colonnes par le haut (`align-items: flex-start`), ce
+       qui posait la pastille à la hauteur du chapeau « Le carnet de … ». Elle doit
+       être centrée sur la PREMIÈRE LIGNE du titre. Mesuré sur un écran de 412 px :
+         · bloc du chapeau .......... 18 px (17 px de ligne + 1 px de marge basse)
+         · ligne de titre 45 px, pastille 36,8 px → (45 − 36,8) / 2 = 4,1 px
+       soit 22 px. Un `calc()` sur des `em` tomberait à côté : 'Baloo 2' (titre) et
+       'Nunito' (chapeau) ont des métriques hautes, leur `line-height: normal` vaut
+       1,6 et 1,36 — pas le 1,2 qu'on suppose d'habitude. À re-mesurer si l'une des
+       deux tailles de police change. */
+    margin-top: 22px;
+}
 body.theme-crepuscule .carnet-hero-text { min-width: 0; }
 body.theme-crepuscule .carnet-kicker {
     font-size: 12.5px;
@@ -380,7 +397,7 @@ body.theme-crepuscule .wg-timer-pill {
     font-size: 15px;
     font-weight: 800;
 }
-body.theme-crepuscule .wg-timer-pill { display: flex; align-items: center; gap: 7px; }
+body.theme-crepuscule .wg-timer-pill { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 body.theme-crepuscule .wg-timer-ico { width: 15px; height: 15px; flex-shrink: 0; }
 /* .wg-timer-cap n'est plus émis par le rendu (la légende a sauté avec le passage
    dans l'en-tête) ; la règle reste inoffensive dans styles.css. */
@@ -504,6 +521,10 @@ body.theme-crepuscule #compagnon-carte-portrait {
     width: clamp(88px, 27vw, 108px);
     height: clamp(94px, 29vw, 116px);
 }
+/* Même masquage que sur le hero (#compagnon-dessin) : l'ombre au sol, première
+   forme dessinée par dessinImageInterieur(), ne convainc pas sur un portrait
+   sans horizon — juste le personnage sur fond de carte. */
+body.theme-crepuscule #compagnon-carte-portrait ellipse[fill="#0d0a22"] { display: none; }
 body.theme-crepuscule #compagnon-carte-info { flex: 1; min-width: 0; }
 body.theme-crepuscule #compagnon-carte-kicker {
     display: flex; align-items: center; gap: 6px;
@@ -517,14 +538,6 @@ body.theme-crepuscule #compagnon-carte-etape {
 }
 body.theme-crepuscule #compagnon-carte-sub {
     font-size: 12px; font-weight: 600; color: var(--cr-ink-2); line-height: 1.4;
-}
-/* Le prénom du profil actif : il vivait en 30 px à droite de la médaille, où il
-   écrasait le nom du rang. Il redevient une étiquette discrète en haut de carte. */
-body.theme-crepuscule #compagnon-carte-profil {
-    margin-left: auto; margin-right: 0; align-self: flex-start;
-    font-size: 12px; font-weight: 800; color: var(--cr-ink-2);
-    background: rgba(0,0,0,0.28); border-radius: 10px; padding: 4px 9px;
-    max-width: 40%;
 }
 body.theme-crepuscule #badge-progress-bar-wrap {
     background: var(--cr-sunken); border-radius: 8px; height: 8px; margin-top: 0;
@@ -738,8 +751,23 @@ body.theme-crepuscule #compagnon-dessin {
     width: clamp(76px, 24vw, 104px);
     height: clamp(82px, 26vw, 112px);
     margin-bottom: -6px;   /* l'ombre au sol du SVG appartient au dessin */
+    /* Descend l'ombre au sol jusqu'au-dessus du champ Destination, sans toucher
+       au calage partagé par les autres écrans (sélecteur de profil, modale
+       d'arrivée) : un transform purement visuel, scindé du flux, ne déplace
+       que ce hero. `bottom right` comme origine : le personnage grandit vers
+       le haut-gauche plutôt que de déborder du panneau sur la droite. */
+    transform: translateY(32px) scale(1.15);
+    transform-origin: bottom right;
 }
 body.theme-crepuscule .cp-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+/* L'ombre au sol (fill #0d0a22, dessinée par dessinImageInterieur()) est
+   partagée avec le sélecteur de profil et la modale d'arrivée, qui la gardent.
+   Ici, sur le hero, on la masque : le personnage descend jusque sur le champ
+   Destination et l'ombre n'y a plus sa place. Sélecteur par couleur de
+   remplissage plutôt que `:first-child` : robuste même quand le SVG contient
+   d'autres formes avant elle (halo, defs). */
+body.theme-crepuscule #compagnon-dessin ellipse[fill="#0d0a22"] { display: none; }
 
 /* La bulle est devenue le sur-titre : « Bonsoir » au-dessus de l'accroche, et
    le reste du temps la phrase de contexte de Babi, à la même place. */
@@ -877,4 +905,97 @@ body.theme-crepuscule .cp-eyes {
     animation: cp-blink 6s ease-in-out infinite;
     transform-box: fill-box;
     transform-origin: center;
+}
+
+
+/* === 13. FEUILLE DE SCAN (stations essence / bornes / parkings) ===========
+   #gas-scan-sheet (js/11) et #parking-scan-sheet (js/27) sont des feuilles
+   `position: fixed`, HORS de #ui-panel : ni le reset de casse/espacement du
+   § 2 ni aucun jeton du thème ne les atteignait, d'où le contraste signalé
+   par l'utilisateur le 28/08/2026 — fond sombre et accents orange d'origine
+   à côté d'un panneau désormais violet partout ailleurs.
+   #parking-scan-sheet est aujourd'hui débranchée (aucune entrée hotbox n'y
+   mène, voir js/10) mais reçoit le même traitement : coût nul, cohérence
+   immédiate si elle est un jour réactivée. */
+
+body.theme-crepuscule #gas-scan-sheet,
+body.theme-crepuscule #parking-scan-sheet {
+    background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
+    -webkit-backdrop-filter: blur(var(--cr-blur));
+    backdrop-filter: blur(var(--cr-blur));
+    border: 1px solid var(--cr-line);
+    border-top: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-sheet) var(--cr-r-sheet) 0 0;
+    box-shadow: 0 -24px 60px rgba(10,6,24,0.6);
+}
+body.theme-crepuscule #gas-scan-sheet::before,
+body.theme-crepuscule #parking-scan-sheet::before {
+    background: var(--cr-line-2);
+}
+
+/* Titre : même bascule que partout ailleurs dans le thème — capitales et
+   espacement d'origine retirés, hiérarchie reprise par le poids seul (le
+   corps de la feuille reste dense, donc pas de passage à Baloo 2 en grand
+   comme les titres de page : ce serait trop lourd pour un simple en-tête
+   de tiroir). */
+body.theme-crepuscule #gas-scan-title,
+body.theme-crepuscule #parking-scan-title {
+    text-transform: none; letter-spacing: normal;
+    font-size: 14px; font-weight: 700; color: var(--cr-ink);
+}
+body.theme-crepuscule #gas-scan-chevron,
+body.theme-crepuscule #parking-scan-chevron { color: var(--cr-amber); }
+body.theme-crepuscule #gas-scan-close,
+body.theme-crepuscule #parking-scan-close { color: var(--cr-ink-3); }
+body.theme-crepuscule #gas-scan-close:hover,
+body.theme-crepuscule #parking-scan-close:hover { color: var(--cr-danger); }
+
+/* Chips (carburant, tri, connecteur) : même socle que les autres pastilles
+   du thème — surface translucide + liseré, l'ambre marque l'état actif.
+   Les variantes EV/tri gardent une teinte distincte (turquoise, « le temps
+   des délais ») pour ne pas se confondre avec le filtre carburant. */
+body.theme-crepuscule .gas-scan-chip {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-ink-2);
+    text-transform: none; letter-spacing: normal;
+}
+body.theme-crepuscule .gas-scan-chip.active {
+    background: rgba(255,179,92,0.16); border-color: rgba(255,179,92,0.45); color: var(--cr-amber);
+}
+body.theme-crepuscule .gas-scan-chip.mode.active,
+body.theme-crepuscule .gas-scan-chip.ev.active {
+    background: rgba(127,216,232,0.16); border-color: rgba(127,216,232,0.45); color: var(--cr-turq);
+}
+
+body.theme-crepuscule #gas-scan-radius-row input[type=range],
+body.theme-crepuscule #parking-scan-radius-row input[type=range] {
+    accent-color: var(--cr-amber);
+}
+body.theme-crepuscule #gas-scan-radius-val,
+body.theme-crepuscule #parking-scan-radius-val { color: var(--cr-amber); }
+body.theme-crepuscule #gas-scan-status,
+body.theme-crepuscule #parking-scan-status { color: var(--cr-ink-4); }
+
+/* Cartes de résultat : même gabarit que .profil-row-btn / .wg-item (§ 7-8) —
+   surface translucide, liseré fin, léger reflet intérieur. */
+body.theme-crepuscule .gas-station-card {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    border-radius: var(--cr-r-row);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+body.theme-crepuscule .gas-station-card:hover { background: var(--cr-surface-2); border-color: var(--cr-line); }
+body.theme-crepuscule .gas-card-name { color: var(--cr-ink); }
+body.theme-crepuscule .gas-card-addr { color: var(--cr-ink-4); }
+/* Priment sur `#gas-scan-list .gas-card-dist` / `.focused` de styles.css
+   (portée par un id, donc plus spécifique qu'une classe seule) : on
+   réintroduit l'id ici pour gagner la cascade plutôt que passer par
+   `!important`. Le turquoise remplace le vert/cyan d'origine — c'est déjà
+   la teinte du thème pour « le temps, les délais » (distance et durée). */
+body.theme-crepuscule #gas-scan-list .gas-card-dist,
+body.theme-crepuscule #parking-scan-list .gas-card-dist { color: var(--cr-turq); font-weight: 700; }
+body.theme-crepuscule #gas-scan-list .gas-station-card.focused,
+body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
+    border-color: rgba(255,179,92,0.5); background: rgba(255,179,92,0.08);
 }

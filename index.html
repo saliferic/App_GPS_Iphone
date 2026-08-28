@@ -933,20 +933,19 @@
 
         <!-- ═══ ONGLET PROFIL ═══ -->
         <div class="panel-tab-content" id="panel-tab-profil">
-        <!-- ═══ EN-TÊTE « MOI » ═══
+        <!-- ═══ EN-TÊTE PROFIL ═══
              Même principe que les onglets Itinéraire et Objectifs (24/08/2026) : le
              titre enveloppé n'est plus enfant direct de .panel-tab-content, il échappe
              donc au bandeau collant noir.
-             ⚠ Le bouton « + » est CELUI de la ligne « Profil sélectionné », déplacé ici
-             — même id, même onclick. showCreateProfileInline() / hideCreateProfileInline()
-             (js/13) le montrent et le masquent par cet id : le déplacer ne change rien
-             pour elles, le DUPLIQUER aurait laissé un deuxième « + » actif pendant la
-             création d'un compte. -->
+             ⚠ « Moi » est retiré (28/08/2026, demande utilisateur) : le titre affiche
+             désormais le NOM DU PROFIL ACTIF, posé par _syncProfilHeroTitle() (js/13),
+             appelée à chaque renderProfilesDropdown() — donc à la sélection, la création,
+             la suppression et le chargement initial. Repli sur « Moi » tant qu'aucun
+             profil n'existe (voir la fonction). Le bouton « + » est reparti sur la ligne
+             « Profil sélectionné » (voir plus bas) : un profil désormais nommé dans le
+             titre n'a plus besoin d'un « + » à côté de lui pour en ajouter un AUTRE. -->
         <div class="profil-hero" id="profil-hero">
             <h2 class="itin-title" id="profil-itin-title">Moi</h2>
-            <button class="profil-hero-add" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
         </div>
 
             <!-- === LE RANG, EN TÊTE DE PAGE ===
@@ -1002,9 +1001,6 @@
                         <div id="compagnon-carte-etape">Le Sauvetage</div>
                         <div id="compagnon-carte-sub">Ouvrir la cage.</div>
                     </div>
-                    <!-- Prénom du profil actif — rempli par renderCarteCompagnon()
-                         (js/12), masqué tant qu'aucun profil n'est sélectionné. -->
-                    <div id="compagnon-carte-profil" style="display:none;"></div>
                 </div>
             </div>
 
@@ -1057,8 +1053,15 @@
                     <span class="itin-select-chevron" id="profile-dropdown-chevron">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </span>
-                    <!-- Le « + » de création vit maintenant dans l'en-tête « Moi »
-                         (voir le haut de l'onglet) : un seul bouton, pas deux. -->
+                    <!-- Le « + » de création est REVENU ici le 28/08/2026 : il vivait dans
+                         l'en-tête « Moi », remplacée par le nom du profil actif (voir plus
+                         haut) — un bouton d'ajout n'a plus de sens collé à un nom, il en a
+                         un juste à côté du sélecteur qu'il alimente. Même id, même onclick :
+                         showCreateProfileInline() / hideCreateProfileInline() (js/13) le
+                         retrouvent sans rien changer. -->
+                    <button class="itin-icon-btn" id="btn-show-create-profile" onclick="showCreateProfileInline()" title="Créer un profil">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    </button>
                     <!-- Le trash externe qui vivait ici a été retiré (22/08/2026, demande
                          utilisateur) : chaque ligne du menu déroulant porte désormais sa
                          propre suppression, un doublon à côté du sélecteur n'avait plus sa
@@ -1096,6 +1099,7 @@
                  Contrairement aux lignes suivantes, elle ne passe pas par openProfilSheet :
                  la fenêtre de choix est autonome (overlay à elle), son contenu n'existe
                  pas dans ce panneau. -->
+            <div class="profil-section-title" id="profil-group-title-animaux">Vos animaux</div>
             <div id="animaux-a-sauver-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openCompagnonPicker()">
                     <span class="profil-row-ico" style="color:#FFB35C;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16"/><path d="M4 20h16"/><path d="M7 4v16M12 4v16M17 4v16"/></svg></span>
@@ -1167,6 +1171,7 @@
                  relevé est donc le dernier lecteur de cet historique dans le Profil.
                  #trip-history-body est masqué ici et révélé par .in-profil-sheet — même
                  règle que #animaux-sauves-body, voir le CSS. -->
+            <div class="profil-section-title" id="profil-group-title-infos">Vos informations</div>
             <div id="trip-history-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('trips')">
                     <!-- Le compteur de trajets qui vivait ici a été retiré (22/08/2026) :
@@ -1484,7 +1489,7 @@
                     🎤 DEBUG — Charger contacts vocal
                 </button>
                 <button onclick="_debugRemettreEnCage()" style="background:rgba(168,139,255,0.15);border:1px dashed rgba(168,139,255,0.5);color:#a88bff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    🔒 DEBUG — Remettre la troupe en cage
+                    🔒 DEBUG — Remettre la troupe en cage (et ressusciter les morts)
                 </button>
             </div>
 
@@ -1676,6 +1681,24 @@
             </div>
             <div id="gas-scan-status"></div>
             <div id="gas-scan-list"></div>
+        </div>
+    </div>
+
+    <div id="parking-scan-sheet" onclick="event.stopPropagation();">
+        <div id="parking-scan-head">
+            <span style="width:17px;"></span>
+            <span id="parking-scan-title">Parkings autour de moi</span>
+            <span id="parking-scan-chevron">▼</span>
+            <button id="parking-scan-close" onclick="event.stopPropagation(); closeParkingScan();" title="Fermer">✕</button>
+        </div>
+        <div id="parking-scan-body">
+            <div id="parking-scan-radius-row">
+                <input type="range" id="parking-scan-radius" min="0.5" max="5" step="0.5" value="1.5"
+                       oninput="onParkingScanRadiusInput(this.value)" onchange="onParkingScanRadiusCommit(this.value)">
+                <span id="parking-scan-radius-val">1,5 km</span>
+            </div>
+            <div id="parking-scan-status"></div>
+            <div id="parking-scan-list"></div>
         </div>
     </div>
 
@@ -1885,6 +1908,7 @@
          #compagnon-carte-portrait au DOMContentLoaded — si le portrait manque, elle ne
          monte pas et le reste de l'app est identique. -->
     <script src="js/26-identite-compagnon.js"></script>
+    <script src="js/27-scan-parkings.js"></script>
 
 </body>
 </html>
