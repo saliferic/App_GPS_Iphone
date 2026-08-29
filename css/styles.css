@@ -791,7 +791,7 @@
             overflow-y: auto; -webkit-overflow-scrolling: touch;
             padding: 0 clamp(12px, 4vw, 18px) clamp(12px, 3.5vw, 16px);
         }
-        #gas-scan-fuels, #gas-scan-modes {
+        #gas-scan-fuels, #gas-scan-modes, #parking-scan-fees {
             display: flex; gap: clamp(5px, 1.6vw, 8px); flex-wrap: wrap;
             justify-content: center; margin-bottom: clamp(8px, 2.2vw, 11px);
         }
@@ -821,6 +821,13 @@
         .gas-scan-chip.fuel-gazole.active { background: rgba(77,163,255,0.14); border-color: rgba(77,163,255,0.6);  color: #4da3ff; }
         .gas-scan-chip.fuel-sp98.active   { background: rgba(156,39,176,0.16); border-color: rgba(206,147,216,0.65); color: #ce93d8; }
         .gas-scan-chip:disabled { opacity: 0.35; cursor: default; }
+
+        /* Filtres tarif du scan parkings : le vert de « gratuit » et l'ambre de
+           « payant » sont ceux déjà portés par la ligne tarif des cartes et de la
+           fiche détail — le filtre actif et ce qu'on lit dans la liste parlent la
+           même langue, comme les pastilles carburant plus haut. */
+        .gas-scan-chip.fee-gratuit.active { background: rgba(40,167,69,0.14);  border-color: rgba(40,167,69,0.6);   color: #28a745; }
+        .gas-scan-chip.fee-payant.active  { background: rgba(255,179,92,0.16); border-color: rgba(255,179,92,0.55); color: #ffb35c; }
 
         #gas-scan-radius-row {
             display: flex; align-items: center; gap: clamp(8px, 2.5vw, 12px);
@@ -1353,6 +1360,35 @@
            qu'on voie les barreaux — c'est le sujet de l'écran.
            `minmax(0, 1fr)` et non `1fr` : sans le 0, un nom un peu long (« hippopotame »)
            impose sa largeur minimale à sa colonne et fait déborder la grille. */
+        /* ── LE COMPAGNON SAUVÉ QUI T'ACCOMPAGNE (js/23, bandeauActifLibre) ──
+           Une BANDE, pas une carte : posée en ligne au-dessus de la grille, elle ne
+           peut pas être confondue avec les propositions à trois colonnes en dessous.
+           Vignette réduite (52px contre ~90 dans la grille) — l'animal est déjà connu,
+           on l'identifie, on ne le découvre pas. Le vert de « sauvé » (#6FE3A0) est
+           celui de sa carte dans « Animaux sauvés » : un animal se reconnaît d'un
+           écran à l'autre. Rien de cliquable ici, et donc aucun état de survol. */
+        #cpx-actif-libre { margin-top: 16px; }
+        .cpx-libre-carte {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px 10px 10px; border-radius: 15px;
+            background: rgba(111,227,160,0.07);
+            border: 1px solid rgba(111,227,160,0.35);
+        }
+        /* Même `aspect-ratio` que `.cpx-vignette`, pas un carré : les dessins sont
+           cadrés en 78/84 et une boîte carrée les écraserait. `object-fit` couvre le
+           cas des compagnons en PNG, où la vignette est une <img> et non un <svg>. */
+        .cpx-libre-vignette { position: relative; width: 52px; aspect-ratio: 78 / 84; flex-shrink: 0; }
+        .cpx-libre-vignette svg, .cpx-libre-vignette img {
+            width: 100%; height: 100%; display: block; object-fit: contain;
+        }
+        .cpx-libre-texte { flex: 1; min-width: 0; }
+        .cpx-libre-nom    { font-size: 14px; font-weight: 800; color: #EDE6FF; }
+        .cpx-libre-espece { font-size: 11px; color: #8579AE; }
+        .cpx-libre-etat {
+            flex-shrink: 0; font-size: 10.5px; font-weight: 800;
+            letter-spacing: 1.4px; text-transform: uppercase; color: #6FE3A0;
+        }
+
         #compagnon-grille {
             margin-top: 16px;
             display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px;
@@ -1434,6 +1470,23 @@
         }
         .cpx-retour:hover { background: rgba(255,255,255,0.10); }
         .cpx-retour:focus-visible { outline: 2px solid #A88BFF; outline-offset: 2px; }
+
+        /* « Prendre comme compagnon » (js/25) — action principale de la fiche d'un
+           animal sauvé, donc pleine largeur et en vert de la troupe, quand `.cpx-retour`
+           reste une navigation discrète. L'état « compagnon actuel » n'est pas grisé
+           comme un verrou : ce n'est pas un refus, c'est une confirmation. */
+        .cpx-prendre {
+            display: block; width: 100%; margin-top: 18px; padding: 13px;
+            border-radius: 12px; font-family: inherit; font-size: 14px; font-weight: 800;
+            cursor: pointer; color: #6FE3A0;
+            background: rgba(111,227,160,0.15); border: 1px solid rgba(111,227,160,0.45);
+        }
+        .cpx-prendre:active { background: rgba(111,227,160,0.28); }
+        .cpx-prendre:focus-visible { outline: 2px solid #6FE3A0; outline-offset: 2px; }
+        .cpx-prendre-actif {
+            cursor: default; color: #8FA8B8;
+            background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.10);
+        }
         /* Le texte reste étroit : au-delà, l'œil perd la ligne suivante. */
         .cpx-fiche-texte {
             margin: 14px 2px 0; max-width: 46ch;
@@ -1524,6 +1577,72 @@
             color: #28a745;
         }
         #arrival-modal-close:active { background: rgba(40,167,69,0.3); }
+
+
+        /* === FICHE DÉTAIL D'UN RÉSULTAT DE SCAN (parking js/27, station/borne js/11) ===
+           Même ossature que #arrival-modal-overlay/#compagnon-modal-overlay : une
+           fenêtre de plus qui invente sa propre boîte se remarque immédiatement.
+           Classes PARTAGÉES entre les deux fiches — même contenu (icône, nom, adresse,
+           lignes d'info), seul l'accent de couleur change par ID (voir plus bas). */
+        .scan-info-overlay {
+            display: none; position: fixed; inset: 0; z-index: 3100;
+            background: rgba(0,0,0,0.75);
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .scan-info-overlay.open { display: flex; }
+        .scan-info-modal {
+            position: relative;
+            width: min(88vw, 380px); box-sizing: border-box;
+            background: linear-gradient(170deg, #0f1825, #0a0e17);
+            border: 1px solid rgba(38,198,218,0.35); border-radius: 20px;
+            padding: 22px 20px 18px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.75);
+        }
+        .scan-info-modal .cpx-fermer { position: absolute; top: 12px; right: 12px; }
+        .scan-info-icon { font-size: 30px; line-height: 1; }
+        .scan-info-name {
+            margin-top: 8px; font-size: 17px; font-weight: 800; color: #EDE6FF;
+            padding-right: 30px;
+        }
+        .scan-info-addr { margin-top: 4px; font-size: 13px; color: #8579AE; }
+        .scan-info-rows { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .scan-info-row {
+            display: flex; align-items: baseline; gap: 8px;
+            font-size: 13.5px; color: #8579AE; line-height: 1.4;
+        }
+        /* `min-width` et non `width` : un pictogramme (emoji, 18px) et un libellé
+           texte comme « Prix » partagent la même colonne sans que le second soit
+           tronqué — le premier reste centré dans sa largeur habituelle, le second
+           l'excède proprement grâce au `min-width`. */
+        .scan-info-row .scan-info-ico { flex-shrink: 0; min-width: 18px; text-align: center; }
+        /* Valeur mise en avant (prix, distance/temps) : même couleur claire que le
+           nom en tête de fiche — c'est l'information qui compte, l'étiquette qui la
+           précède reste dans le ton discret de la ligne. */
+        .scan-info-row .scan-info-value { color: #EDE6FF; }
+        .scan-info-row a { color: #26c6da; text-decoration: none; word-break: break-all; }
+        .scan-info-row a:active { opacity: 0.7; }
+
+        /* Bouton d'action principal — « J'y vais », partagé par la fiche station ET
+           la fiche parking (toutes deux sont des destinations possibles). Couleur de
+           base reprise de l'orange de marque des stations (.gas-station-card,
+           .gas-card-icon) plutôt que du vert d'#arrival-modal-close, déjà pris par
+           « arrivée » ; #parking-info-modal la retinte en cyan juste dessous pour ne
+           pas se confondre avec la fiche station. */
+        #gas-info-modal { border-color: rgba(255,140,0,0.35); }
+        .scan-info-go-btn {
+            width: 100%; margin-top: 18px; padding: 13px; border-radius: 12px;
+            font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer;
+            border: 1px solid rgba(255,140,0,0.45); background: rgba(255,140,0,0.15);
+            color: #ff9d1f;
+        }
+        .scan-info-go-btn:active { background: rgba(255,140,0,0.3); }
+
+        #parking-info-modal { border-color: rgba(38,198,218,0.35); }
+        #parking-info-modal .scan-info-go-btn {
+            border-color: rgba(38,198,218,0.45); background: rgba(38,198,218,0.15);
+            color: #26c6da;
+        }
+        #parking-info-modal .scan-info-go-btn:active { background: rgba(38,198,218,0.3); }
 
 
         /* === PANNEAU DE CONTRÔLE UI === */
@@ -2992,9 +3111,19 @@
             font-size: 10px; font-weight: 700; letter-spacing: 2px;
             color: #4a5568; text-transform: uppercase; margin-bottom: 12px;
         }
+        /* `flex-start` ET NON `center` : les trois colonnes pendent d'une même ligne
+           haute — sommet du portrait, « Le parcours de X », et le score éco. Centrées,
+           elles flottaient chacune à sa propre hauteur selon la longueur de son texte,
+           et la tuile de score paraissait posée de travers. Rien ne rattrape ça au
+           niveau de la tuile seule : c'est la rangée qui donne la ligne. */
         #compagnon-carte-rangee {
-            display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+            display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px;
         }
+        /* La rangée est aujourd'hui le seul enfant de la carte : sa marge basse
+           s'ajoutait au padding et creusait un vide sous la barre de vie. Écrit en
+           `:last-child` plutôt qu'en retirant la marge — le jour où un bloc revient
+           sous la rangée, l'espacement se rétablit tout seul. */
+        #compagnon-carte-rangee:last-child { margin-bottom: 0; }
         /* === LA VIE DU COMPAGNON SOUS SON PORTRAIT ===            (27/08/2026)
            La colonne prend la largeur du portrait — c'est lui le plus large, la
            jauge en `width: 100%` s'y aligne donc sans qu'aucune mesure ne soit à
@@ -3015,7 +3144,39 @@
         #vie-compagnon-profil .vie-piste  { height: 10px; border-width: 1.5px; }
         /* #badge-category-icon (le picto de catégorie du chapeau) a été retiré le
            27/08/2026 avec le système de badges. */
-        #compagnon-carte-info { flex: 1; min-width: 0; }
+        /* `margin-left` et non un décalage du portrait : `#compagnon-carte-info` et la
+           tuile éco qui le suit dans la rangée (`#profil-stats`) doivent bouger
+           ENSEMBLE — la marge sur le premier pousse le second avec lui, dans le flux
+           normal, sans toucher à la colonne portrait/vie ni à la largeur de la carte. */
+        #compagnon-carte-info { flex: 1; min-width: 0; margin-left: 15px; }
+
+        /* === LE SCORE ÉCO, TROISIÈME COLONNE DE LA CARTE ===      (29/08/2026)
+           La tuile garde ses classes `.profil-stats` / `.profil-stat` — donc l'habillage
+           que le thème crépuscule leur donne — mais perd sa grille pleine largeur : dans
+           la carte elle n'est plus une bande, c'est une pastille au bout de la rangée.
+           Elle est dans le COIN SUPÉRIEUR DROIT, sur la ligne haute donnée par
+           `align-items: flex-start` de la rangée — pas d'`align-self` ici, sinon deux
+           endroits décideraient de la même chose.
+           Elle reste DANS le flux — pas de `position: absolute` — pour que le bloc de
+           texte réserve sa largeur au lieu de couler dessous ; le titre passe sur deux
+           lignes, ce que la maquette montre aussi.
+           `flex-shrink: 0` protège le chiffre — sans lui, un nom d'étape long le
+           comprimerait jusqu'à couper « score éco ». */
+        /* Le décalage est un `position: relative` et NON un `margin-top: -35px` : la
+           marge négative remonterait la tuile en tirant la hauteur de la rangée avec
+           elle, donc en déplaçant aussi le texte et la carte. Ici rien d'autre ne
+           bouge — seul le rendu de la tuile est décalé. */
+        #compagnon-carte-rangee > #profil-stats {
+            display: block; flex-shrink: 0; margin: 0; min-width: 0;
+            position: relative; top: -33px;
+        }
+        #compagnon-carte-rangee > #profil-stats .profil-stat {
+            padding: 8px 12px; text-align: center;
+        }
+        #compagnon-carte-rangee > #profil-stats .profil-stat-val { font-size: 20px; }
+        #compagnon-carte-rangee > #profil-stats .profil-stat-lab {
+            font-size: 9.5px; white-space: nowrap;
+        }
         #compagnon-carte-etape {
             font-size: 22px; font-weight: 900; letter-spacing: 0.5px;
             line-height: 1.1; margin-bottom: 3px;
@@ -4054,6 +4215,7 @@
             background: linear-gradient(135deg, rgba(13,71,161,0.6), rgba(21,101,192,0.6));
             color: #b3d4fc; border: 1px solid rgba(0,150,255,0.25);
             box-shadow: 0 4px 20px rgba(13,71,161,0.25);
+            position: relative; overflow: hidden;
         }
         .modal-validate-btn:hover { box-shadow: 0 6px 30px rgba(13,71,161,0.45), 0 0 12px rgba(0,100,255,0.12); transform: translateY(-1px); color: #e3f2fd; border-color: rgba(0,150,255,0.4); }
         .modal-validate-btn:not(:disabled) { animation: modalBtnGlow 2.5s ease-in-out infinite; }
@@ -4062,6 +4224,17 @@
             50% { box-shadow: 0 4px 30px rgba(13,71,161,0.5), 0 0 20px rgba(0,120,255,0.2), 0 0 40px rgba(0,100,255,0.08); border-color: rgba(0,150,255,0.45); }
         }
         .modal-validate-btn:disabled { background: rgba(15,20,30,0.8); color: #3a4250; border-color: rgba(255,255,255,0.04); box-shadow: none; cursor: not-allowed; transform: none; animation: none; }
+        .modal-validate-btn:disabled::before { display: none; }
+
+        /* --- Même reflet périodique que .itin-start-btn (bouton « Démarrer ") --- */
+        .modal-validate-btn::before {
+            content: ''; position: absolute; top: 0; left: -60%; width: 35%; height: 100%;
+            background: linear-gradient(115deg, transparent, rgba(255,255,255,0.35), transparent);
+            transform: skewX(-20deg); pointer-events: none;
+        }
+        .modal-validate-btn:not(:disabled)::before {
+            animation: itin-start-idle-sweep 3.2s ease-in-out infinite;
+        }
         
         /* === EFFET ONDE / PULSE POUR LE POINT GPS === */
         .pulse-marker-container {
@@ -4097,6 +4270,42 @@
         @keyframes pulse-wave {
             0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.7; }
             100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
+        }
+
+        /* === MARQUEURS DÉPART / ARRIVÉE ===                       (29/08/2026)
+           Ils remplacent les émoji 🟢 et 🔴, dont le vert et le rouge bruts détonnaient
+           avec la palette du thème. Mint pour le départ, amber pour l'arrivée — le rouge
+           reste réservé au danger (var(--cr-danger)). Le repli sert aux autres thèmes,
+           qui ne définissent pas les variables `--cr-*`.
+           ⚠ RIEN QUE LA COULEUR. Même taille que l'émoji remplacé, pas de bordure, pas de
+           halo, pas d'animation : chaque tentative d'en ajouter a rendu le raccord au
+           tracé illisible, le point paraissant décalé de la ligne une fois dézoomé. */
+        /* ⚠ `box-sizing: border-box` OBLIGATOIRE avec le contour : cette feuille n'a pas de
+           réinitialisation globale (le box-sizing y est déclaré règle par règle), donc sans
+           lui le marqueur passerait à 26 px et ne ferait plus la taille de l'émoji qu'il
+           remplace. */
+        .trip-pin {
+            width: 22px; height: 22px; border-radius: 50%; pointer-events: none;
+            border: 2px solid rgba(244,239,255,0.95); box-sizing: border-box;
+        }
+        .trip-pin-start { background: var(--cr-mint, #6FE3A0); }
+        .trip-pin-end   { background: var(--cr-amber, #FFB35C); }
+
+        /* Onde : mêmes keyframes que le point GPS (`pulse-wave`), pour que les trois
+           repères de la carte respirent à l'identique.
+           ⚠ En pseudo-élément, et SANS toucher au `position` de `.trip-pin` : Mapbox pose
+           lui-même `position: absolute` sur l'élément du marqueur (règle `.mapboxgl-marker`
+           de sa feuille de style). Une redéclaration ici, à spécificité égale, se jouerait
+           à l'ordre de chargement — donc au hasard. Le pseudo se cale sur ce positionnement
+           déjà là. `background: inherit` reprend la couleur du point, une seule règle pour
+           le départ comme pour l'arrivée. `z-index: -1` le peint DERRIÈRE le disque : le
+           point garde un bord net, seule l'onde qui en déborde se voit. */
+        .trip-pin::before {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 22px; height: 22px; border-radius: 50%;
+            transform: translate(-50%, -50%);
+            background: inherit; z-index: -1;
+            animation: pulse-wave 1.8s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
         }
 
         /* === LE COMPAGNON SUR LA CARTE ===                        (27/08/2026)

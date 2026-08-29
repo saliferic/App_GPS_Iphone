@@ -266,6 +266,20 @@ body.theme-crepuscule .itin-start-btn:active {
 }
 body.theme-crepuscule .itin-start-btn:disabled { opacity: 0.45; box-shadow: none; }
 
+body.theme-crepuscule .modal-validate-btn {
+    background: linear-gradient(135deg, #FFC578, #FF8F5C);
+    border: none;
+    color: #2A1226;
+    box-shadow: 0 10px 30px rgba(255,140,60,0.26);
+    animation: none;
+}
+body.theme-crepuscule .modal-validate-btn:hover {
+    color: #2A1226;
+    transform: none;
+    box-shadow: 0 6px 20px rgba(255,140,60,0.34);
+}
+body.theme-crepuscule .modal-validate-btn:disabled { opacity: 0.45; box-shadow: none; }
+
 /* Actions secondaires : contour seul */
 body.theme-crepuscule .itin-place-btn,
 body.theme-crepuscule .nav-search-modes button {
@@ -943,8 +957,10 @@ body.theme-crepuscule #parking-scan-title {
     text-transform: none; letter-spacing: normal;
     font-size: 14px; font-weight: 700; color: var(--cr-ink);
 }
-body.theme-crepuscule #gas-scan-chevron,
-body.theme-crepuscule #parking-scan-chevron { color: var(--cr-amber); }
+body.theme-crepuscule #gas-scan-chevron { color: var(--cr-amber); }
+/* Parkings : même turquoise que le curseur de rayon et la zone radar de cette
+   feuille — l'ambre appartient aux stations. */
+body.theme-crepuscule #parking-scan-chevron { color: var(--cr-turq); }
 body.theme-crepuscule #gas-scan-close,
 body.theme-crepuscule #parking-scan-close { color: var(--cr-ink-3); }
 body.theme-crepuscule #gas-scan-close:hover,
@@ -968,12 +984,17 @@ body.theme-crepuscule .gas-scan-chip.ev.active {
     background: rgba(127,216,232,0.16); border-color: rgba(127,216,232,0.45); color: var(--cr-turq);
 }
 
-body.theme-crepuscule #gas-scan-radius-row input[type=range],
-body.theme-crepuscule #parking-scan-radius-row input[type=range] {
+body.theme-crepuscule #gas-scan-radius-row input[type=range] {
     accent-color: var(--cr-amber);
 }
-body.theme-crepuscule #gas-scan-radius-val,
-body.theme-crepuscule #parking-scan-radius-val { color: var(--cr-amber); }
+body.theme-crepuscule #gas-scan-radius-val { color: var(--cr-amber); }
+/* Parkings : l'ambre appartient aux stations. Le curseur et sa valeur reprennent
+   le turquoise du scan parkings (zone radar et marqueurs 🅿️), sinon la feuille
+   annonce une couleur que rien sur la carte ne porte. */
+body.theme-crepuscule #parking-scan-radius-row input[type=range] {
+    accent-color: var(--cr-turq);
+}
+body.theme-crepuscule #parking-scan-radius-val { color: var(--cr-turq); }
 body.theme-crepuscule #gas-scan-status,
 body.theme-crepuscule #parking-scan-status { color: var(--cr-ink-4); }
 
@@ -995,7 +1016,11 @@ body.theme-crepuscule .gas-card-addr { color: var(--cr-ink-4); }
    la teinte du thème pour « le temps, les délais » (distance et durée). */
 body.theme-crepuscule #gas-scan-list .gas-card-dist,
 body.theme-crepuscule #parking-scan-list .gas-card-dist { color: var(--cr-turq); font-weight: 700; }
-body.theme-crepuscule #gas-scan-list .gas-station-card.focused,
-body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
+body.theme-crepuscule #gas-scan-list .gas-station-card.focused {
     border-color: rgba(255,179,92,0.5); background: rgba(255,179,92,0.08);
+}
+/* Carte sélectionnée côté parkings : turquoise, pour que le liseré de la carte
+   et le marqueur mis en avant sur la carte parlent la même langue. */
+body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
+    border-color: rgba(127,216,232,0.55); background: rgba(127,216,232,0.10);
 }

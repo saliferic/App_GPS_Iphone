@@ -670,6 +670,11 @@
                 </div>
                 <button type="button" class="cpx-fermer" aria-label="Fermer">✕</button>
             </div>
+            <!-- Le compagnon SAUVÉ qui t'accompagne, hors de la grille : il n'est plus
+                 un choix à faire, il est l'état courant. Rempli par js/23
+                 (bandeauActifLibre) ; vide et masqué quand le compagnon est encore
+                 en cage — dans ce cas sa carte « En cours » suffit, dans la grille. -->
+            <div id="cpx-actif-libre"></div>
             <div id="compagnon-grille"></div>
             <div id="cpx-note">Trois missions tenues, et l'animal est libre. Chaque animal sauvé en ouvre un nouveau.</div>
         </div>
@@ -1001,6 +1006,24 @@
                         <div id="compagnon-carte-etape">Le Sauvetage</div>
                         <div id="compagnon-carte-sub">Ouvrir la cage.</div>
                     </div>
+
+                    <!-- === LE SCORE ÉCO EST DANS LA CARTE  (29/08/2026) ===
+                         Il vivait juste en dessous, en bande pleine largeur, entre la
+                         carte et le sélecteur de profil. Il y disait la même chose que
+                         la barre de vie — « comment tu conduis » — mais dans un bloc
+                         séparé, si bien que les deux mesures d'un même sujet se lisaient
+                         à deux endroits. Rapproché de la jauge, l'ensemble se prend d'un
+                         coup d'œil.
+                         ⚠ ID INCHANGÉ (#profil-stats / #profil-stat-eco) : c'est
+                         renderCarteCompagnon() (js/13) qui écrit le chiffre, et il le
+                         retrouve par `getElementById` — un déplacement de nœud ne le
+                         gêne pas, un renommage l'aurait cassé en silence. -->
+                    <div class="profil-stats profil-stats-solo" id="profil-stats">
+                        <div class="profil-stat eco">
+                            <div class="profil-stat-val" id="profil-stat-eco">—</div>
+                            <div class="profil-stat-lab">score éco</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1014,8 +1037,9 @@
                 <div id="compagnon-identite-body"></div>
             </div>
 
-            <!-- Le chiffre qui résume le profil. Rempli par renderCarteCompagnon() —
-                 donc rafraîchi par tous les chemins qui changent de profil.
+            <!-- Le chiffre qui résume le profil (rempli par renderCarteCompagnon()) a
+                 REJOINT #compagnon-carte le 29/08/2026 — voir le pavé posé là-bas. Il
+                 occupait ici une bande pleine largeur à lui seul.
 
                  ⚠ LA TUILE « POINTS AU TOTAL » A ÉTÉ RETIRÉE (26/08/2026). Elle affichait
                  le cumul brut de l'ancien système de score ; le même nombre reste lisible
@@ -1023,12 +1047,6 @@
                  progression se raconte désormais en animaux sortis de cage.
                  ⚠ #profil-stat-points N'EXISTE DONC PLUS : renderCarteCompagnon()
                  teste sa présence avant d'écrire dedans. -->
-            <div class="profil-stats profil-stats-solo" id="profil-stats">
-                <div class="profil-stat eco">
-                    <div class="profil-stat-val" id="profil-stat-eco">—</div>
-                    <div class="profil-stat-lab">score éco</div>
-                </div>
-            </div>
 
             <!-- === PROFIL SÉLECTIONNÉ === -->
             <div class="itin-section" style="margin-bottom:12px;">
@@ -1692,6 +1710,9 @@
             <button id="parking-scan-close" onclick="event.stopPropagation(); closeParkingScan();" title="Fermer">✕</button>
         </div>
         <div id="parking-scan-body">
+            <!-- Filtres tarif injectés par _renderParkingScanFees() (js/27) : deux
+                 pastilles Gratuit / Payant, chacune se désélectionnant au second clic. -->
+            <div id="parking-scan-fees"></div>
             <div id="parking-scan-radius-row">
                 <input type="range" id="parking-scan-radius" min="0.5" max="5" step="0.5" value="1.5"
                        oninput="onParkingScanRadiusInput(this.value)" onchange="onParkingScanRadiusCommit(this.value)">
@@ -1699,6 +1720,36 @@
             </div>
             <div id="parking-scan-status"></div>
             <div id="parking-scan-list"></div>
+        </div>
+    </div>
+
+    <!-- Fiche détail d'un parking sélectionné (js/27) — même ossature que
+         #compagnon-modal-overlay/#arrival-modal-overlay : fond sombre, boîte
+         centrée, fermeture au clic sur le fond ou sur la croix. Bouton « J'y
+         vais » identique à la fiche station (_pkInfoGoClicked, js/27) : un
+         parking EST une destination possible au même titre qu'une station. -->
+    <div id="parking-info-overlay" class="scan-info-overlay" onclick="if(event.target===this)closeParkingInfo()">
+        <div id="parking-info-modal" class="scan-info-modal">
+            <button class="cpx-fermer" id="parking-info-close" onclick="closeParkingInfo()" title="Fermer">✕</button>
+            <div id="parking-info-icon" class="scan-info-icon">🅿️</div>
+            <div id="parking-info-name" class="scan-info-name"></div>
+            <div id="parking-info-addr" class="scan-info-addr"></div>
+            <div id="parking-info-rows" class="scan-info-rows"></div>
+            <button class="scan-info-go-btn" onclick="_pkInfoGoClicked()">J'y vais</button>
+        </div>
+    </div>
+
+    <!-- Fiche détail d'une station/borne sélectionnée (js/11) — même composant que
+         #parking-info-overlay, avec le même bouton d'action « J'y vais » (_gasInfoGoClicked)
+         qui lance directement le trajet vers la station. -->
+    <div id="gas-info-overlay" class="scan-info-overlay" onclick="if(event.target===this)closeGasStationInfo()">
+        <div id="gas-info-modal" class="scan-info-modal">
+            <button class="cpx-fermer" id="gas-info-close" onclick="closeGasStationInfo()" title="Fermer">✕</button>
+            <div id="gas-info-icon" class="scan-info-icon">⛽</div>
+            <div id="gas-info-name" class="scan-info-name"></div>
+            <div id="gas-info-addr" class="scan-info-addr"></div>
+            <div id="gas-info-rows" class="scan-info-rows"></div>
+            <button class="scan-info-go-btn" onclick="_gasInfoGoClicked()">J'y vais</button>
         </div>
     </div>
 
@@ -1801,7 +1852,6 @@
                     <div class="trip-preview-item"><span id="preview-time-fast-label">• Temps avec excès de vitesse</span><span id="preview-time-fast">--</span></div>
                     <div class="trip-preview-item"><span>• Heure d'arrivée</span><span id="preview-arrival">--</span></div>
                     <div class="trip-preview-item"><span>• Distance</span><span id="preview-distance">--</span></div>
-                    <div class="trip-preview-item"><span>• Points max (sans excès)</span><span id="preview-points">--</span></div>
                     <div class="trip-info-separator"></div>
                     <div class="trip-preview-item"><span id="preview-fuel-label">• Coût carburant estimé</span><span id="preview-fuel-cost">--</span></div>
                     <div class="trip-preview-item"><span>• Péages estimés</span><span id="preview-toll-cost">--</span></div>

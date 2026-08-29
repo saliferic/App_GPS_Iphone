@@ -731,46 +731,9 @@
                      changent pas ET dont l'état ne se voit pas autrement (trafic, muet,
                      partage live) : là, la couleur est le seul signal disponible. */
                   act:  () => openGasScan() },
-                /* ⚠ MÊME IMAGE QUE 'gasscan', SURCHARGÉE D'UN SENS INTERDIT — c'est ce qui
-                   fait reconnaître l'entrée sans lire le libellé : « la chose que je connais,
-                   barrée ». Un dessin distinct aurait obligé à réapprendre un symbole.
-                   Le sens interdit est en CSS (`.hb-off`), pas en PNG : il se superpose donc
-                   aussi bien à la pompe qu'à une future `Images/bornes.png`, sans qu'il faille
-                   dessiner et maintenir une variante barrée de chaque picto.
-
-                   ⚠ L'IMAGE MONTRE L'ACTION PROPOSÉE, PAS L'ÉTAT COURANT — même règle que
-                   Jour/Nuit et 2D/3D plus haut, à laquelle il ne faut pas déroger ici sous
-                   prétexte que le barré « dit » l'état. Stations visibles → on propose de les
-                   masquer → picto BARRÉ. Stations masquées → on propose de les rendre → picto
-                   NU. Les intervertir donnerait un bouton qui barre les stations tout en
-                   promettant de les afficher.
-
-                   ⚠ PAS DE `on` — et ce n'est pas un oubli (19/08/2026). `on` colore la bulle
-                   en bleu clair (`.hotbox-item.on`), or l'état est DÉJÀ dit deux fois ici :
-                   par le picto (barré / nu) et par le libellé. Le fond clair n'ajoutait donc
-                   aucune information et faisait détonner l'entrée au milieu de bulles sombres.
-                   `on` garde son sens pour les bascules dont l'icône ne change pas (trafic,
-                   muet, partage live) : là, la couleur est le seul signal d'état.
-
-                   ⚠ `when` : PENDANT L'APERÇU DE TRAJET UNIQUEMENT — exactement l'inverse de
-                   la garde de 'gasscan' juste au-dessus, les deux entrées étant ainsi
-                   mutuellement exclusives. C'est le seul moment où des pastilles de prix
-                   recouvrent un tracé que l'on cherche à lire, départ et arrivée compris.
-                   Ailleurs elle serait du bruit : sur le panneau Itinéraire aucune station
-                   n'est affichée, et dans le scan « autour de moi » proposer de masquer ce
-                   que l'on vient tout juste de demander n'a aucun sens (`openGasScan()` lève
-                   d'ailleurs le masquage pour cette raison).
-                   ⚠ Le second terme `_stationsHidden` est INDISPENSABLE : sans lui, masquer
-                   pendant l'aperçu puis fermer l'aperçu emporterait le seul bouton capable de
-                   rendre les stations — elles resteraient invisibles pour toute la session,
-                   sans aucun chemin de retour. */
-                { id: 'stationsvis',
-                  html: () => _stationsHidden
-                            ? '<img class="hb-img" src="Images/stations.png" alt="">'
-                            : '<span class="hb-stack"><img class="hb-img" src="Images/stations.png" alt=""><span class="hb-off"></span></span>',
-                  label: () => _stationsHidden ? 'Afficher stations' : 'Masquer stations',
-                  when: () => _stationsHidden || _hbTripPreviewOpen(),
-                  act:  () => toggleStationsVisibility() },
+                { id: 'parkingscan', icon: '🅿️', label: 'Parkings autour de moi',
+                  when: () => !_gasScanBlocked(),
+                  act:  () => openParkingScan() },
                 { id: 'stop', icon: '📍', label: 'Ajouter un arrêt',
                   when: _hbHasDestination,
                   on:   () => pickingMode === 'nav-pin-stop',

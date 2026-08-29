@@ -356,7 +356,6 @@
                 // Restaurer les infos trajet d'origine
                 majPreviewTemps(_baseRouteForGas.durationH, _baseRouteForGas.distKm);
                 document.getElementById('preview-distance').innerText = _baseRouteForGas.distKm.toFixed(1) + ' km';
-                document.getElementById('preview-points').innerText   = (_baseRouteForGas.distKm * 1000 * POINTS_PER_METER).toFixed(2) + ' pts';
                 const cfg = loadVehicleConfig();
                 const fuelCost = calcEnergyCost(_baseRouteForGas.distKm, cfg);
                 const tollCost = avoidTolls ? 0 : estimateTollCost(_baseRouteForGas.osrmData);
@@ -574,11 +573,9 @@
 
                 const durationH = totalDurationSec / 3600;
                 const distKm    = totalDistanceM / 1000;
-                const maxPts    = totalDistanceM * POINTS_PER_METER;
 
                 majPreviewTemps(durationH, distKm);
                 document.getElementById('preview-distance').innerText = distKm.toFixed(1) + ' km';
-                document.getElementById('preview-points').innerText   = maxPts.toFixed(2) + ' pts';
 
                 const cfg = loadVehicleConfig();
                 const fuelCost = calcEnergyCost(distKm, cfg);

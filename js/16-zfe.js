@@ -11,10 +11,32 @@
         const ZFE_CACHE_KEY     = 'gps_zfe_cache_v1';
         const ZFE_CACHE_TTL_MS  = 7 * 24 * 60 * 60 * 1000;   // 7 jours
 
-        // Miroirs de téléchargement de la base nationale (aires.geojson, ~1.7 Mo)
+        /* Miroirs de téléchargement de la base nationale (aires.geojson, ~1,7 Mo).
+           ⚠ L'ORDRE ET LA FORME DES URL SONT DICTÉS PAR CORS, PAS PAR LA PRÉFÉRENCE.
+           Les deux sources d'origine échouaient TOUTES LES DEUX depuis le navigateur —
+           l'app tournait donc en permanence sur les octogones approximatifs, sans que
+           rien ne le signale (voir le pavé de loadZFEData). Relevé le 29/08/2026 :
+
+             `transport.data.gouv.fr/resources/79567/download`
+                 → 200, mais AUCUN en-tête `access-control-allow-origin`. Le navigateur
+                   jette la réponse ; `curl` la rend très bien, d'où l'illusion que la
+                   source marchait.
+             `www.data.gouv.fr/fr/datasets/r/<id>`
+                 → 301 SANS en-tête CORS. Une redirection doit elle aussi passer le
+                   contrôle CORS : la chaîne meurt au premier saut, avant même
+                   d'atteindre le fichier. C'est le `net::ERR_FAILED` de la console.
+             `www.data.gouv.fr/api/1/datasets/r/<id>`   ← celle qu'on utilise
+                 → 302 AVEC `access-control-allow-origin: *`, vers `static.data.gouv.fr`
+                   qui le porte aussi. Toute la chaîne est propre.
+
+           Ne PAS « simplifier » en pointant l'URL finale de `static.data.gouv.fr` :
+           elle est horodatée (`20260326-093742/aires.geojson`) et se périmera au
+           prochain millésime, là où le point d'entrée `/api/1/` reste stable.
+           Toute URL ajoutée ici doit être vérifiée avec un `Origin:` explicite —
+           `curl` sans en-tête `Origin` ne dit RIEN de ce que fera le navigateur,
+           même piège que la mesure Overpass consignée dans AGENTS.md. */
         const ZFE_SOURCES = [
-            'https://transport.data.gouv.fr/resources/79567/download',
-            'https://www.data.gouv.fr/fr/datasets/r/673a16bf-49ec-4645-9da2-cf975d0aa0ea'
+            'https://www.data.gouv.fr/api/1/datasets/r/673a16bf-49ec-4645-9da2-cf975d0aa0ea'
         ];
 
         const CRITAIR_RANK  = { EL: 0, V1: 1, V2: 2, V3: 3, V4: 4, V5: 5, NC: 6 };
@@ -26,6 +48,7 @@
         let zfeZonesApprox    = false;   // true si on tourne sur le jeu de secours embarqué
         let zfeRouteCrossings = [];      // traversées détectées sur l'itinéraire courant
         let zfeLoadPromise    = null;
+        let _zfeFallbackLogged = false;  // voir loadZFEData : une ligne de journal, pas vingt
         let _zfeLastLiveCheck = 0;
         let _zfeLiveInsideId  = null;
         let _zfeBannerTimer   = null;
@@ -171,10 +194,17 @@
                         return zfeZones;
                     }
                 }
+                /* Causes retenues pour le journal, une par source — même parti pris que
+                   `_fetchOverpassHedged` (js/19) : « base injoignable » ne dit pas si
+                   c'est le réseau, un 404 de jeu de données déplacé, ou le blocage CORS
+                   du chargement depuis `file://`. Trois pannes sans rapport, trois
+                   remèdes différents. */
+                const causes = [];
                 for (const url of ZFE_SOURCES) {
+                    const hote = url.split('/')[2];
                     try {
                         const res = await fetchResilient(url, {}, { timeoutMs: 15000, retries: 0 });
-                        if (!res.ok) continue;
+                        if (!res.ok) { causes.push(`${hote}: HTTP ${res.status}`); continue; }
                         const gj = await res.json();
                         const zones = _zfeParseGeoJSON(gj);
                         if (zones.length) {
@@ -184,13 +214,30 @@
                             if (DEBUG) console.log(`[ZFE] ${zones.length} zones chargées depuis ${url}`);
                             return zfeZones;
                         }
+                        causes.push(`${hote}: 0 zone exploitable`);
                     } catch (e) {
+                        causes.push(`${hote}: ${e.message || e}`);
                         if (DEBUG) console.warn('[ZFE] source injoignable :', url, e);
                     }
                 }
                 // Dernier recours : périmètres approximatifs embarqués
                 zfeZones = _zfeFallbackZones();
                 zfeZonesApprox = true;
+                /* ⚠ CET ÉCHEC DOIT LAISSER UNE TRACE DANS `gps_error_log`, PAS DANS LA
+                   SEULE CONSOLE. `DEBUG` ne vaut vrai qu'avec `?debug=1` dans l'URL —
+                   or l'APK charge `file:///android_asset/index.html`, SANS query string :
+                   en production ce `console.warn` n'existe tout simplement pas. La bascule
+                   sur des octogones approximatifs (Paris = un octogone de 11 km) restait
+                   donc totalement muette, et un journal vide se lit « tout va bien ».
+                   C'est le défaut qui a laissé le relevé des aires cassé des mois durant
+                   (voir AGENTS.md, « toute requête Overpass »). Journalisé UNE fois par
+                   session : loadZFEData() est rappelée à chaque aperçu de trajet, et
+                   vingt lignes identiques chasseraient tout le reste de `gps_error_log`. */
+                if (!_zfeFallbackLogged) {
+                    _zfeFallbackLogged = true;
+                    logAppError('loadZFEData/repli approximatif',
+                                new Error('base nationale ZFE injoignable — ' + causes.join(' | ')));
+                }
                 if (DEBUG) console.warn('[ZFE] base nationale injoignable, jeu de secours approximatif utilisé');
                 return zfeZones;
             })();
@@ -721,7 +768,6 @@
                 const distanceMeters = route.legs ? route.legs.reduce((s, l) => s + l.distance, 0) : route.distance;
                 const distanceKm = distanceMeters / 1000;
                 const totalDurationHours = (route.legs ? route.legs.reduce((s, l) => s + l.duration, 0) : route.duration) / 3600;
-                const maxPoints = distanceMeters * POINTS_PER_METER;
                 modalPendingRoute = {
                     /* ⚠ `traffic` DOIT ÊTRE REPORTÉ. On ne garde ici qu'UNE route du lot,
                        mais le drapeau décrit la RÉPONSE, pas la route : le jeter revenait à
@@ -798,7 +844,6 @@
                 // Afficher les résultats
                 majPreviewTemps(totalDurationHours, distanceKm);
                 document.getElementById('preview-distance').innerText = distanceKm.toFixed(1) + " km";
-                document.getElementById('preview-points').innerText = maxPoints.toFixed(2) + " pts";
 
                 // Calcul du coût
                 const cfg = loadVehicleConfig();

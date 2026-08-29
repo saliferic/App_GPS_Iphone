@@ -68,7 +68,6 @@
             // Mettre à jour le preview
             const distKm = route.distance / 1000;
             const durationH = route.duration / 3600;
-            const maxPts = route.distance * POINTS_PER_METER;
             // Les zones de pause portent sur le tracé RETENU : changer d'alternative les
             // déplace. La signature de tracé (js/09) évite l'appel Overpass quand le
             // nouveau tracé partage les aires déjà relevées.
@@ -77,7 +76,6 @@
 
             majPreviewTemps(durationH, distKm);
             document.getElementById('preview-distance').innerText = distKm.toFixed(1) + " km";
-            document.getElementById('preview-points').innerText = maxPts.toFixed(2) + " pts";
 
             const cfg = loadVehicleConfig();
             const fuelCost = calcEnergyCost(distKm, cfg);
@@ -242,8 +240,17 @@
         }
         map.on('load', setupAltRouteClickHandlers);
 
-        // Marqueurs emoji simples (départ 🟢 / destination 🔴)
+        /* Marqueurs emoji simples (📍 🔵 🏠 …), SAUF le départ et la destination : ces
+           deux-là sont dessinés en CSS pour être aux couleurs du thème (mint / amber)
+           plutôt qu'en vert et rouge bruts, qui détonnaient avec l'univers crépuscule.
+           ⚠ Le disque reprend la géométrie exacte de l'émoji qu'il remplace — 22 px, rien
+           d'autre. Voir `.trip-pin` (css/styles.css) pour ce qu'il ne faut pas y ajouter. */
         function createEmojiMarkerEl(emoji) {
+            if (emoji === '🟢' || emoji === '🔴') {
+                const el = document.createElement('div');
+                el.className = 'trip-pin trip-pin-' + (emoji === '🟢' ? 'start' : 'end');
+                return el;
+            }
             const el = document.createElement('div');
             el.className = 'emoji-pin';
             el.style.fontSize = '22px';
