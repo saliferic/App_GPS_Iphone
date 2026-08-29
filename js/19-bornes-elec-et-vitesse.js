@@ -1487,7 +1487,8 @@
                fin. L'ordre importait tant qu'une modale de badge pouvait partir d'ici et
                se poser par-dessus (retirée le 27/08/2026) ; il importe encore : cet appel
                écrit le parcours de l'animal, que la fenêtre d'arrivée vient de lire. */
-            updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun);
+            const vieMinTrajet = drivers.length > 0 && drivers[0].vieMinTrajet !== undefined ? drivers[0].vieMinTrajet : 100;
+            updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun, vieMinTrajet);
 
             map.easeTo({ bearing: 0, duration: 500 });
 
@@ -1513,9 +1514,14 @@
                 if (d.marker) d.marker.remove();
                 d.dist = 0; d.score = 0; d.timeHours = 0; d.actualSpeed = 0; d.speedSmoothed = 0;
                 d.isSpeeding = false; d.hasSpeeded = false; d.lastCheckpoint = -1; d.finished = false; d.hardBrakings = 0; d.hardAccels = 0; d.ecoScore = 100;
+                /* Pour la mission « X km sans jamais descendre sous 90% de vie » : le
+                   plancher part de la vie ACTUELLE du compagnon, pas de 100 — un animal
+                   déjà amoché avant le départ ne peut pas valider un trajet censé le
+                   préserver. Voir updateWeeklyGoalsAfterTrip (js/12). */
+                d.vieMinTrajet = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
                 const _bc=document.getElementById('eco-brake-count'); const _ac=document.getElementById('eco-accel-count'); const _sc=document.getElementById('eco-score-counter'); if(_bc)_bc.textContent='0'; if(_ac)_ac.textContent='0'; if(_sc){_sc.textContent='100';_sc.style.color='#28a745';}
             });
-            exactEndCoords = null; 
+            exactEndCoords = null;
             renderDriversUI();
             if (lastRealCoords) { map.jumpTo({ center: [lastRealCoords[0], lastRealCoords[1]], zoom: 15 }); } 
             else { map.jumpTo({ center: [2.2561, 48.8966], zoom: 15 }); }
@@ -1852,6 +1858,7 @@
                    sont des adversaires simulés, ils n'ont pas d'animal à user. */
                 if (d.id === drivers[0].id && window.VieCompagnon) {
                     VieCompagnon.avancer(distanceMovedMeters, { enExces: true, vitesse: d.actualSpeed, limite: limitKmh });
+                    d.vieMinTrajet = Math.min(d.vieMinTrajet, VieCompagnon.valeur());
                 }
             } else {
                 d.isSpeeding = false;
@@ -1874,6 +1881,7 @@
                        pas — il ne doit pas récompenser non plus. */
                     if (d.id === drivers[0].id && window.VieCompagnon) {
                         VieCompagnon.avancer(distanceMovedMeters, { enExces: false });
+                        d.vieMinTrajet = Math.min(d.vieMinTrajet, VieCompagnon.valeur());
                     }
                 }
                 document.getElementById(`driver-card-${d.id}`).classList.remove('speeding');
@@ -2035,8 +2043,9 @@
                 if (d.marker) d.marker.remove();
                 d.dist = 0; d.score = 0; d.timeHours = 0; d.actualSpeed = 0; d.speedSmoothed = 0;
                 d.isSpeeding = false; d.hasSpeeded = false; d.lastCheckpoint = -1; d.finished = false; d.hardBrakings = 0; d.hardAccels = 0; d.ecoScore = 100;
+                d.vieMinTrajet = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
                 const _bc=document.getElementById('eco-brake-count'); const _ac=document.getElementById('eco-accel-count'); const _sc=document.getElementById('eco-score-counter'); if(_bc)_bc.textContent='0'; if(_ac)_ac.textContent='0'; if(_sc){_sc.textContent='100';_sc.style.color='#28a745';}
-                
+
                 d.marker = addDriverMarker(lastRealCoords[0], lastRealCoords[1], d.color);
                 const distEl = document.getElementById(`dist-left-${d.id}`);
                 const etaEl = document.getElementById(`eta-${d.id}`);
@@ -2118,8 +2127,9 @@
                 if (d.marker) d.marker.remove();
                 d.dist = 0; d.score = 0; d.timeHours = 0; d.actualSpeed = 0; d.speedSmoothed = 0;
                 d.isSpeeding = false; d.hasSpeeded = false; d.lastCheckpoint = -1; d.finished = false; d.hardBrakings = 0; d.hardAccels = 0; d.ecoScore = 100;
+                d.vieMinTrajet = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
                 const _bc=document.getElementById('eco-brake-count'); const _ac=document.getElementById('eco-accel-count'); const _sc=document.getElementById('eco-score-counter'); if(_bc)_bc.textContent='0'; if(_ac)_ac.textContent='0'; if(_sc){_sc.textContent='100';_sc.style.color='#28a745';}
-                
+
                 d.marker = new mapboxgl.Marker({ element: createPulseMarkerEl(d.color), anchor: 'center' }).setLngLat([0, 0]);
             });
 
@@ -2360,6 +2370,7 @@
                            c'est la même règle que pour la détection d'arrivée. */
                         if (d.id === drivers[0].id && window.VieCompagnon) {
                             VieCompagnon.avancer(deltaDistMeters, { enExces: !!d.isSpeeding, vitesse: d.actualSpeed, limite: limitKmh });
+                            d.vieMinTrajet = Math.min(d.vieMinTrajet, VieCompagnon.valeur());
                         }
 
                         if (d.id === drivers[0].id) updateScreenGlow(d.isSpeeding, true, d.actualSpeed, false); // simulation : pas de grâce

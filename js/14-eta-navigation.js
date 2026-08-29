@@ -1005,6 +1005,7 @@
                doubleraient les stations que le panneau du modal va poser. keepCamera :
                calculateTripPreview() pose son propre cadrage juste après. */
             closeGasScan({ keepCamera: true });
+            closeParkingScan({ keepCamera: true });
 
             modalMode = mode; modalPendingRoute = null; modalStartManuallyEdited = false;
             resetModalWaypoints();
@@ -1441,6 +1442,7 @@
                recherche — un onglet Objectifs ou Profil n'a rien à faire d'une zone de
                scan encore dessinée sur la carte derrière lui. */
             if (document.body.classList.contains('gas-scan-open')) closeGasScan();
+            if (document.body.classList.contains('parking-scan-open')) closeParkingScan();
 
             /* Quitter l'onglet avec le formulaire de création de profil encore ouvert
                laisserait la classe profile-focus posée, et donc le panneau libéré de sa
@@ -1559,6 +1561,13 @@
             document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.remove('active'));
             const targetContent = document.getElementById('panel-tab-' + tab);
             if (targetContent) targetContent.classList.add('active');
+
+            /* Itinéraire revient TOUJOURS en haut de sa page (« Où allons-nous » /
+               Destination visibles), quel que soit le défilement laissé avant de
+               quitter l'onglet — demande utilisateur du 28/08/2026. `.panel-tab-content`
+               est lui-même le conteneur défilant (voir son commentaire dans styles.css),
+               d'où le scrollTop posé directement dessus plutôt que sur un enfant. */
+            if (tab === 'trajet' && targetContent) targetContent.scrollTop = 0;
 
             // Changer le titre (compatibilité overlay navigation)
             const titleEl = document.getElementById('ui-panel-title');

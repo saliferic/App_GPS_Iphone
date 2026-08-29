@@ -337,14 +337,11 @@
 
             const droite = document.createElement('div');
             droite.className = 'trip-row-score';
-            const pts = document.createElement('div');
-            pts.className = 'trip-row-pts';
-            pts.textContent = `${Math.round(Number(t.score) || 0)}`;
-            const ptsU = document.createElement('span');
-            ptsU.className = 'trip-row-pts-unit';
-            ptsU.textContent = 'pts';
-            pts.appendChild(ptsU);
-            droite.appendChild(pts);
+
+            /* Les points de score sont retirés de l'historique (demande utilisateur,
+               29/08/2026) : ce système de points n'a plus cours dans l'app, ne pas le
+               réafficher ici. `t.score` reste en stockage (pas de migration) et sert
+               encore ailleurs (voir `stats-kpi-value` / graphique), non touchés. */
 
             /* Le drapeau de conduite parfaite est ce que l'utilisateur cherche en premier
                dans la liste — d'où sa place dans l'en-tête et non dans le détail. */
@@ -1039,7 +1036,10 @@
             /* Un à-coup secoue aussi le compagnon. Le même `factor` sert aux deux :
                la vie et le score doivent punir la même chose avec la même intensité,
                sinon la barre raconte une autre histoire que les points. */
-            if (drivers.length > 0 && d.id === drivers[0].id && window.VieCompagnon) VieCompagnon.choc(factor);
+            if (drivers.length > 0 && d.id === drivers[0].id && window.VieCompagnon) {
+                VieCompagnon.choc(factor);
+                d.vieMinTrajet = Math.min(d.vieMinTrajet !== undefined ? d.vieMinTrajet : 100, VieCompagnon.valeur());
+            }
             // Mise à jour affichage score éco dans le profil
             const ptsEl = document.getElementById(`pts-${d.id}`);
             if (ptsEl) { ptsEl.innerText = Math.max(0, d.score).toFixed(3); ptsEl.style.color = d.score < 0 ? '#ff6b6b' : '#4da3ff'; }
@@ -1106,6 +1106,17 @@
             dropdown.value = activeProfileId || "";
             _syncProfileDropdownLabel();
             _renderProfileDropdownMenu();
+            _syncProfilHeroTitle();
+        }
+
+        // Le titre en tête de l'onglet Profil affiche le nom du profil ACTIF (28/08/2026,
+        // demande utilisateur) — plus le mot générique « Moi ». Appelée depuis
+        // renderProfilesDropdown(), donc à jour après sélection, création ou suppression.
+        function _syncProfilHeroTitle() {
+            const el = document.getElementById('profil-itin-title');
+            if (!el) return;
+            const profile = profiles.find(p => p.id === activeProfileId);
+            el.textContent = profile ? profile.name : 'Moi';
         }
 
         /* ═══════════════════════════════════════════════════════════════════════════
@@ -1190,8 +1201,10 @@
         const _PROFIL_MASK_IDS = [
             'profil-section-title-monprofil',
             'compagnon-carte',
+            'profil-group-title-animaux',
             'animaux-a-sauver-section',
             'animaux-sauves-section',
+            'profil-group-title-infos',
             'vehicle-panel-section',
             'aide-conduite-section',
             'eco-score-bar',

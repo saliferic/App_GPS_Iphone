@@ -331,7 +331,7 @@
                     : Compagnon.phrase('carnet_observe', {
                           sem: weeksCount, total: BASELINE_MIN_WEEKS,
                           reste: (BASELINE_MIN_WEEKS - weeksCount) + ' sem.' });
-                motEl.innerHTML = `<div class="carnet-mot-dessin">${Compagnon.dessin('repos')}</div>
+                motEl.innerHTML = `<div class="carnet-mot-dessin">${Compagnon.dessin('repos', undefined, true)}</div>
                                    <div class="carnet-mot-texte"></div>`;
                 // textContent : la phrase peut contenir des chiffres venus de l'app.
                 motEl.querySelector('.carnet-mot-texte').textContent = texte;
@@ -1144,7 +1144,20 @@
                pire, un `poser()` de débogage le montrerait ressuscité. Le registre fait
                foi, la jauge ne fait que l'alimenter. */
             const dejaMort = !!(window.VieCompagnon && VieCompagnon.estMort && VieCompagnon.estMort(cle));
-            const etat     = dejaMort ? 'mort' : etatPhysiqueVie(vie);
+            /* ⚠ UN ANIMAL SAUVÉ NE PEUT PAS MOURIR — et ça se décide ICI AUSSI, pas
+               seulement dans `declarerMort()` (js/24). Depuis qu'on peut reprendre un
+               animal libéré comme compagnon (js/25), sa vie redescend comme celle des
+               autres. Le registre des morts refuse bien de l'inscrire, mais cette
+               ligne-ci ne lisait que la jauge : à zéro, `etat` valait 'mort', et
+               l'arrivée jouait toute la scène du deuil — portrait de cadavre, puis
+               réouverture de la fenêtre de choix — pour un animal qui, lui, restait
+               vivant dans tous les registres. Deux écrans, deux vérités opposées.
+               Il tombe donc au pire à 'blesse' : la jauge continue de dire la vérité
+               sur la conduite, sans jamais franchir le pas qui lui est interdit. */
+            const estSauve = typeof window.compagnonEstSauve === 'function'
+                             && window.compagnonEstSauve(cle);
+            let etat = dejaMort ? 'mort' : etatPhysiqueVie(vie);
+            if (etat === 'mort' && !dejaMort && estSauve) etat = 'blesse';
 
             /* ⚠ LA MORT EST DÉCLARÉE ICI, ET NULLE PART AILLEURS. C'est le seul endroit
                de l'app qui constate la fin d'un trajet en connaissant la vie finale :

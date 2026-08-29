@@ -220,6 +220,22 @@
             return Math.sqrt(dx * dx + dy * dy);
         }
 
+        /* Fraîcheur d'un cache de scan « autour de moi » — commun à js/11 (stations
+           essence/bornes) et js/27 (parkings), qui interrogent tous deux Overpass ou
+           data.gouv.fr pour une bulle centrée sur le conducteur. Un cache n'est
+           réutilisable que si TROIS conditions tiennent à la fois : la position n'a
+           pas assez bougé pour changer la bulle, les paramètres de la requête (rayon,
+           mode véhicule…) sont identiques — encodés par l'appelant dans `tag`, une
+           simple chaîne — et il n'est pas trop vieux (les prix et statuts changent).
+           Fonction pure : cache et instant sont injectés, jamais lus, ce qui la rend
+           testable ici et évite qu'un troisième scan la duplique. */
+        function _scanCacheFresh(cache, anchor, tag, nowMs, ttlMs, moveThresholdKm) {
+            if (!cache || !cache.anchor || cache.tag !== tag) return false;
+            if (!Number.isFinite(cache.ts) || !Number.isFinite(nowMs)) return false;
+            if (nowMs - cache.ts > ttlMs) return false;
+            return _ecartMetres(anchor, cache.anchor) <= moveThresholdKm * 1000;
+        }
+
 
         // ═══════════════════════════════════════════════════════════════════
         // === CHOIX DU POINT D'ÉTAPE D'UNE STATION ===

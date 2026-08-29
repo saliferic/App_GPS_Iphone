@@ -96,7 +96,55 @@
         retour.addEventListener('click', cacherFiche);
         f.insertBefore(retour, f.firstChild);
 
+        f.appendChild(boutonPrendre(cle));
         basculer(true);
+    }
+
+    /* ─── REPRENDRE UN ANIMAL SAUVÉ COMME COMPAGNON  (29/08/2026) ──────────
+       Un animal libéré pouvait être revu, jamais REPRIS : la fenêtre de choix
+       (js/23) ne liste que ce qui est en cage, et c'est la seule qui menait à
+       `Compagnon.choisir()`. Un joueur attaché à celui qu'il venait de sauver
+       n'avait donc aucun moyen de le garder à ses côtés — la récompense d'un
+       parcours réussi était de perdre l'animal de vue.
+
+       Le bouton est ICI et pas dans la fenêtre de choix : celle-ci sert à
+       décider QUI SORTIR DE CAGE, et y remettre les sauvés les montrerait à
+       deux endroits — ce que l'en-tête de js/23 proscrit explicitement. Cette
+       page est déjà « le seul endroit où l'on revoit un animal sauvé » ; elle
+       devient l'endroit où on le reprend.
+
+       ⚠ ON N'APPELLE PAS `activer()` DE js/23, malgré le nom : cette
+       fonction-là enchaîne sur la VIDÉO DE LA CAGE, qui raconte qu'on part
+       chercher l'animal derrière ses barreaux. Rejouer ça sur un animal libre
+       depuis des semaines démentirait la page qui l'affiche comme sauvé. On
+       passe donc par la porte d'entrée commune, `Compagnon.choisir()`, et on
+       rafraîchit ce que js/23 rafraîchit aussi — sans la mise en scène. */
+    function boutonPrendre(cle) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cpx-prendre';
+
+        const dejaActif = window.Compagnon && typeof Compagnon.cle === 'function'
+                          && Compagnon.cle() === cle;
+        if (dejaActif) {
+            // Pas de bouton mort-vivant : ce qui ne fait rien ne se présente pas
+            // comme cliquable (même règle que les cases verrouillées de js/23).
+            b.className += ' cpx-prendre-actif';
+            b.disabled = true;
+            b.textContent = '✓ Votre compagnon actuel';
+            return b;
+        }
+
+        b.textContent = 'Prendre comme compagnon';
+        b.addEventListener('click', function () {
+            if (!window.Compagnon || typeof Compagnon.choisir !== 'function') return;
+            if (!Compagnon.choisir(cle)) return;   // refus (animal mort) : on ne ment pas
+            if (typeof window.rafraichirIdentiteCompagnon === 'function') {
+                try { window.rafraichirIdentiteCompagnon(); } catch (e) { /* la fiche se refera */ }
+            }
+            montrerFiche(cle);   // repeint la fiche : le bouton passe à « compagnon actuel »
+        });
+        return b;
     }
 
     function cacherFiche() { basculer(false); }

@@ -45,6 +45,16 @@
         let _scanRadiusKm = parseFloat(localStorage.getItem('gps_gas_scan_radius') || '5');
         if (!Number.isFinite(_scanRadiusKm) || _scanRadiusKm < 1 || _scanRadiusKm > 10) _scanRadiusKm = 5;
 
+        /* Cache du dernier relevé (carburant + bornes) et veille silencieuse — même
+           logique que le scan parkings (_scanCacheFresh, js/00 ; jumeau côté js/27).
+           Le `tag` inclut le mode véhicule : changer de profil (thermique → hybride)
+           entre deux scans doit invalider le cache, faute de quoi la moitié « bornes »
+           manquerait tant que la position n'a pas assez bougé pour l'invalider seule. */
+        const SCAN_CACHE_TTL_MS  = 120000;  // 2 min : prix et statuts bougent
+        const SCAN_CACHE_MOVE_KM = 0.3;
+        const SCAN_PREFETCH_MS   = 60000;
+        let _scanCache = { anchor: null, tag: null, ts: 0, rawGas: [], rawEv: [] };
+
         /* Le scan par rayon est INDISPONIBLE pendant l'aperçu de trajet.
            À cette étape, prefetchGasStationsPhase1() a déjà scanné les stations et
            posé ses propres marqueurs : lancer le scan par rayon dessinerait une
@@ -98,6 +108,8 @@
             // Garde de dernier recours : la hotbox retire déjà l'entrée dans ce cas,
             // mais openGasScan() doit rester sûr quel que soit l'appelant.
             if (_gasScanBlocked()) return;
+            // Exclusion mutuelle avec le scan parkings (js/27) : voir openParkingScan().
+            closeParkingScan({ keepCamera: true });
             /* Demander un scan alors que les stations sont masquées est contradictoire : la
                feuille afficherait une liste dont RIEN n'apparaît sur la carte, et la zone
                radar balaierait un vide. On lève donc le masquage — c'est le seul endroit où
@@ -149,6 +161,11 @@
             setTimeout(() => sheet.classList.remove('open'), 280);
             _clearGasScanMarkers();
             _gasScanZoneRemove();
+            // Fermer la feuille sous une fiche détail encore ouverte laisserait
+            // celle-ci flotter sans rien derrière — simple filet de sécurité,
+            // sans restauration de caméra (_gasInfoGoClicked s'en charge déjà
+            // proprement quand la fermeture vient de « J'y vais »).
+            document.getElementById('gas-info-overlay')?.classList.remove('open');
             // Le scan a détaché la caméra du suivi : la refermer rend la main.
             // Sauf si l'appelant pose lui-même un cadrage juste après (« Go ici »),
             // auquel cas un recentrage intercalé ne ferait que secouer la vue.
@@ -574,21 +591,31 @@
                 // sur la position d'il y a deux minutes.
                 _scanAnchor = _gasScanAnchorPoint();
                 _gasScanZoneUpdate(_scanAnchor, _scanRadiusKm);
-                status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
                 list.innerHTML = '';
                 _clearGasScanMarkers();
 
                 const mode = _scanVehicleMode();
-                // Les deux collectes partent en parallèle en mode hybride : elles
-                // n'ont aucune source commune, les sérialiser doublerait l'attente.
-                const [rawGas, rawEv] = await Promise.all([
-                    (mode === 'gas' || mode === 'both')
-                        ? _gasScanFetchRaw(_scanAnchor[0], _scanAnchor[1], _scanRadiusKm).catch(() => [])
-                        : Promise.resolve([]),
-                    (mode === 'ev' || mode === 'both')
-                        ? _evScanFetchRaw(_scanAnchor[0], _scanAnchor[1], _scanRadiusKm)
-                        : Promise.resolve([]),
-                ]);
+                const tag  = `${_scanRadiusKm}|${mode}`;
+                const now  = Date.now();
+
+                let rawGas, rawEv;
+                if (_scanCacheFresh(_scanCache, _scanAnchor, tag, now, SCAN_CACHE_TTL_MS, SCAN_CACHE_MOVE_KM)) {
+                    rawGas = _scanCache.rawGas;
+                    rawEv  = _scanCache.rawEv;
+                } else {
+                    status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
+                    // Les deux collectes partent en parallèle en mode hybride : elles
+                    // n'ont aucune source commune, les sérialiser doublerait l'attente.
+                    [rawGas, rawEv] = await Promise.all([
+                        (mode === 'gas' || mode === 'both')
+                            ? _gasScanFetchRaw(_scanAnchor[0], _scanAnchor[1], _scanRadiusKm).catch(() => [])
+                            : Promise.resolve([]),
+                        (mode === 'ev' || mode === 'both')
+                            ? _evScanFetchRaw(_scanAnchor[0], _scanAnchor[1], _scanRadiusKm)
+                            : Promise.resolve([]),
+                    ]);
+                    _scanCache = { anchor: _scanAnchor, tag, ts: now, rawGas, rawEv };
+                }
 
                 _scanStations = [
                     ..._gasScanParse(rawGas, _scanAnchor, _scanRadiusKm),
@@ -761,11 +788,7 @@
                 card.className = 'gas-station-card';
                 card.id = 'gas-scan-card-' + i;
                 card.innerHTML = s.kind === 'ev' ? _scanEvCardHtml(s, i) : _scanGasCardHtml(s, i);
-                card.addEventListener('click', () => {
-                    if (_gasLongPressFired) { _gasLongPressFired = false; return; }
-                    focusGasScanStation(i);
-                });
-                _attachStationLongPress(card, s);
+                card.addEventListener('click', () => _openGasScanDetail(i));
                 list.appendChild(card);
             });
 
@@ -872,6 +895,11 @@
                     const el = document.getElementById('gas-scan-eta-' + i);
                     if (el) el.textContent = _gasScanEtaText(s);
                 });
+                // La fiche détail peut être ouverte sur une station déjà présente dans
+                // `targets` : sa distance/temps affichait l'estimation à 25 km/h avant
+                // que la Matrix ne réponde, elle mérite la même mise à jour que les cartes.
+                const etaInfo = document.getElementById('gas-info-eta');
+                if (etaInfo && _gasInfoCurrent) etaInfo.textContent = _gasScanEtaText(_gasInfoCurrent);
             } catch (e) { /* estimation conservée */ }
         }
 
@@ -902,17 +930,15 @@
                     const price = getEffectivePrice(s, _scanFuel);
                     el.innerHTML = '⛽ ' + (price != null ? price.toFixed(2) : '—');
                 }
-                // Repère lu par la détection d'appui long de la carte : sans lui, une
-                // pression sur une pastille armerait AUSSI la hotbox générale (les
-                // marqueurs sont des enfants du conteneur #map) et les deux menus se
-                // disputeraient l'ouverture à 400 ms.
+                // Repère lu par la détection d'appui long de la carte : sans lui, un
+                // appui sur une pastille armerait AUSSI la hotbox générale (les
+                // marqueurs sont des enfants du conteneur #map), qui n'a rien à voir
+                // avec une station.
                 el.dataset.gasStation = '1';
                 el.addEventListener('click', (ev) => {
                     ev.stopPropagation();
-                    if (_gasLongPressFired) { _gasLongPressFired = false; return; }
-                    focusGasScanStation(i);
+                    _openGasScanDetail(i);
                 });
-                _attachStationLongPress(el, s);
                 // Respecte un masquage en cours (entrée hotbox « Masquer stations », js/18) :
                 // cette fonction est rejouée à chaque rendu de la liste.
                 if (_stationsHidden) el.style.display = 'none';
@@ -932,14 +958,40 @@
             map.flyTo({ center: [s.lng, s.lat], zoom: 16, duration: 800, padding: _gasScanPadding() });
         }
 
-        // ── CHOIX « GO ICI » / « NE PAS GO » SUR UNE STATION ────────────────
-        // Même geste que la hotbox générale (appui long 400 ms) et même moteur :
-        // openHotbox() accepte une liste d'entrées. Rien n'est réimplémenté ici,
-        // seuls le contenu, l'angle de départ et l'intitulé changent.
+        /* ── VEILLE SILENCIEUSE ──────────────────────────────────────────────
+           Jumelle de _pkPrefetchTick() (js/27) : rafraîchit _scanCache même
+           feuille fermée, pour que la prochaine ouverture de runGasScan() trouve
+           un résultat déjà prêt au lieu d'attendre le réseau.
+           Ne s'exécute que si un vrai fix GPS existe, sinon l'ancre retomberait
+           sur le centre de carte et préchargerait un endroit arbitraire. */
+        function _scanPrefetchTick() {
+            if (!navigator.onLine || !lastRealCoords) return;
+            if (_scanBusy) return;
+            if (_gasScanBlocked()) return;   // prefetchGasStationsPhase1 fait déjà le travail
+            if (document.getElementById('gas-scan-sheet')?.classList.contains('open')) return;
 
-        let _gasLongPressFired = false;
+            const anchor = normalizeLngLat(lastRealCoords);
+            if (!anchor || !isLngLat(anchor)) return;
+            const mode = _scanVehicleMode();
+            const tag  = `${_scanRadiusKm}|${mode}`;
+            const now  = Date.now();
+            if (_scanCacheFresh(_scanCache, anchor, tag, now, SCAN_CACHE_TTL_MS, SCAN_CACHE_MOVE_KM)) return;
 
-        /* Coordonnées de la station retenue via « Go ici ». Sert à reconnaître la
+            Promise.all([
+                (mode === 'gas' || mode === 'both')
+                    ? _gasScanFetchRaw(anchor[0], anchor[1], _scanRadiusKm).catch(() => [])
+                    : Promise.resolve([]),
+                (mode === 'ev' || mode === 'both')
+                    ? _evScanFetchRaw(anchor[0], anchor[1], _scanRadiusKm)
+                    : Promise.resolve([]),
+            ]).then(([rawGas, rawEv]) => {
+                _scanCache = { anchor, tag, ts: Date.now(), rawGas, rawEv };
+            }).catch(() => { /* silencieux : la prochaine ouverture retentera */ });
+        }
+        setInterval(_scanPrefetchTick, SCAN_PREFETCH_MS);
+
+        /* Coordonnées de la station retenue via « J'y vais » (fiche détail,
+           _gasInfoGoClicked). Sert à reconnaître la
            configuration « ma destination EST une station » — auquel cas proposer des
            stations SUR le trajet n'a plus de sens : le choix est déjà fait.
            On DÉDUIT cet état d'une comparaison de coordonnées au lieu de poser un
@@ -958,29 +1010,6 @@
             if (!isLngLat(dest)) return false;
             return Math.abs(dest[0] - _gasGoStationCoords[0]) < 0.0002   // ~22 m
                 && Math.abs(dest[1] - _gasGoStationCoords[1]) < 0.0002;
-        }
-
-        function _stationHotboxItems(s) {
-            /* Ordre = sens de lecture : refuser d'abord, accepter ensuite. Depuis que la
-               hotbox est un arc horizontal (16/08/2026), c'est acquis par construction —
-               il fallait auparavant un `startAngle: -180` pour forcer un choix binaire à
-               l'horizontale dans un cercle. « Ne pas go » est donc au centre à l'ouverture,
-               ce qui ne présélectionne rien : tant que le doigt n'a pas glissé, rien n'est
-               armé et le relâchement referme. */
-            return [
-                { id: 'nogo', cls: 'hb-nogo', label: 'Ne pas go',
-                  html: '<span class="hb-glyph">NON</span>',
-                  act: () => { /* on ressort simplement du cercle */ } },
-                { id: 'go', cls: 'hb-go', label: 'Go ici',
-                  html: '<span class="hb-glyph">GO</span>',
-                  act: () => _gasGoToStation(s) },
-            ];
-        }
-
-        function openStationChoice(x, y, s) {
-            openHotbox(x, y, _stationHotboxItems(s), {
-                title: s.name || s.addr || 'Station'
-            });
         }
 
         function _gasGoToStation(s) {
@@ -1020,37 +1049,110 @@
             handleStartClick();
         }
 
-        /* Arme l'appui long sur une carte de résultat ou une pastille de prix.
-           Le drapeau neutralise le `click` qui suit l'appui long, sinon relâcher
-           le doigt recentrerait aussi la carte sur la station. Il est remis à
-           false à chaque pointerdown : si le navigateur n'émet aucun click après
-           un appui long (courant sur tactile), il ne doit pas avaler le tap suivant. */
-        function _attachStationLongPress(el, station) {
-            let timer = null, pt = null;
-            const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } pt = null; };
+        // ── FICHE DÉTAIL D'UNE STATION / BORNE ──────────────────────────────
+        // Décalque de la fiche parking (openParkingInfo, js/27), plus un bouton
+        // d'action « J'y vais » : une station EST une destination possible, un
+        // parking ne l'est pas. _scanInfoRow() est PARTAGÉE entre les deux fiches
+        // (js/27 la réutilise telle quelle, ce fichier chargeant avant le sien).
 
-            el.addEventListener('pointerdown', (e) => {
-                if (e.button !== undefined && e.button > 0) return;
-                _gasLongPressFired = false;
-                cancel();
-                pt = { x: e.clientX, y: e.clientY };
-                timer = setTimeout(() => {
-                    timer = null;
-                    if (!pt) return;
-                    _gasLongPressFired = true;
-                    openStationChoice(pt.x, pt.y, station);
-                }, HOTBOX_PRESS_MS);
-            }, { passive: true });
+        // Un champ, une ligne — construite en DOM (pas en innerHTML) parce que
+        // nom, adresse et prix viennent tous d'un flux tiers (data.gouv, OSM) :
+        // textContent échappe automatiquement, là où une interpolation de gabarit
+        // aurait exécuté n'importe quel balisage glissé dans une fiche.
+        // `accent` met la VALEUR dans la même couleur claire que le nom (utilisé pour
+        // prix et distance/temps, l'information qui compte le plus dans la fiche) ;
+        // sans lui, la valeur garde la teinte discrète du reste de la ligne, dont
+        // « Prix » / « Distance/temps » restent l'étiquette.
+        function _scanInfoRow(icon, contenu, accent) {
+            const row = document.createElement('div');
+            row.className = 'scan-info-row';
+            const ico = document.createElement('span');
+            ico.className = 'scan-info-ico';
+            ico.textContent = icon;
+            const corps = document.createElement('span');
+            if (accent) corps.className = 'scan-info-value';
+            if (typeof contenu === 'string') corps.textContent = contenu;
+            else corps.appendChild(contenu);
+            row.append(ico, corps);
+            return row;
+        }
 
-            el.addEventListener('pointermove', (e) => {
-                if (!pt) return;
-                // Même tolérance que la hotbox : au-delà, c'est un défilement de liste.
-                if (Math.hypot(e.clientX - pt.x, e.clientY - pt.y) > HOTBOX_MOVE_TOL) cancel();
-            }, { passive: true });
+        let _gasInfoCurrent = null;
+        // Caméra d'avant clic, restaurée à la fermeture (voir closeGasStationInfo) —
+        // sans elle, fermer la fiche laisserait la carte zoomée sur la station au
+        // lieu de rendre la vue d'ensemble du scan telle qu'avant le clic.
+        let _gasInfoPrevCamera = null;
 
-            ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev =>
-                el.addEventListener(ev, cancel, { passive: true }));
-            el.addEventListener('contextmenu', (e) => e.preventDefault());
+        function openGasStationInfo(s) {
+            const overlay = document.getElementById('gas-info-overlay');
+            if (!overlay || !s) return;
+            _gasInfoCurrent = s;
+
+            const generique = s.kind === 'ev' && (!s.name || s.name === 'Borne de recharge');
+            document.getElementById('gas-info-icon').textContent = s.kind === 'ev' ? '⚡' : '⛽';
+            document.getElementById('gas-info-name').textContent =
+                generique ? (s.addr || 'Borne de recharge') : (s.name || 'Station');
+            document.getElementById('gas-info-addr').textContent =
+                generique ? '' : (s.addr || 'Adresse non renseignée');
+
+            const rows = document.getElementById('gas-info-rows');
+            rows.innerHTML = '';
+
+            if (s.kind === 'ev') {
+                rows.appendChild(_scanInfoRow('⚡', s.power ? `${s.power} kW` : 'Puissance inconnue'));
+                rows.appendChild(_scanInfoRow('🔌', s.nb_pdc > 1 ? `${s.nb_pdc} points de charge` : '1 point de charge'));
+            } else {
+                const price   = getEffectivePrice(s, _scanFuel);
+                const fuelDef = FUEL_DEFS.find(f => f.key === getEffectiveFuelType(s, _scanFuel));
+                // Libellé texte plutôt qu'un pictogramme billet : à cette taille, un
+                // second picto à côté de ⛽/⚡ n'ajoutait rien qu'un mot ne dise mieux.
+                if (price != null) rows.appendChild(_scanInfoRow('Prix', `${fuelDef?.label || ''} ${price.toFixed(3)} €`.trim(), true));
+                const st = getStationOpeningStatus(s);
+                if (st.status !== 'unknown') {
+                    const dot = st.status === 'closed' ? '🔴' : st.status === '24h' ? '🔵' : '🟢';
+                    rows.appendChild(_scanInfoRow(dot, st.label));
+                }
+            }
+
+            // Distance/temps depuis la position GPS — `_gasScanEtaText()` porte déjà le
+            // repli « ~ » à 25 km/h tant que la Matrix n'a pas répondu (voir plus bas,
+            // qui rafraîchit `#gas-info-eta` dès que la vraie durée arrive).
+            const etaEl = document.createElement('span');
+            etaEl.id = 'gas-info-eta';
+            etaEl.textContent = _gasScanEtaText(s);
+            rows.appendChild(_scanInfoRow('Distance/temps', etaEl, true));
+
+            overlay.classList.add('open');
+        }
+
+        function closeGasStationInfo(opts = {}) {
+            document.getElementById('gas-info-overlay')?.classList.remove('open');
+            document.querySelectorAll('#gas-scan-list .gas-station-card')
+                .forEach(c => c.classList.remove('focused'));
+            // Restaure la vue d'avant clic — sauf si l'on ferme pour PARTIR vers la
+            // station (_gasInfoGoClicked) : y revenir une frame avant de relancer un
+            // trajet ferait clignoter la caméra pour rien.
+            if (!opts.skipCameraRestore && _gasInfoPrevCamera) {
+                map.flyTo({ center: _gasInfoPrevCamera.center, zoom: _gasInfoPrevCamera.zoom, duration: 500 });
+            }
+            _gasInfoPrevCamera = null;
+            _gasInfoCurrent = null;
+        }
+
+        function _gasInfoGoClicked() {
+            const s = _gasInfoCurrent;
+            closeGasStationInfo({ skipCameraRestore: true });
+            if (s) _gasGoToStation(s);
+        }
+
+        // Ouvre la fiche ET mémorise la caméra AVANT le recentrage de
+        // focusGasScanStation() — c'est cette vue-là que la fermeture restaure.
+        function _openGasScanDetail(i) {
+            const s = _scanShown[i];
+            if (!s) return;
+            _gasInfoPrevCamera = { center: map.getCenter(), zoom: map.getZoom() };
+            focusGasScanStation(i);
+            openGasStationInfo(s);
         }
 
         // padding/offset s'expriment en pixels du CANEVAS : on mesure sur le conteneur

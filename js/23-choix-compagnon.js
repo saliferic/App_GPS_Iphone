@@ -63,6 +63,14 @@
            Le compte reste juste : un animal sauvé en ouvre un nouveau
            (`ouverts = 2 + nbSauves`), donc il y a toujours deux cages à choisir. */
         hote.innerHTML = Compagnon.catalogue().map((c, i) => {
+            /* LA GRILLE NE CONTIENT QUE DES CAGES — y compris pour le compagnon sauvé
+               qui t'accompagne, sorti d'ici et posé au-dessus par `bandeauActifLibre()`.
+               Première tentative (29/08/2026) : le garder dans la grille, hors cage et
+               marqué « Avec toi ». Ça marchait, mais ça mélangeait deux natures dans la
+               même liste — huit cartes qui proposent un choix et une neuvième qui n'en
+               est pas un, à la même taille et au même rang. Le lecteur devait relire le
+               libellé de chaque carte pour retrouver laquelle était la sienne.
+               Le sortir de la grille dit la même chose sans un mot de plus. */
             if (c.debloque && sauve(c.cle)) return '';
             /* Trois états de disponibilité, à ne pas confondre :
                  - `c.debloque` : l'animal EXISTE (il est dessiné). Nima et Pilou
@@ -148,9 +156,60 @@
        Ce qui reste partagé entre les deux écrans : `.cpx-retour` et
        `.cpx-fiche-texte` dans styles.css, et `Compagnon.fiche()` dans js/22. */
 
+    /* ─── LE COMPAGNON SAUVÉ QUI T'ACCOMPAGNE  (29/08/2026) ────────────────
+       Une bande à part, au-dessus de la grille, et pas une carte de plus dedans.
+
+       La grille répond à « qui sort-on de cage ? » : neuf cartes de même taille,
+       toutes des propositions. L'animal déjà sauvé qui t'accompagne n'en est pas
+       une — il est l'état courant. Mis au même rang que les autres (première
+       version), il obligeait à relire chaque libellé pour retrouver lequel était
+       le sien ; sorti de la liste, il se lit d'un coup d'œil, et le surtitre
+       « Ton compagnon » trouve enfin ce qu'il annonce.
+
+       ⚠ SEULEMENT SI L'ANIMAL EST SAUVÉ. Un compagnon encore en cage a déjà sa
+       carte « En cours » dans la grille, à sa place : le sauvetage est en cours,
+       c'est bien une ligne de la liste. Le dédoubler ici le montrerait deux fois
+       dans la même fenêtre. La bande reste donc vide et masquée dans ce cas —
+       le cas le plus courant, celui de tout joueur qui n'a encore rien sauvé. */
+    function bandeauActifLibre() {
+        const hote = document.getElementById('cpx-actif-libre');
+        if (!hote) return;
+        hote.innerHTML = '';
+        hote.style.display = 'none';
+        if (!window.Compagnon || typeof Compagnon.cle !== 'function') return;
+
+        const cle = Compagnon.cle();
+        if (!cle || !sauveIci(cle)) return;
+
+        const c = Compagnon.catalogue().find(x => x.cle === cle);
+        if (!c) return;
+
+        /* Le dessin NU, jamais la version en cage : l'animal est libre, et c'est
+           tout le sujet de la bande. Même parti pris que les cartes de js/25. */
+        hote.innerHTML = `
+            <div class="cpx-libre-carte">
+                <div class="cpx-libre-vignette" style="--cpx-accent:${c.accent}">${c.vignette}</div>
+                <div class="cpx-libre-texte">
+                    <div class="cpx-libre-nom">${c.nom}</div>
+                    <div class="cpx-libre-espece">${c.espece}</div>
+                </div>
+                <div class="cpx-libre-etat">Avec toi</div>
+            </div>`;
+        hote.style.display = '';
+    }
+
+    // `grille()` a son propre `sauve()` en variable locale ; la bande est hors de
+    // cette portée, d'où ce doublon d'une ligne plutôt qu'un remaniement de la
+    // grille pour un seul appelant de plus.
+    function sauveIci(cle) {
+        return (typeof window.compagnonEstSauve === 'function')
+            && window.compagnonEstSauve(cle);
+    }
+
     function ouvrir() {
         const ov = document.getElementById('compagnon-modal-overlay');
         if (!ov) return;
+        bandeauActifLibre();
         grille();
         ov.classList.add('open');
     }
@@ -167,6 +226,9 @@
            eux. Leur fiche s'ouvre depuis « Animaux sauvés » (js/25). */
         Compagnon.choisir(cle);
         grille();   // repeint AVANT la vidéo : au retour, la carte dit déjà « en cours »
+        // La bande du sauvé doit disparaître dans le même souffle : on vient de lui
+        // préférer un animal en cage, elle annoncerait un compagnon qui ne l'est plus.
+        bandeauActifLibre();
         /* La fiche « qui est cet animal » peut être ouverte derrière cette fenêtre :
            sans ça elle resterait sur le compagnon précédent. */
         if (typeof rafraichirIdentiteCompagnon === 'function') rafraichirIdentiteCompagnon();

@@ -117,6 +117,7 @@
                sans condition, pour couvrir aussi bien ce cas que le trajet en cours
                (closeGasScan() ne fait rien si la feuille n'est pas ouverte). */
             if (document.body.classList.contains('gas-scan-open')) closeGasScan();
+            if (document.body.classList.contains('parking-scan-open')) closeParkingScan();
             if (isCourseStarted) { openQuickReroute(); return; }
             const surTrajet = document.querySelector('.panel-tab-content.active')?.id === 'panel-tab-trajet';
             if (!surTrajet) switchMainTab('trajet');

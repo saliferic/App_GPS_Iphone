@@ -672,7 +672,15 @@
             boite: { x: 106, y: 130, w: 304, h: 340 },
             x: -39.5, y: -5.5, taille: 395.9,   // contenu 304×340 à 106,130
             sol: { cx: 160, rx: 59 },
-            larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]]
+            larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]],
+            /* Le calage d'avant la bascule webp, gardé pour le parcours (page
+               Objectifs) : demande utilisateur (28/08/2026), en vue d'illustrations
+               dédiées par étape à venir dans ce dossier Normal. */
+            statique: {
+                fichier: 'Images/Animals/Normal/Elephant.PNG',
+                boite: { x: 27, y: 67, w: 449, h: 400 },
+                x: -6.6, y: 53.0, taille: 336.5
+            }
         },
         bulle: {
             /* ⚡ TEST ANIMATION — remplace temporairement le PNG statique pour
@@ -697,7 +705,14 @@
                s'enfonce dans le sol ou flotte au-dessus de l'ombre). */
             x: -49.0, y: -31.7, taille: 420.6,   // contenu 362×407 à 73,58 (×1.25)
             sol: { cx: 160, rx: 63 },
-            larme: [114, 181], zzz: [265, 98], etoiles: [[60, 106, 13], [258, 94, 10]]
+            larme: [114, 181], zzz: [265, 98], etoiles: [[60, 106, 13], [258, 94, 10]],
+            /* Le calage d'avant la bascule webp, gardé pour le parcours (page
+               Objectifs) — voir la même entrée sur babi. */
+            statique: {
+                fichier: 'Images/Animals/Normal/Hippo_Neutre.PNG',
+                boite: { x: 73, y: 58, w: 362, h: 407 },
+                x: -6.9, y: 52.4, taille: 336.5
+            }
         },
         titi: {
             fichier: 'Images/Animals/Normal/Singe.png',
@@ -795,8 +810,16 @@
         return 'sain';
     }
 
-    function variante(cle, physique) {
+    function variante(cle, physique, statique) {
         const im = IMAGES[cle] || IMAGES.babi;
+        /* Le parcours (page Objectifs) demande l'image FIXE du dossier Normal,
+           pas le webp animé du hero/profil — le calage `statique` est celui
+           d'avant la bascule webp, gardé pour ça. Prioritaire sur l'état
+           physique : le parcours ne montre jamais un animal blessé ou mort. */
+        if (statique && im.statique) {
+            const st = im.statique;
+            return { fichier: st.fichier, boite: st.boite, x: st.x, y: st.y, taille: st.taille };
+        }
         const v = (physique && physique !== 'sain' && im.variantes) ? im.variantes[physique] : null;
         if (!v) return { fichier: im.fichier, boite: im.boite, x: im.x, y: im.y, taille: im.taille };
         const b = v.boite;
@@ -808,9 +831,9 @@
         };
     }
 
-    function dessinImageInterieur(cle, etat, physique) {
+    function dessinImageInterieur(cle, etat, physique, statique) {
         const im = IMAGES[cle];
-        const v  = variante(cle, physique);
+        const v  = variante(cle, physique, statique);
         /* ⚠ AUCUN ACCESSOIRE SUR UNE VARIANTE. Larme, zzz et étoiles sont des calques
            posés à des ancres relevées sur l'image NORMALE — sur un hippo couché, la
            larme tomberait à côté du visage. Et ils n'ont rien à y ajouter : une image
@@ -839,8 +862,8 @@
             ${signe}`;
     }
 
-    function dessinerImage(cle, etat, physique) {
-        return `<svg class="cp-svg" viewBox="6 42 308 330" aria-hidden="true">${dessinImageInterieur(cle, etat, physique)}</svg>`;
+    function dessinerImage(cle, etat, physique, statique) {
+        return `<svg class="cp-svg" viewBox="6 42 308 330" aria-hidden="true">${dessinImageInterieur(cle, etat, physique, statique)}</svg>`;
     }
 
     const COMPAGNONS = {
@@ -866,8 +889,8 @@
                 defi_valide:    (v) => `Un défi de moins. Il t'en reste ${v.reste}.`
             },
             decor: 'point_eau',
-            dessin:    (e, p) => dessinerImage('babi', e, p),
-            interieur: (e, p) => dessinImageInterieur('babi', e, p)
+            dessin:    (e, p, s) => dessinerImage('babi', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('babi', e, p, s)
         },
 
         bulle: {
@@ -894,8 +917,8 @@
                 defi_valide:    (v) => `Un de moins. Il t'en reste ${v.reste}.`
             },
             decor: 'fleuve',
-            dessin:    (e, p) => dessinerImage('bulle', e, p),
-            interieur: (e, p) => dessinImageInterieur('bulle', e, p)
+            dessin:    (e, p, s) => dessinerImage('bulle', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('bulle', e, p, s)
         },
 
         titi: {
@@ -920,8 +943,8 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e, p) => dessinerImage('titi', e, p),
-            interieur: (e, p) => dessinImageInterieur('titi', e, p)
+            dessin:    (e, p, s) => dessinerImage('titi', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('titi', e, p, s)
         },
         zola: {
             nom: 'Zola',
@@ -945,8 +968,8 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e, p) => dessinerImage('zola', e, p),
-            interieur: (e, p) => dessinImageInterieur('zola', e, p)
+            dessin:    (e, p, s) => dessinerImage('zola', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('zola', e, p, s)
         },
         kiri: {
             nom: 'Kiri',
@@ -970,8 +993,8 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e, p) => dessinerImage('kiri', e, p),
-            interieur: (e, p) => dessinImageInterieur('kiri', e, p)
+            dessin:    (e, p, s) => dessinerImage('kiri', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('kiri', e, p, s)
         },
         raya: {
             nom: 'Raya',
@@ -995,8 +1018,8 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e, p) => dessinerImage('raya', e, p),
-            interieur: (e, p) => dessinImageInterieur('raya', e, p)
+            dessin:    (e, p, s) => dessinerImage('raya', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('raya', e, p, s)
         },
         sam: {
             nom: 'Sam',
@@ -1024,8 +1047,8 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de bouclé. Il t'en reste ${v.reste}.`
             },
-            dessin:    (e, p) => dessinerImage('sam', e, p),
-            interieur: (e, p) => dessinImageInterieur('sam', e, p)
+            dessin:    (e, p, s) => dessinerImage('sam', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('sam', e, p, s)
         }
     };
 
@@ -1630,6 +1653,12 @@
         /* --------------------------------------------------------- BABI */
         point_eau: {
             titre: "Ton point d'eau",
+            /* ⚡ Fond photo dédié (demande utilisateur, 29/08/2026) : le
+               Kilimandjaro de Babi, à la place du paysage de nuit partagé
+               posé le 28/08/2026 en attendant. `parcLibre` le prend au lieu
+               de `ciel`/`lune`/`fond()` dès que `photo` est renseigné — voir
+               la note à sa lecture de `d`. */
+            photo: 'Images/Enviro/Paysage_Liberation_Elephant.PNG',
             ciel: ['#2B2050', '#1B3A48'],
             lune: { x: 300, y: 34, r: 16 },
             places: CL_SOL_PLACES,
@@ -1656,6 +1685,9 @@
         /* -------------------------------------------------------- BULLE */
         fleuve: {
             titre: 'Ton fleuve',
+            /* ⚡ Même fond photo provisoire que le point d'eau de Babi (voir sa
+               note) — demande utilisateur du 28/08/2026, avant un fleuve dédié. */
+            photo: 'Images/Enviro/Paysage_Nuit.PNG',
             ciel: ['#25234E', '#1C4450'],
             lune: { x: 300, y: 34, r: 16 },
             places: CL_SOL_PLACES,
@@ -1995,15 +2027,13 @@
        pose donc par son CENTRE et sa LIGNE DE SOL, jamais par son coin. */
     function parcAnimal(etat, s, cx, baseY, cle) {
         const c = COMPAGNONS[cle] || COMPAGNONS[courant];
-        return `<g transform="translate(${(cx - 160 * s).toFixed(1)},${(baseY - 356 * s).toFixed(1)}) scale(${s})">${c.interieur(etat)}</g>`;
+        /* Image FIXE (dossier Normal), pas le webp animé du hero/profil — demande
+           utilisateur (28/08/2026) : voir `statique` dans IMAGES (js/22). */
+        return `<g transform="translate(${(cx - 160 * s).toFixed(1)},${(baseY - 356 * s).toFixed(1)}) scale(${s})">${c.interieur(etat, undefined, true)}</g>`;
     }
 
     function parcDefs(u) {
         return `
-            <linearGradient id="paMetal${u}" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stop-color="#5E6789"/><stop offset="0.45" stop-color="#9AA3C4"/>
-                <stop offset="1" stop-color="#596183"/>
-            </linearGradient>
             <filter id="paFlou${u}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
             <linearGradient id="paVoile${u}" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0" stop-color="#0F0A20" stop-opacity="0"/>
@@ -2013,82 +2043,84 @@
 
     /* La nuit neutre des étapes 1 et 2 : ni roseaux, ni fleuve, ni canopée.
        C'est un nulle part, et c'est voulu — on n'est pas encore arrivé. */
+    /* ⚠ HISTORIQUE : ce dégradé nuit + lune + étoiles dessinait le fond des
+       étapes 1 et 2 avant la photo `Images/Enviro/Paysage_Nuit.PNG` (demande
+       utilisateur du 28/08/2026 : un seul fond photo pour les trois étapes,
+       en attendant des fonds par espèce). Gardé vide plutôt que supprimé : le
+       marqueur `<!--PA_FOND-->` de `parcPlanche` a toujours besoin d'un
+       `bout[0]` à mettre dans les `<defs>`, même vide. */
     function parcNuit(u) {
-        return `
-            <linearGradient id="paCiel${u}" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#2B2050"/><stop offset="1" stop-color="#1B3A48"/>
-            </linearGradient>`;
+        return '';
     }
 
     function parcNuitFond(u) {
-        return `
-            <rect width="${CL_L}" height="${CL_H}" fill="url(#paCiel${u})"/>
-            <circle cx="300" cy="32" r="14" fill="#FFE9B8" opacity="0.85"/>
-            <circle cx="300" cy="32" r="27" fill="#FFE9B8" opacity="0.15" filter="url(#paFlou${u})"/>
-            <g fill="#FFF0DC" opacity="0.55">
-                <circle cx="40" cy="26" r="1.4"/><circle cx="96" cy="46" r="1.1"/>
-                <circle cx="160" cy="22" r="1.3"/><circle cx="238" cy="52" r="1.1"/>
-            </g>
-            <path d="M0 134 C60 124 120 138 180 130 C240 122 300 136 354 128 L354 ${CL_H} L0 ${CL_H} Z" fill="#243F4C" opacity="0.75"/>
-            <rect x="0" y="${CL_SOL}" width="${CL_L}" height="${CL_H - CL_SOL}" fill="#1B3340"/>`;
+        return `<image href="${RACINE}Images/Enviro/Paysage_Nuit.PNG" xlink:href="${RACINE}Images/Enviro/Paysage_Nuit.PNG"
+                        x="0" y="0" width="${CL_L}" height="${CL_H}" preserveAspectRatio="xMidYMid slice"/>`;
     }
 
-    /* ÉTAPE 1 — la cage. Barreaux droits, métal froid, cadenas FERMÉ : l'anse
-       rentre des deux côtés dans le boîtier. Ouverte, elle dirait que la porte
-       l'est aussi, et l'étape n'aurait plus rien à débloquer.
-       Le compagnon est « secoué » — c'est le seul écran du parcours où il ne va
-       pas bien. */
+    /* ÉTAPE 1 — la cage. Deux photos (`Images/Cage/Grille_01.PNG` en fond,
+       `Grille_02.PNG` au premier plan) posées aux MÊMES x/y/largeur/hauteur :
+       les deux sont calées sur le même canevas 512×512 dans le fichier
+       d'origine, la 01 étant la cage complète vue de face, cadenas fermé, et
+       la 02 le mur avant en gros plan (barreaux seuls, demande utilisateur du
+       28/08/2026 — inversé par rapport à l'ordre du dessin d'origine).
+       L'animal est intercalé entre les deux : il apparaît derrière les
+       barreaux avant sans clipPath, exactement comme le camion de l'étape 2
+       est posé par-dessus l'animal.
+       Cadenas FERMÉ dans le fichier — c'est ce qui dit que la porte l'est
+       aussi ; l'étape n'aurait plus rien à débloquer sinon.
+       Le compagnon est « secoué » — c'est le seul écran du parcours où il ne
+       va pas bien.
+       ⚠ MÊME RÈGLE DE CASSE QUE LES ANIMAUX ET LE CAMION : noms recopiés tels
+       quels du disque (`.PNG` majuscule) — Android en tiendrait rigueur. */
     function parcCage(u, cle) {
-        const barreaux = Array.from({ length: 9 }, function (_, i) {
-            return `<rect x="${72 + i * 19.5}" y="52" width="5" height="110" rx="2.5" fill="url(#paMetal${u})"/>`;
-        }).join('');
+        /* Cadrage mesuré sur `Grille_01.PNG` (boîte alpha 24..494 × 90..426) :
+           le bord gauche du cadre en métal calé sur l'ancien x=56 du dessin
+           SVG, la largeur 470 mise à l'échelle sur les 188 disponibles. */
+        const s = 0.4;
+        const imgX = (56 - 24 * s).toFixed(1);
+        const imgY = (40 - 90 * s).toFixed(1);
+        const imgT = (512 * s).toFixed(1);
+        const fond  = 'Images/Cage/Grille_01.PNG';
+        const avant = 'Images/Cage/Grille_02.PNG';
         return `<g transform="${PARC_POSE}">
             <ellipse cx="150" cy="172" rx="96" ry="7" fill="#0d0a22" opacity="0.5"/>
-            <rect x="62" y="50" width="176" height="114" fill="#141B2E"/>
-            <path d="M70 158 L104 150 M112 159 L146 151 M156 158 L190 150 M198 159 L226 152"
-                  stroke="#C9A46A" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+            <image href="${RACINE}${fond}" xlink:href="${RACINE}${fond}"
+                   x="${imgX}" y="${imgY}" width="${imgT}" height="${imgT}"/>
             ${parcAnimal('secoue', 0.33, 150, 162, cle)}
-            ${barreaux}
-            <rect x="56" y="40" width="188" height="14" rx="7" fill="url(#paMetal${u})"/>
-            <rect x="56" y="158" width="188" height="12" rx="6" fill="url(#paMetal${u})"/>
-            <rect x="56" y="40" width="14" height="130" rx="7" fill="url(#paMetal${u})"/>
-            <rect x="230" y="40" width="14" height="130" rx="7" fill="url(#paMetal${u})"/>
-            <path d="M142 110 L142 100 A8 8 0 0 1 158 100 L158 110"
-                  fill="none" stroke="#C9C2E6" stroke-width="5" stroke-linecap="round"/>
-            <rect x="134" y="107" width="32" height="26" rx="7" fill="#FFB35C"/>
-            <circle cx="150" cy="118" r="3.6" fill="#7A4E1C"/>
-            <path d="M150 120 L150 126" stroke="#7A4E1C" stroke-width="3" stroke-linecap="round"/>
+            <image href="${RACINE}${avant}" xlink:href="${RACINE}${avant}"
+                   x="${imgX}" y="${imgY}" width="${imgT}" height="${imgT}"/>
         </g>`;
     }
 
-    /* ÉTAPE 2 — l'attelage. Remorque OUVERTE, tête au-dessus du bastingage,
-       oreilles au vent : sorti de la cage, il ne repart pas dans une autre
-       boîte. C'est ce qui fait de l'étape 2 une bonne nouvelle et pas un
-       simple transfert. */
+    /* ÉTAPE 2 — le camion. Benne OUVERTE (photo `Images/Vehicules/Camion.PNG`),
+       tête au-dessus des ridelles, oreilles au vent : sorti de la cage, il ne
+       repart pas dans une autre boîte. C'est ce qui fait de l'étape 2 une
+       bonne nouvelle et pas un simple transfert.
+
+       ⚠ L'ANIMAL EST DERRIÈRE LE CAMION, PAS DEDANS UN CLIP. Le PNG est une
+       vue de côté : ses ridelles sont un pan plein, opaque du haut de la benne
+       (y≈228) jusqu'au plancher (y≈300, repère natif 512×512) — poser l'animal
+       dessous et le camion dessus suffit à cacher tout ce qui tombe derrière
+       ce pan, sans clipPath. Seule la tête, plus haute que la ridelle, sort
+       dans le ciel transparent au-dessus. Repère mesuré au disque (script
+       `_alpha-bbox` façon animaux) : boîte alpha 36..476 × 130..382.
+       ⚠ MÊME RÈGLE DE CASSE QUE LES ANIMAUX : `.PNG` en majuscules, recopié
+       tel quel du disque — Android en tiendrait rigueur, pas Windows. */
     function parcVehicule(u, cle) {
-        const roue = function (cx, cy, r) {
-            return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#2A2440"/>
-                    <circle cx="${cx}" cy="${cy}" r="${r * 0.55}" fill="#6E6599"/>
-                    <circle cx="${cx}" cy="${cy}" r="${r * 0.22}" fill="#C3AEFF"/>`;
-        };
+        /* Mise à l'échelle : le bas des roues (natif y=382) touche le sol du
+           parcours (local y=172), la largeur du camion (natif 36..476) occupe
+           14..286 dans le repère 300×210 — même marge que la cage. */
+        const s = 272 / 440;
+        const imgX = (14 - 36 * s).toFixed(1);
+        const imgY = (172 - 382 * s).toFixed(1);
+        const imgT = (512 * s).toFixed(1);
+        const chemin = 'Images/Vehicules/Camion.PNG';
         return `<g transform="${PARC_POSE}">
-            <ellipse cx="146" cy="178" rx="120" ry="7" fill="#0d0a22" opacity="0.5"/>
-            <rect x="40" y="118" width="140" height="12" rx="4" fill="#4E5A7C"/>
-            <clipPath id="paRem${u}"><rect x="20" y="20" width="180" height="102"/></clipPath>
-            <g clip-path="url(#paRem${u})">${parcAnimal('ravi', 0.30, 108, 154, cle)}</g>
-            <rect x="44" y="98" width="132" height="24" rx="5" fill="#6E6599"/>
-            <rect x="44" y="98" width="132" height="7" rx="3.5" fill="#8E85BF"/>
-            <path d="M60 104 L60 120 M96 104 L96 120 M132 104 L132 120 M164 104 L164 120"
-                  stroke="#4F4877" stroke-width="3" opacity="0.6"/>
-            <path d="M176 112 L200 106" stroke="#8A93B5" stroke-width="5" stroke-linecap="round"/>
-            <path d="M196 118 L196 82 C196 74 202 68 210 68 L240 68 L262 94 L272 96 C278 98 282 104 282 110 L282 118 Z" fill="#3F6B62"/>
-            <path d="M212 74 L236 74 L254 92 L212 92 Z" fill="#9FD8E8" opacity="0.85"/>
-            <rect x="196" y="60" width="86" height="8" rx="4" fill="#2E5049"/>
-            <path d="M204 60 L204 54 M274 60 L274 54" stroke="#2E5049" stroke-width="5" stroke-linecap="round"/>
-            <rect x="196" y="114" width="86" height="8" rx="4" fill="#2E5049"/>
-            <circle cx="278" cy="102" r="5" fill="#FFE08A"/>
-            <circle cx="278" cy="102" r="13" fill="#FFE08A" opacity="0.2" filter="url(#paFlou${u})"/>
-            ${roue(78, 144, 20)}${roue(160, 144, 20)}${roue(216, 144, 22)}${roue(268, 144, 22)}
+            <ellipse cx="146" cy="176" rx="128" ry="7" fill="#0d0a22" opacity="0.5"/>
+            ${parcAnimal('ravi', 0.32, 83, 121, cle)}
+            <image href="${RACINE}${chemin}" xlink:href="${RACINE}${chemin}"
+                   x="${imgX}" y="${imgY}" width="${imgT}" height="${imgT}"/>
         </g>`;
     }
 
@@ -2107,8 +2139,12 @@
              <circle cx="${l.x}" cy="${l.y}" r="${l.r * 1.9}" fill="#FFE9B8" opacity="0.16" filter="url(#paFlou${u})"/>`;
 
         /* La cage abandonnée : sa porte est DEHORS, arrachée et posée de
-           travers. Une cage simplement vide se lit comme une cage qui attend. */
-        const cageVide = `<g opacity="0.4">
+           travers. Une cage simplement vide se lit comme une cage qui attend.
+           ⚠ SEULEMENT tant que l'étape n'est PAS franchie : une fois `libre`,
+           l'animal est chez lui — la cage n'a plus rien à faire dans le
+           paysage (demande utilisateur, 29/08/2026, sur le fond photo de
+           Babi où une cage plantée dans la savane ne se justifiait plus). */
+        const cageVide = libre ? '' : `<g opacity="0.4">
             <rect x="272" y="112" width="46" height="34" fill="#141B2E"/>
             <path d="M278 112 L278 146 M288 112 L288 146 M298 112 L298 146 M308 112 L308 146"
                   stroke="#6E7796" stroke-width="2.4"/>
@@ -2128,19 +2164,31 @@
         };
         const envol = libre ? oiseau(214, 58, 1.3) + oiseau(244, 44, 1) + oiseau(196, 40, 0.85) : '';
 
-        return `
+        /* ⚡ Fond photo provisoire (`d.photo`, demande utilisateur 28/08/2026) :
+           remplace tout le ciel-SVG (dégradé, lune, étoiles génériques et
+           `d.fond()`) par une seule image — même paysage que les étapes 1 et
+           2, posé sur Babi et Bulle en attendant un décor dédié par espèce.
+           Un décor sans `photo` (Titi...) garde le rendu SVG existant. */
+        const cielDefs = d.photo ? '' : `
             <linearGradient id="paCiel${u}" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0" stop-color="${d.ciel[0]}"/><stop offset="1" stop-color="${d.ciel[1]}"/>
-            </linearGradient>
+            </linearGradient>`;
+        const fondVisuel = d.photo
+            ? `<image href="${RACINE}${d.photo}" xlink:href="${RACINE}${d.photo}"
+                       x="0" y="0" width="${CL_L}" height="${CL_H}" preserveAspectRatio="xMidYMid slice"/>`
+            : `<rect width="${CL_L}" height="${CL_H}" fill="url(#paCiel${u})"/>
+               ${d.luneDevant ? '' : lune}
+               <g fill="#FFF0DC" opacity="0.6">
+                   <circle cx="40" cy="26" r="1.4"/><circle cx="96" cy="46" r="1.1"/>
+                   <circle cx="160" cy="22" r="1.3"/><circle cx="238" cy="52" r="1.1"/>
+               </g>
+               ${d.fond()}
+               ${d.luneDevant ? lune : ''}`;
+
+        return `
+            ${cielDefs}
             <!--PA_FOND-->
-            <rect width="${CL_L}" height="${CL_H}" fill="url(#paCiel${u})"/>
-            ${d.luneDevant ? '' : lune}
-            <g fill="#FFF0DC" opacity="0.6">
-                <circle cx="40" cy="26" r="1.4"/><circle cx="96" cy="46" r="1.1"/>
-                <circle cx="160" cy="22" r="1.3"/><circle cx="238" cy="52" r="1.1"/>
-            </g>
-            ${d.fond()}
-            ${d.luneDevant ? lune : ''}
+            ${fondVisuel}
             ${cageVide}
             ${parcAnimal('ravi', 0.30, 132, 166, cle)}
             ${envol}
@@ -2446,7 +2494,7 @@
                             Normal (changé le 27/08/2026) : un portrait intact au-dessus
                             d'une barre de vie à 2 % se lisait comme un bug. Passer
                             explicitement 'sain' pour forcer l'animal indemne. */
-                         dessin: function (e, physique) { return COMPAGNONS[courant].dessin(e || etatCourant, physique || physiqueCourant()); },
+                         dessin: function (e, physique, statique) { return COMPAGNONS[courant].dessin(e || etatCourant, physique || physiqueCourant(), statique); },
                          clairiere: clairiere, nom: function () { return COMPAGNONS[courant].nom; },
                          parcours: parcours, parcoursEtape: parcoursEtape, vignetteCage: vignetteCage,
                          fiche: fiche, texteSauve: texteSauve,

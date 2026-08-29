@@ -51,6 +51,13 @@
     let vies = {};              // { cle: vie }, l'état vrai, en mémoire
     let dernierEcrit = 0;
 
+    /* Un seul abonné, volontairement (pas un tableau de callbacks) : à ce jour
+       seule la mission « ne jamais descendre sous X% » (js/12) en a besoin, et
+       une liste n'apporterait qu'une complexité sans deuxième appelant pour la
+       justifier. Le second qui se présentera pourra la faire naître. */
+    let onChangementCb = null;
+    function onChangement(cb) { onChangementCb = (typeof cb === 'function') ? cb : null; }
+
     function lire() {
         try {
             const brut = localStorage.getItem(CLE_STOCKAGE);
@@ -187,6 +194,7 @@
             el.setAttribute('aria-label', 'Vie du compagnon : ' + arrondi + ' %');
         });
         signalerPhysique(v);
+        if (onChangementCb) onChangementCb(v);
     }
 
     /* ══════════════════════════════════════════════════════════════════════
@@ -306,10 +314,11 @@
        premier `JSON.parse` qui échoue. Perdre une vie en cours, c'est repartir
        à 100 % ; perdre le registre, c'est ressusciter tout le monde.
 
-       ⚠ AUCUN CHEMIN DE RÉSURRECTION N'EST EXPOSÉ, volontairement. Rendre la vie
-       à un animal se fait en effaçant la clé à la main dans le stockage — un
-       geste de débogage, pas une fonction que l'interface pourrait appeler par
-       accident.
+       ⚠ AUCUN CHEMIN DE RÉSURRECTION N'EST EXPOSÉ AU JEU, volontairement : rien
+       dans l'interface du conducteur ne peut annuler une mort, et il ne faut pas
+       lui en donner le moyen. La seule porte est `ressusciterTout()`, tout en bas
+       de ce fichier — réservée au bouton de DÉBOGAGE « Remettre la troupe en
+       cage », et qui part avec lui.
        ══════════════════════════════════════════════════════════════════════ */
     const CLE_MORTS = 'gps_compagnons_morts';
 
@@ -332,14 +341,77 @@
     function declarerMort(cle) {
         const k = cle || cleCourante();
         if (morts[k]) return false;
+        /* ⚠ UN ANIMAL SAUVÉ NE MEURT PLUS  (29/08/2026, avec la reprise en
+           compagnon depuis js/25). Depuis qu'on peut reprendre un animal déjà
+           libéré, la vie continue de descendre sur lui comme sur les autres — et
+           sans cette garde, une mauvaise conduite le tuait. Il se serait alors
+           retrouvé dans DEUX registres qui se contredisent : « SAUVÉ » sur sa
+           page, « Mort » dans la fenêtre de choix. Or « sauvé » est un état
+           définitif : c'est la promesse que fait la page qui les affiche, et
+           toute la récompense du parcours.
+           La garde est ICI et pas chez l'appelant, pour la même raison que celle
+           de `choisir()` dans js/22 : c'est l'unique porte par laquelle un animal
+           entre au registre des morts. js/12 est chargé avant, mais on garde le
+           `typeof` — un module absent ne doit pas faire mourir tout le monde. */
+        if (typeof window.compagnonEstSauve === 'function' && window.compagnonEstSauve(k)) return false;
         morts[k] = true;
         try { localStorage.setItem(CLE_MORTS, JSON.stringify(morts)); } catch (e) { /* non bloquant */ }
         return true;
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       RESSUSCITER TOUTE LA TROUPE — DÉBOGAGE UNIQUEMENT      (27/08/2026)
+       ----------------------------------------------------------------------
+       Vide le registre des morts ET les vies, puis remet l'affichage d'aplomb.
+
+       ⚠ C'EST L'EXCEPTION À LA RÈGLE ÉCRITE PLUS HAUT (« aucun chemin de
+       résurrection n'est exposé »). Elle reste vraie pour le JEU : rien dans
+       l'interface du conducteur n'appelle ceci. Le seul appelant est le bouton
+       « 🔒 DEBUG — Remettre la troupe en cage » (js/12), qui existe déjà pour
+       défaire les essais — et un animal mort pendant un essai était jusqu'ici
+       perdu pour de bon, ce qui obligeait à effacer une clé à la main dans le
+       stockage du navigateur. À retirer avec les autres boutons de débogage.
+
+       ⚠ LES VIES SONT REMISES À NEUF EN MÊME TEMPS, et ce n'est pas un excès.
+       Ressusciter un animal en le laissant à 0 % le ferait mourir de nouveau à
+       l'arrivée du trajet suivant : on aurait défait le registre sans défaire
+       la situation. Les deux vont ensemble ou pas du tout — même raisonnement
+       que le parcours et les objectifs dans `_debugRemettreEnCage()`.
+
+       ⚠ ON EFFACE LA CLÉ, on ne la réécrit pas à 100 %. `majVie()` borne déjà
+       une valeur absente à VIE_MAX (voir `valeur()`) : un stockage vide EST un
+       stockage plein, et c'est la seule façon d'être sûr qu'aucun reliquat de
+       forme ancienne ne survive au nettoyage.
+       ══════════════════════════════════════════════════════════════════════ */
+    function ressusciterTout() {
+        morts = {};
+        vies  = {};
+        try { localStorage.removeItem(CLE_MORTS); }     catch (e) { /* non bloquant */ }
+        try { localStorage.removeItem(CLE_STOCKAGE); }  catch (e) { /* non bloquant */ }
+        dernierEcrit = Date.now();
+
+        /* La marque est remise à zéro AVANT le rendu : sans ça, un compagnon qui
+           était déjà 'mort' garderait la même marque après résurrection — la jauge
+           se repeindrait, mais ni le marqueur GPS ni les portraits ne changeraient
+           d'image, et l'animal resterait mort à l'écran tout en étant vivant. */
+        dernierePhysique = null;
+        rendre();
+
+        /* Rappel explicite du marqueur et des portraits : `rendre()` s'arrête net
+           quand aucune jauge n'est dans la page (c'est le cas hors navigation sur
+           certains écrans), et la résurrection doit se voir quand même. */
+        if (typeof window.rafraichirMarqueurCompagnon === 'function') {
+            try { window.rafraichirMarqueurCompagnon(); } catch (e) { /* pas de carte */ }
+        }
+        if (window.Compagnon && typeof Compagnon.rafraichirPortraits === 'function') {
+            try { Compagnon.rafraichirPortraits(); } catch (e) { /* pas de portrait */ }
+        }
+    }
+
     window.VieCompagnon = {
         monter: monter, rendre: rendre, avancer: avancer, choc: choc,
         valeur: valeur, poser: poser, enregistrer: enregistrer,
-        estMort: estMort, declarerMort: declarerMort
+        estMort: estMort, declarerMort: declarerMort,
+        ressusciterTout: ressusciterTout, onChangement: onChangement
     };
 })();
