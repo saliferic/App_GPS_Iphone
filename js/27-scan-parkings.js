@@ -30,6 +30,10 @@
         let _pkInfoToken = 0;
         // Parking dont la fiche détail est ouverte — voir _pkInfoGoClicked().
         let _pkInfoCurrent = null;
+        // Caméra d'avant clic, restaurée à la fermeture — décalque de
+        // _gasInfoPrevCamera (js/11) : sans elle, désélectionner un parking laisse
+        // la carte zoomée dessus au lieu de revenir à la vue d'ensemble du scan.
+        let _pkInfoPrevCamera = null;
         /* Filtre tarif : 'gratuit', 'payant', ou null pour « tous ». Volontairement
            NON persisté en localStorage, à la différence du rayon : un filtre qui
            survit à la fermeture ferait rouvrir la feuille sur une liste amputée sans
@@ -255,7 +259,11 @@
                la même contre-vérité sans retoucher le réseau. On laisse remonter :
                le `catch` de runParkingScan affiche « Recherche impossible », journalise
                la cause, et n'écrit RIEN dans le cache — le scan suivant retente. */
-            const data = await _fetchOverpassHedged(query);
+            /* `exigerResultat` : un miroir qui répond « 0 parking » ne clôt plus la
+               course à lui seul (voir _fetchOverpassHedged, js/19). C'est exactement la
+               panne du 01/09/2026 : une instance à couverture suisse rendait 0 en 0,3 s
+               et gagnait contre le miroir qui, lui, avait les 121 parkings. */
+            const data = await _fetchOverpassHedged(query, { exigerResultat: true });
             return data?.elements || [];
         }
 
@@ -533,7 +541,7 @@
                 card.className = 'gas-station-card';
                 card.id = 'parking-scan-card-' + i;
                 card.innerHTML = _pkCardHtml(s);
-                card.addEventListener('click', () => { focusParkingScanStation(i); openParkingInfo(_pkShown[i]); });
+                card.addEventListener('click', () => _openParkingScanDetail(i));
                 list.appendChild(card);
             });
 
@@ -578,7 +586,7 @@
                 // Même repère que les pastilles stations (js/11) : évite que la
                 // hotbox générale s'ouvre en plus au même appui long sur la carte.
                 el.dataset.gasStation = '1';
-                el.addEventListener('click', (ev) => { ev.stopPropagation(); focusParkingScanStation(i); openParkingInfo(_pkShown[i]); });
+                el.addEventListener('click', (ev) => { ev.stopPropagation(); _openParkingScanDetail(i); });
                 const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
                     .setLngLat([s.lng, s.lat]).addTo(map);
                 _pkMarkers.push(marker);
@@ -661,6 +669,17 @@
             });
         }
 
+        // Ouvre la fiche ET mémorise la caméra AVANT le recentrage de
+        // focusParkingScanStation() — décalque de _openGasScanDetail() (js/11) :
+        // c'est cette vue-là que la fermeture restaure.
+        function _openParkingScanDetail(i) {
+            const s = _pkShown[i];
+            if (!s) return;
+            _pkInfoPrevCamera = { center: map.getCenter(), zoom: map.getZoom() };
+            focusParkingScanStation(i);
+            openParkingInfo(s);
+        }
+
         // ── FICHE DÉTAIL D'UN PARKING ────────────────────────────────────────
         // La construction ligne par ligne (_scanInfoRow) est PARTAGÉE avec la
         // fiche station/borne — voir js/11, chargé avant ce fichier.
@@ -730,8 +749,15 @@
             overlay.classList.add('open');
         }
 
-        function closeParkingInfo() {
+        function closeParkingInfo(opts = {}) {
             document.getElementById('parking-info-overlay')?.classList.remove('open');
+            // Restaure la vue d'avant clic — sauf si l'on ferme pour PARTIR vers le
+            // parking (_pkInfoGoClicked) : y revenir une frame avant de relancer un
+            // trajet ferait clignoter la caméra pour rien.
+            if (!opts.skipCameraRestore && _pkInfoPrevCamera) {
+                map.flyTo({ center: _pkInfoPrevCamera.center, zoom: _pkInfoPrevCamera.zoom, duration: 500 });
+            }
+            _pkInfoPrevCamera = null;
             _pkInfoCurrent = null;
         }
 
@@ -773,7 +799,7 @@
 
         function _pkInfoGoClicked() {
             const s = _pkInfoCurrent;
-            closeParkingInfo();
+            closeParkingInfo({ skipCameraRestore: true });
             if (s) _pkGoToParking(s);
         }
 
@@ -801,6 +827,8 @@
             if (_pkBusy) return;
             if (_gasScanBlocked()) return;   // aperçu de trajet : pas la priorité
             if (document.getElementById('parking-scan-sheet')?.classList.contains('open')) return;
+            // Même garde que la veille stations : un seul appel Overpass à la fois.
+            if (typeof overpassOccupe === 'function' && overpassOccupe()) return;
 
             const anchor = normalizeLngLat(lastRealCoords);
             if (!anchor || !isLngLat(anchor)) return;

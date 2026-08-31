@@ -194,6 +194,19 @@
         }
 
         function toggleMapPick(mode) {
+            /* ⚠ SORTIR D'ABORD DU MODE SAISIE — sinon le ping lancé DEPUIS le champ
+               « Où allez-vous ? » ne dégage que la moitié de la carte (31/08/2026).
+               Deux choses s'y opposaient, dans cet ordre :
+               1. `.search-focus` pose `max-height: none !important`, qui l'emporte sur le
+                  max-height inline du setPanelSnap('hidden') ci-dessous — même piège que
+                  le chevron mort corrigé le 16/08 (voir togglePanel dans js/08) ;
+               2. le blur du champ programme une sortie différée de 250 ms qui rejoue
+                  setPanelSnap('full') — elle serait passée APRÈS nous et aurait de toute
+                  façon rouvert le panneau sur la carte.
+               D'où la différence avec un appui sur la punaise sans passer par le champ,
+               où rien de tout cela n'est en place. */
+            tenterSansBruit(() => document.getElementById('end-addr')?.blur(), 'toggleMapPick/blur');
+            if (typeof exitDestinationSearchMode === 'function') exitDestinationSearchMode();
             document.getElementById('btn-pick-end')?.classList.remove('active');
             document.getElementById('map').classList.remove('crosshair-cursor');
             if (pickingMode === mode) {
@@ -910,6 +923,11 @@
 
         function clearDestination() {
             const destInput = document.getElementById('end-addr');
+            /* Champ DÉJÀ vide : il n'y a plus rien à effacer, la croix n'avait donc
+               aucun effet visible — elle remettait juste le focus, clavier ouvert et
+               panneau en mode saisie (31/08/2026). Un deuxième appui vaut alors
+               « j'abandonne ma recherche » : on referme le clavier et le mode saisie. */
+            const dejaVide = !destInput.value.trim();
             destInput.value = "";
             // Le champ est partagé avec la dictée, qui le colore en style inline : sans
             // cette remise à zéro, ce que l'utilisateur tape après avoir vidé le champ
@@ -923,7 +941,12 @@
                zéro silencieuse se fait à l'ouverture de la liste (voir plus bas), sinon
                resélectionner le même contact n'émettrait aucun événement `change`. */
             toggleCreateContactForm(false);
-            document.getElementById('end-addr').focus();
+            if (dejaVide) {
+                destInput.blur();
+                if (typeof exitDestinationSearchMode === 'function') exitDestinationSearchMode();
+            } else {
+                destInput.focus();
+            }
         }
 
         /* Quand la destination est vide alors qu'un contact reste affiché dans la liste,
@@ -1127,8 +1150,16 @@
                    panneau mémorisé avant la saisie, et `toggleCreateContactForm(false)` peut
                    imposer 'full' — les laisser décider après nous rendrait la remise à zéro
                    inopérante une fois sur deux. */
-                setPanelSnap('full');
-                panel.scrollTop = 0;
+                /* Une remise à zéro du seul scrollTop ne tenait pas sur Android : le
+                   panneau réapparaissait défilé, sans l'accroche « Où allons-nous ? ».
+                   reopenItineraryFresh() rejoue la remise à zéro après l'animation de
+                   hauteur et redonne la parole au compagnon — voir son commentaire. */
+                if (typeof reopenItineraryFresh === 'function') {
+                    reopenItineraryFresh();
+                } else {
+                    setPanelSnap('full');
+                    panel.scrollTop = 0;
+                }
             }
             // Nettoyer les marqueurs et la section stations
             clearGasStationMarkers();
@@ -1394,6 +1425,10 @@
 
             backdrop.classList.add('open');
             overlay.style.display = 'flex';
+            /* Marque lue par le CSS : pendant un trajet, l'onglet Trajet est peint comme
+               actif en permanence (body.nav-active #nav-tab-trajet). Sans ce drapeau,
+               ouvrir Objectifs ou Profil allumait DEUX onglets à la fois. */
+            document.body.classList.add('nav-overlay-open');
             requestAnimationFrame(() => overlay.classList.add('open'));
         }
 
@@ -1409,6 +1444,7 @@
             if (!overlay) return;
             overlay.classList.remove('open');
             backdrop.classList.remove('open');
+            document.body.classList.remove('nav-overlay-open');
             setTimeout(() => {
                 overlay.style.display = 'none';
                 // Vider le clone sans toucher au DOM source
@@ -1635,6 +1671,9 @@
         const DOM = {};
         document.addEventListener('DOMContentLoaded', function() {
             DOM.navSpeedValue        = document.getElementById('nav-speed-value');
+            /* Lu à chaque point GPS pour savoir s'il faut rafraîchir le widget
+               « Info trajet » : replié, ses lignes ne sont plus réécrites. */
+            DOM.infoWidget           = document.getElementById('info-widget');
             DOM.navSpeedDisplay      = document.getElementById('nav-speed-display');
             DOM.navEtaBox            = document.getElementById('nav-eta-box');
             DOM.navEta               = document.getElementById('nav-eta');

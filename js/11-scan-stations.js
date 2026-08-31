@@ -53,6 +53,36 @@
         const SCAN_CACHE_TTL_MS  = 120000;  // 2 min : prix et statuts bougent
         const SCAN_CACHE_MOVE_KM = 0.3;
         const SCAN_PREFETCH_MS   = 60000;
+
+        /* ── SUIVI DE LA LISTE FEUILLE OUVERTE (30/08/2026) ──────────────────
+           `runGasScan()` n'était appelé qu'à l'ouverture de la feuille et au
+           relâchement du curseur de rayon ; la veille silencieuse, elle, s'arrête dès
+           que la feuille est ouverte. Résultat : LA LISTE ÉTAIT FIGÉE SUR L'INSTANT DE
+           L'OUVERTURE. Feuille laissée à l'écran sur un Paris→Lyon, elle affichait
+           encore les stations du départ, avec des distances devenues fausses de
+           plusieurs centaines de kilomètres — exactement le scénario que le scan
+           « autour de moi » est censé couvrir.
+
+           ⚠ LE SEUIL EST UNE CONJONCTION, ET C'EST TOUT L'ENJEU. Le réflexe est de
+           rejouer le scan sur les 300 m de SCAN_CACHE_MOVE_KM, qui invalident déjà le
+           cache. Chiffré avant d'écrire la moindre ligne : 300 m à 105 km/h se
+           franchissent en **10 secondes**, soit 360 relevés à l'heure et ~1600 sur un
+           Paris→Lyon. Le seuil de 300 m est calibré pour la ville (36 s à 30 km/h) et
+           devient absurde sur autoroute. Il faut donc les DEUX conditions :
+
+             • un plancher de temps — il plafonne la charge à 60 relevés/heure quelle
+               que soit la vitesse, y compris à 130 km/h ;
+             • une distance proportionnelle au rayon — 1 km sur un scan à 5 km. Un
+               seuil fixe rescanne pour un déplacement invisible à l'échelle du cercle
+               affiché, alors que ce qui compte est la part du disque qui a changé.
+
+           Le plancher est plus contraignant que la distance dès ~60 km/h ; en dessous
+           c'est la distance qui commande. Les deux règnent donc sur le domaine où ils
+           ont un sens, et aucun ne peut emballer l'autre. */
+        const SCAN_LIVE_TICK_MS  = 15000;   // cadence de vérification, pas de relevé
+        const SCAN_LIVE_MIN_MS   = 60000;   // plancher entre deux relevés, feuille ouverte
+        const SCAN_LIVE_MOVE_FRAC = 0.20;   // part du rayon à parcourir pour rejouer
+        let _scanLastRunTs = 0;             // horodatage du dernier relevé effectif
         let _scanCache = { anchor: null, tag: null, ts: 0, rawGas: [], rawEv: [] };
 
         /* Le scan par rayon est INDISPONIBLE pendant l'aperçu de trajet.
@@ -108,6 +138,7 @@
             // Garde de dernier recours : la hotbox retire déjà l'entrée dans ce cas,
             // mais openGasScan() doit rester sûr quel que soit l'appelant.
             if (_gasScanBlocked()) return;
+            _gasVeilleArmee = true;   // voir _scanPrefetchTick : la veille suit l'usage réel
             // Exclusion mutuelle avec le scan parkings (js/27) : voir openParkingScan().
             closeParkingScan({ keepCamera: true });
             /* Demander un scan alors que les stations sont masquées est contradictoire : la
@@ -564,7 +595,25 @@
             return out;
         }
 
-        async function runGasScan() {
+        /* `opts.live` = relevé de suivi, déclenché par _scanLiveTick() pendant que la
+           feuille est SOUS LES YEUX du conducteur. Un rafraîchissement n'a pas le droit
+           de se comporter comme une ouverture : trois gestes de `runGasScan()` sont
+           acceptables quand on vient d'ouvrir la feuille et deviennent hostiles quand on
+           est en train de la lire.
+             1. Le vidage préalable de la liste et des marqueurs — il fait clignoter
+                l'écran pendant les secondes de réseau. En mode live on ne touche à rien
+                avant d'avoir les données : _renderGasScan() remplace le contenu d'un
+                coup, et _renderGasScanMarkers() reprend les marqueurs de lui-même.
+             2. `_fitMapToGasScan()` — il RECADRE LA CAMÉRA. Le conducteur a pu déplacer
+                la carte pour regarder une station ; la lui reprendre toutes les minutes
+                serait insupportable. Le cadrage reste au geste d'ouverture, qui est une
+                intention explicite.
+             3. Le statut « 🔄 Recherche… » — il efface un décompte lisible pour le
+                remplacer par une attente que personne n'a demandée.
+           La position de défilement est également conservée : sans cela, la liste
+           remontait en tête et faisait perdre la carte qu'on était en train de lire. */
+        async function runGasScan(opts = {}) {
+            const live   = !!opts.live;
             const status = document.getElementById('gas-scan-status');
             const list   = document.getElementById('gas-scan-list');
             if (!status || !list) return;
@@ -591,8 +640,10 @@
                 // sur la position d'il y a deux minutes.
                 _scanAnchor = _gasScanAnchorPoint();
                 _gasScanZoneUpdate(_scanAnchor, _scanRadiusKm);
-                list.innerHTML = '';
-                _clearGasScanMarkers();
+                // En live, l'écran garde le relevé précédent jusqu'à l'arrivée du neuf
+                // (voir le pavé au-dessus) ; le défilement est repris après le rendu.
+                const scrollAvant = live ? list.scrollTop : 0;
+                if (!live) { list.innerHTML = ''; _clearGasScanMarkers(); }
 
                 const mode = _scanVehicleMode();
                 const tag  = `${_scanRadiusKm}|${mode}`;
@@ -603,7 +654,7 @@
                     rawGas = _scanCache.rawGas;
                     rawEv  = _scanCache.rawEv;
                 } else {
-                    status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
+                    if (!live) status.textContent = `🔄 Recherche dans un rayon de ${_scanRadiusKm} km…`;
                     // Les deux collectes partent en parallèle en mode hybride : elles
                     // n'ont aucune source commune, les sérialiser doublerait l'attente.
                     [rawGas, rawEv] = await Promise.all([
@@ -631,13 +682,26 @@
 
                 _renderGasScanFilters();
                 _renderGasScan();
-                _fitMapToGasScan();
+                if (live) list.scrollTop = scrollAvant;
+                else _fitMapToGasScan();
                 _fetchGasScanDurations();   // en tâche de fond : les cartes sont déjà lisibles
             } catch (e) {
                 logAppError('runGasScan', e);
-                status.textContent = '⚠️ Recherche impossible (' + (e.message || 'réseau') + ')';
+                /* ⚠ UN RELEVÉ DE SUIVI RATÉ NE DÉTRUIT PAS CE QUI EST À L'ÉCRAN. La liste
+                   affichée reste vraie — elle date d'une minute et de quelques centaines
+                   de mètres. La remplacer par « Recherche impossible » parce qu'un miroir
+                   Overpass a bronché ferait payer au conducteur une panne réseau par la
+                   perte d'un résultat encore utilisable. Le tick suivant retentera. */
+                if (!live) status.textContent = '⚠️ Recherche impossible (' + (e.message || 'réseau') + ')';
             } finally {
                 _scanBusy = false;
+                /* ⚠ HORODATÉ DANS LE `finally`, DONC MÊME EN CAS D'ÉCHEC. Posé après le
+                   rendu, un relevé raté laissait `_scanLastRunTs` sur sa vieille valeur :
+                   le plancher de 60 s était déjà franchi, et _scanLiveTick() relançait au
+                   tick suivant, soit une rafale toutes les 15 s tant que le réseau était
+                   coupé — précisément la charge qui fâche les miroirs Overpass, appliquée
+                   au pire moment. Le plancher borne les TENTATIVES, pas les succès. */
+                _scanLastRunTs = Date.now();
             }
         }
 
@@ -963,12 +1027,61 @@
            feuille fermée, pour que la prochaine ouverture de runGasScan() trouve
            un résultat déjà prêt au lieu d'attendre le réseau.
            Ne s'exécute que si un vrai fix GPS existe, sinon l'ancre retomberait
-           sur le centre de carte et préchargerait un endroit arbitraire. */
+           sur le centre de carte et préchargerait un endroit arbitraire.
+
+           ⚠ ARMÉE PAR LE PREMIER USAGE, PAS PAR LE CHARGEMENT DE LA PAGE (30/08/2026) —
+           alignement sur _pkPrefetchTick (js/27), qui avait déjà pris ce virage pour la
+           même raison. Chiffré sur un Paris→Lyon : le cache est invalidé dès 300 m, soit
+           10 s à 105 km/h, donc PÉRIMÉ À CHAQUE TICK en roulant. La veille tirait ainsi
+           270 requêtes sur les 4 h 30 du trajet — 540 en hybride, où carburant et bornes
+           partent ensemble — pour un panneau que le conducteur n'ouvrait peut-être pas
+           une seule fois. Côté bornes, ces appels vont sur Overpass, et `_fetchOverpassHedged`
+           en double une partie sur un second miroir : les serveurs bénévoles encaissaient
+           plusieurs centaines de requêtes par trajet pour rien.
+           Ce que l'armement NE change PAS : dès la feuille ouverte une fois, la veille
+           reprend exactement comme avant. Le drapeau ne supprime que le trafic d'avant le
+           premier usage — c'est-à-dire tout, pour qui ne s'en sert jamais. */
+        let _gasVeilleArmee = false;
+        /* ── SUIVI FEUILLE OUVERTE ──────────────────────────────────────────
+           Le pendant de _scanPrefetchTick() : celui-ci ne travaille QUE feuille
+           ouverte, l'autre QUE feuille fermée. Les deux ne peuvent donc jamais tirer
+           ensemble. Le tick est court (15 s) mais ne relève rien de lui-même : il ne
+           fait que vérifier les deux seuils, dont le plancher de temps commande la
+           charge réelle. Voir SCAN_LIVE_* pour le chiffrage. */
+        function _scanLiveTick() {
+            if (!navigator.onLine || !lastRealCoords) return;
+            if (_scanBusy) return;
+            const sheet = document.getElementById('gas-scan-sheet');
+            if (!sheet?.classList.contains('open')) return;
+            /* La fiche détail est une lecture posée sur UNE station : rejouer le relevé
+               dessous réordonne `_scanShown`, et l'index que la fiche a mémorisé désigne
+               alors une autre station. On attend qu'elle soit refermée. */
+            if (document.getElementById('gas-info-overlay')?.classList.contains('open')) return;
+
+            const now = Date.now();
+            if (now - _scanLastRunTs < SCAN_LIVE_MIN_MS) return;
+
+            const anchor = normalizeLngLat(lastRealCoords);
+            if (!anchor || !isLngLat(anchor) || !_scanAnchor) return;
+            /* Le seuil est adossé au rayon, mais jamais plus laxiste que l'invalidation
+               du cache : sous SCAN_CACHE_MOVE_KM, `runGasScan()` ressortirait le même
+               relevé depuis le cache — un tour de rendu pour rien. */
+            const seuilKm = Math.max(SCAN_CACHE_MOVE_KM, _scanRadiusKm * SCAN_LIVE_MOVE_FRAC);
+            if (_ecartMetres(anchor, _scanAnchor) < seuilKm * 1000) return;
+
+            runGasScan({ live: true });
+        }
+        setInterval(_scanLiveTick, SCAN_LIVE_TICK_MS);
+
         function _scanPrefetchTick() {
+            if (!_gasVeilleArmee) return;
             if (!navigator.onLine || !lastRealCoords) return;
             if (_scanBusy) return;
             if (_gasScanBlocked()) return;   // prefetchGasStationsPhase1 fait déjà le travail
             if (document.getElementById('gas-scan-sheet')?.classList.contains('open')) return;
+            // Un appel Overpass est déjà en vol (l'autre veille, ou un scan au premier
+            // plan) : le serveur unique rendrait 504 aux deux. Voir overpassOccupe, js/19.
+            if (typeof overpassOccupe === 'function' && overpassOccupe()) return;
 
             const anchor = normalizeLngLat(lastRealCoords);
             if (!anchor || !isLngLat(anchor)) return;

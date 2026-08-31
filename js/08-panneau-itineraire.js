@@ -502,7 +502,22 @@
                mode avant d'appliquer l'état, plutôt que d'affaiblir le `!important` — dont
                le rôle au clavier reste nécessaire. `exitDestinationSearchMode()` restaure
                l'état mémorisé, que les lignes suivantes remplacent aussitôt. */
+            /* ⚠ EN MODE SAISIE, LE CHEVRON REMONTE — IL NE REPLIE PAS (31/08/2026).
+               Il pointe vers le haut (▲) pendant la saisie, et pourtant l'appui faisait
+               DESCENDRE le panneau à 200 px : sortir du mode saisie remet `panelSnapState`
+               à 'full', et la bascule d'en bas lit justement 'full' pour replier. Le
+               chevron promettait donc l'inverse de ce qu'il faisait.
+               Sortir de la saisie, c'est refermer le clavier et retrouver le panneau
+               entier — pas le réduire de moitié. On s'arrête donc ici, sans jouer la
+               bascule ouvert/replié qui vaut pour un panneau au repos. */
+            const etaitEnSaisie = _searchFocusActive;
             if (_searchFocusActive) exitDestinationSearchMode();
+            if (etaitEnSaisie) {
+                tenterSansBruit(() => document.getElementById('end-addr')?.blur(), 'togglePanel/blurSaisie');
+                setPanelSnap('full');
+                _resetPanelScroll();
+                return;
+            }
             const _panel = document.getElementById('ui-panel');
             if (_panel && _panel.classList.contains('profile-focus')) {
                 _panel.classList.remove('profile-focus');
@@ -514,7 +529,17 @@
                 setPanelSnap(panelSnapState === 'immersive' ? 'hidden' : 'immersive');
                 return;
             }
-            if (panelSnapState === 'full') setPanelSnap('half');
+            /* ⚠ LE REPLI VA JUSQU'EN BAS — plus d'arrêt à 200 px (31/08/2026).
+               'half' était le dernier utilisateur d'un état que le reste de l'interface
+               avait déjà abandonné : le glissement au doigt et le double-appui sur
+               l'onglet s'arrêtent tous deux sur 'hidden'. Un demi-panneau ne libère pas
+               assez de carte pour valoir un geste, et il fallait ensuite un second appui
+               pour finir de ranger le panneau.
+               ⚠ Le chevron part avec le panneau (il est DEDANS) : la réouverture se fait
+               par l'onglet Itinéraire de la barre du bas, qui reste visible et rouvre en
+               'full' (voir switchMainTab dans js/14). C'est déjà le chemin de retour du
+               glissement au doigt — aucun état n'est donc sans issue. */
+            if (panelSnapState === 'full') setPanelSnap('hidden');
             else setPanelSnap('full');
         }
 
@@ -563,7 +588,54 @@
             const targetSnap = _searchFocusPrevSnap || panelSnapState;
             _searchFocusPrevSnap = null;
             setPanelSnap(targetSnap);
+            /* ⚠ REMISE À ZÉRO DU DÉFILEMENT — bug Android du 31/08/2026, INVISIBLE AU
+               SIMULATEUR. Pendant la saisie, `.search-focus` lève le plafond de hauteur
+               et le clavier fait rétrécir la fenêtre du WebView : le navigateur fait
+               alors défiler ce qu'il peut pour garder le champ visible. Le panneau
+               retrouve bien sa hauteur en sortant, mais GARDE ce défilement — d'où
+               l'accroche « Où allons-nous ? » disparue et un panneau qui semble avoir
+               glissé d'un cran une fois l'adresse validée. Pas de clavier au simulateur,
+               donc pas de défilement, donc rien à voir : ne pas conclure de son absence
+               là-bas que le problème n'existe pas.
+               Deux passes : celle d'ici, puis une après la fermeture du clavier — la
+               fenêtre ne reprend sa taille qu'APRÈS notre sortie, et le navigateur y
+               rejoue son propre calage. */
+            _resetPanelScroll();
+            setTimeout(() => {
+                if (_searchFocusActive) return;   // l'utilisateur est revenu dans le champ
+                _resetPanelScroll();
+                setPanelSnap(panelSnapState, { immediate: true });
+            }, 400);
             setTimeout(() => { panel.style.transition = ''; }, 300);
+        }
+
+        /* ═══ ROUVRIR ITINÉRAIRE COMME AU PREMIER JOUR ═══
+           Renoncer à une confirmation de trajet (croix ou « Annuler » du modal) ramène au
+           panneau Itinéraire. On n'y revient pas là où on l'avait laissé : on le rouvre,
+           comme si l'on venait d'ouvrir l'app — accroche « Où allons-nous ? » en haut,
+           compagnon à sa place, champ vide. C'est l'écran de départ d'une NOUVELLE saisie ;
+           le retrouver défilé sur « Go home / Go work » ou sur le bouton Démarrer donne
+           l'impression d'un panneau à moitié rangé.
+
+           ⚠ LE DÉFILEMENT SE REMET À ZÉRO EN TROIS TEMPS, ce n'est pas de la superstition :
+           setPanelSnap('full') ANIME le max-height sur 300 ms. Tant que l'animation dure,
+           le panneau est plus court que son contenu, et le navigateur — Android surtout, où
+           le clavier vient en plus de se refermer — peut reposer son propre défilement
+           après notre remise à zéro. La passe finale, une fois la hauteur stabilisée, est
+           la seule qui tienne à coup sûr. Les deux premières évitent le saut visible.
+           Les fermetures des modes de saisie restent chez l'appelant : lui seul sait dans
+           quel état il rend le panneau. */
+        function reopenItineraryFresh() {
+            const panel = document.getElementById('ui-panel');
+            if (!panel) return;
+            setPanelSnap('full');
+            _resetPanelScroll();
+            requestAnimationFrame(_resetPanelScroll);
+            setTimeout(_resetPanelScroll, 340);
+            /* Le compagnon redit bonjour : c'est ce qui fait lire l'écran comme une
+               ouverture et non comme un retour en arrière. Sans lui, la bulle garderait la
+               dernière phrase prononcée avant l'aperçu. */
+            tenterSansBruit(() => window.Compagnon?.monter(), 'reopenItineraryFresh/compagnon');
         }
 
         /* Appelée dès qu'une destination est confirmée depuis le champ "Où allez-vous ?".
@@ -846,7 +918,13 @@
         })();
 
         function toggleInfoWidget() {
-            document.getElementById('info-widget').classList.toggle('open');
+            const _ouvert = document.getElementById('info-widget').classList.toggle('open');
+            /* ⚠ INDISPENSABLE DEPUIS QUE LE WIDGET REPLIÉ NE SE MET PLUS À JOUR
+               (31/08/2026, voir handleRealMovement dans js/19). Ses lignes datent
+               du dernier repli : sans ce coup de pouce, on ouvrirait sur des
+               chiffres périmés jusqu'au point GPS suivant — une seconde en
+               navigation, mais l'éternité à l'arrêt, où plus aucun point n'arrive. */
+            if (_ouvert) tenterSansBruit(() => rafraichirInfoWidget(), 'infoWidget/ouverture');
         }
 
         /* ⚠ LE BADGE D'INFO N'A QU'UN SEUL RÔLE : déplier les informations du trajet.
@@ -964,16 +1042,41 @@
         // GPS et finit par dériver de plusieurs centaines de mètres sur un long trajet — décalage
         // suffisant pour lire la limite de vitesse du mauvais tronçon.
         let _lastRouteDistAlongKm = 0;
+
+        /* ═══ UNE SEULE PROJECTION PAR POINT GPS         (31/08/2026) ═══
+           `nearestPointOnLine` parcourt TOUT le tracé — plusieurs milliers de segments sur
+           un long trajet — et trois appelants demandaient la même chose, avec les mêmes
+           coordonnées, dans la même seconde : la relève de limite de vitesse, la sonde
+           maxspeed locale, et la boucle de mouvement (js/10 et js/19). On mémorise donc le
+           dernier calcul.
+           ⚠ LA CLÉ CONTIENT LE TRACÉ LUI-MÊME, pas seulement les coordonnées. Un recalcul
+           d'itinéraire remplace `fullRouteLine` : sans cette comparaison, la même position
+           rendrait la distance mesurée sur l'ANCIEN tracé, et la limite de vitesse serait
+           lue au mauvais endroit. La comparaison est une identité de référence (`===`),
+           donc gratuite.
+           Rien d'autre ne change : à clé différente, le calcul est refait à l'identique.
+           Les relevés de stations (js/11, js/17, js/18) ne passent pas par ici — ils font
+           leurs propres projections, avec leurs propres lignes. */
+        let _distAlongCache = { line: null, lng: NaN, lat: NaN, val: null };
+
         function getRouteDistanceAlongKm(lng, lat) {
             if (!fullRouteLine) return null;
+            if (_distAlongCache.line === fullRouteLine
+                && _distAlongCache.lng === lng && _distAlongCache.lat === lat) {
+                return _distAlongCache.val;
+            }
+            const _memo = (v) => {
+                _distAlongCache = { line: fullRouteLine, lng, lat, val: v };
+                return v;
+            };
             try {
                 const snapped = turf.nearestPointOnLine(fullRouteLine, turf.point([lng, lat]), { units: 'kilometers' });
                 // Si on est très loin du tracé (hors itinéraire, recalcul en cours), la projection
                 // n'a plus de sens : on ne veut pas lire une limite au hasard.
-                if (snapped.properties.dist > 0.08) return null;
+                if (snapped.properties.dist > 0.08) return _memo(null);
                 _lastRouteDistAlongKm = snapped.properties.location;
-                return _lastRouteDistAlongKm;
-            } catch (e) { return null; }
+                return _memo(_lastRouteDistAlongKm);
+            } catch (e) { return _memo(null); }
         }
 
         // Distance max (km) à laquelle on accepte d'emprunter la limite d'un segment voisin.
@@ -981,7 +1084,16 @@
         // d'un tronçon situé à 2 km de là est exactement ce qui produisait un "30" permanent.
         const MAXSPEED_NEIGHBOUR_TOLERANCE_KM = 0.25;
 
+        /* Vrai quand la dernière valeur rendue par getMapboxSpeedLimitAtDist() a été
+           EMPRUNTÉE à un segment voisin, faute d'annotation sur le tronçon foulé. Le
+           calcul de pénalité s'en sert pour ne pas punir sur une limite de voisinage
+           (voir UNCERTAIN_SPEED_SOURCES dans js/05). Un drapeau plutôt qu'un objet de
+           retour : la fonction est appelée à chaque point GPS et par plusieurs modules,
+           changer sa signature les obligeait tous à suivre. */
+        let _mapboxLimitWasBorrowed = false;
+
         function getMapboxSpeedLimitAtDist(distKm) {
+            _mapboxLimitWasBorrowed = false;
             const arr = _routeMaxspeedAnnotations;
             if (!arr.length) return null;
             if (typeof distKm !== 'number' || !isFinite(distKm) || distKm < 0) return null;
@@ -1005,6 +1117,7 @@
                     if (j < 0 || j >= arr.length) continue;
                     if (arr[j].speed === null) continue;
                     if (Math.abs(arr[j].distKm - distKm) > MAXSPEED_NEIGHBOUR_TOLERANCE_KM) continue;
+                    _mapboxLimitWasBorrowed = true;
                     return arr[j].speed;
                 }
             }

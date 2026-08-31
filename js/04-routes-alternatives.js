@@ -440,9 +440,28 @@
             return (_animalCharge[im.fichier] === true) ? im : null;
         }
 
-        function svgMarqueur(im) {
+        /* ═══ L'ANIMAL A QUITTÉ LA CARTE            (31/08/2026) ═══
+           Essai en ville : à 75 px posé sur la position du conducteur, le compagnon
+           couvrait le carrefour que l'on est justement en train d'aborder — noms de rues,
+           tracé, prochaine manœuvre. Un ornement ne peut pas manger l'information dont
+           dépend la conduite. Retour au point bleu seul sur la carte ; l'état de l'animal
+           se lit désormais dans la barre de navigation, entre ARRIVÉE et TEMPS RESTANT
+           (voir `rafraichirPortraitNav` plus bas), à côté de sa barre de vie — donc au
+           même endroit que le reste de l'enjeu, et hors du champ de la route.
+           ⚠ TOUT LE MÉCANISME EST CONSERVÉ, seul ce drapeau le débranche : repasser à
+           `true` remet l'animal sur la carte, fondu et variantes blessé/mort compris. */
+        const ANIMAL_SUR_CARTE = false;
+        function imageCarte() { return ANIMAL_SUR_CARTE ? imageMarqueur() : null; }
+
+        /* Hauteur du portrait flottant en bas à gauche pendant la navigation. Réglé sur
+           la taille du compteur de vitesse d'en face (110 px de case) : les deux coins
+           bas se répondent, aucun ne domine l'autre. La case CSS est un peu plus haute,
+           l'animal s'y pose par le bas (`align-items: flex-end`). */
+        const TAILLE_PORTRAIT_PX = 96;
+
+        function svgMarqueur(im, hauteurPx) {
             const b = im.boite;
-            const h = TAILLE_ANIMAL_PX;
+            const h = hauteurPx || TAILLE_ANIMAL_PX;
             const w = Math.round(h * (b.w / b.h));
             /* `width`/`height` en attributs et non en CSS : la propriété `aspect-ratio`
                qu'il faudrait sinon n'est pas garantie sur la WebView de l'APK, et un
@@ -459,9 +478,27 @@
         }
 
         function compagnonMarkerSvg() {
-            const im = imageMarqueur();
+            const im = imageCarte();
             return im ? svgMarqueur(im) : '';
         }
+
+        /* ═══ LE PORTRAIT DE LA BARRE DE NAVIGATION ═══
+           Même image, même état physique et même repli que le marqueur de carte : c'est
+           le même animal, il ne peut pas être blessé ici et intact là. Il n'y a QUE le
+           fondu en moins — sur 44 px, entre deux compteurs, un enchaînement d'images
+           attirerait l'œil pour rien.
+           `data-fichier` sert de garde : la fonction est appelée à chaque changement
+           d'état, réécrire le SVG à l'identique relancerait le décodage de l'image. */
+        function rafraichirPortraitNav() {
+            const el = document.getElementById('nav-compagnon-portrait');
+            if (!el) return;
+            const im = imageMarqueur();
+            if (!im) { el.innerHTML = ''; return; }
+            const actuel = el.firstElementChild?.dataset?.fichier;
+            if (actuel === im.fichier) return;
+            el.innerHTML = svgMarqueur(im, TAILLE_PORTRAIT_PX);
+        }
+        window.rafraichirPortraitNav = rafraichirPortraitNav;
 
         // Marqueur conducteur (point pulsant coloré), remplace le pattern L.divIcon répété.
         function createPulseMarkerEl(color) {
@@ -493,7 +530,12 @@
         const DUREE_FONDU_MS = 700;
 
         function rafraichirMarqueurCompagnon() {
-            const im = imageMarqueur();
+            /* Le portrait de la barre suit les mêmes signaux que le marqueur (changement
+               d'état physique, changement de compagnon, image enfin chargée) : le mettre
+               à jour ici, c'est hériter de tous les appelants d'un coup — js/22 et js/24
+               n'ont rien à connaître de plus. */
+            rafraichirPortraitNav();
+            const im = imageCarte();
             document.querySelectorAll('.pulse-marker-container').forEach(c => {
                 const presents = c.querySelectorAll('.pulse-marker-animal');
                 c.classList.toggle('has-animal', !!im);

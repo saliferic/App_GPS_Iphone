@@ -1581,15 +1581,15 @@
            L'échelle d'origine suivait la troupe de js/22 : la masse tranquille encaisse,
            le vif encaisse mal — bulle 1.60 (le plus indulgent) → nima 0.50 (le plus
            exigeant). Elle donnait au passage l'ordre de difficulté dans lequel ouvrir les
-           compagnons. Les deux compagnons d'A_VENIR y figurent DÉJÀ : leur vie doit
-           exister le jour où on les débloque, pas être ajoutée à ce moment-là. */
+           compagnons. Le compagnon encore dans A_VENIR (nima) y figure DÉJÀ : sa vie
+           doit exister le jour où on le débloque, pas être ajoutée à ce moment-là. */
         const VIE_ROBUSTESSE = {
             bulle: 1,   // hippopotame — « la masse tranquille » — d'origine : 1.60
             babi:  1,   // éléphanteau — compagnon par défaut     — d'origine : 1.30
             zola:  1,   // lion        — « le calme du fort »     — d'origine : 1.10
             kiri:  1,   // girafe      — haute et fragile         — d'origine : 0.90
             sam:   1,   // renarde     — « la maligne »           — d'origine : 0.85
-            pilou: 1,   // chien       — à venir                  — d'origine : 0.80
+            pilou: 1,   // chien                                   — d'origine : 0.80
             titi:  1,   // singe       — « le curieux »           — d'origine : 0.70
             raya:  1,   // tigre       — « le geste juste »       — d'origine : 0.55
             nima:  1    // chatte      — à venir                  — d'origine : 0.50

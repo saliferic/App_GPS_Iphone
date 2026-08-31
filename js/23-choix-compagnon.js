@@ -73,9 +73,8 @@
                Le sortir de la grille dit la même chose sans un mot de plus. */
             if (c.debloque && sauve(c.cle)) return '';
             /* Trois états de disponibilité, à ne pas confondre :
-                 - `c.debloque` : l'animal EXISTE (il est dessiné). Nima et Pilou
-                   ne le sont pas encore — c'est « Bientôt », et ça ne dépend pas
-                   du joueur.
+                 - `c.debloque` : l'animal EXISTE (il est dessiné). Nima ne l'est
+                   pas encore — c'est « Bientôt », et ça ne dépend pas du joueur.
                  - `ouvert`     : il est dessiné ET son tour est venu.
                Le troisième état, « sauvé », ne se présente plus : ces animaux sont
                écartés juste au-dessus.
@@ -233,30 +232,10 @@
            sans ça elle resterait sur le compagnon précédent. */
         if (typeof rafraichirIdentiteCompagnon === 'function') rafraichirIdentiteCompagnon();
 
-        /* ═══ LA VIDÉO DE LA CAGE (25/08/2026) ═══
-           Choisir un animal, c'est partir le chercher : on montre où il est.
-           Elle se joue PAR-DESSUS la fenêtre de choix (z-index 6100 contre 3000),
-           qui reste ouverte derrière — au retour on est là où on avait laissé,
-           sans transition à écrire.
-
-           ⚠ ELLE PART SUR UN APPUI, et c'est ce qui la rend possible. Android
-           refuse de démarrer une vidéo avec son hors d'un geste de l'utilisateur ;
-           déclenchée ici, elle est toujours la conséquence directe d'un doigt sur
-           une carte. Ne pas déplacer cet appel vers un enchaînement automatique
-           sans passer la vidéo en `muted`.
-
-           ⚠ ON REJOUE MÊME SI L'ANIMAL ÉTAIT DÉJÀ LE COMPAGNON COURANT.
-           `Compagnon.choisir()` rend `false` dans ce cas — s'en servir comme
-           condition ferait qu'un appui sur sa propre carte ne produirait rien du
-           tout, ce qui se lit comme une interface morte. Toucher une carte fait
-           toujours quelque chose.
-
-           `typeof` : js/12 porte le lecteur et est chargé avant, mais un module
-           absent ne doit jamais empêcher de choisir son compagnon. */
-        if (typeof jouerVideo === 'function' && Compagnon.video) {
-            const film = Compagnon.video(cle, 'cage');
-            if (film) jouerVideo(film);
-        }
+        /* La vidéo de la cage qui se jouait ici au choix d'un animal a été retirée
+           (30/08/2026) : pour le moment, choisir un animal ne fait plus que le
+           sélectionner. `Compagnon.video()` / `jouerVideo()` restent en place
+           (js/22, js/12) pour un usage futur éventuel. */
     }
 
     document.addEventListener('DOMContentLoaded', function () {

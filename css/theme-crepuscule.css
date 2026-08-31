@@ -214,6 +214,20 @@ body.theme-crepuscule #trip-modal .input-with-btn:focus-within {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 
+/* Le padding généreux ci-dessus est calibré pour les lignes d'itinéraire, qui
+   n'ont pas de padding interne. Dans le modal, l'input en ajoute un second
+   par-dessus (styles.css) : les deux se cumulaient et donnaient une boîte
+   d'adresse d'une soixantaine de pixels de haut. On resserre le vertical des
+   deux côtés, sans toucher à l'horizontal. */
+body.theme-crepuscule #trip-modal .input-with-btn {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+body.theme-crepuscule #trip-modal .input-with-btn input {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
 body.theme-crepuscule .itin-input-row input,
 body.theme-crepuscule .itin-select-row select {
     color: var(--cr-ink);
@@ -325,9 +339,12 @@ body.theme-crepuscule .main-nav-tab.active::before {
     background: var(--cr-amber);
     box-shadow: none;   /* le halo bleu d'origine coûtait un repaint permanent */
 }
-/* Pendant la navigation, l'onglet Trajet reste marqué — même couleur que l'actif */
-body.theme-crepuscule.nav-active #nav-tab-trajet { color: var(--cr-amber); }
-body.theme-crepuscule.nav-active #nav-tab-trajet::before { background: var(--cr-amber); box-shadow: none; }
+/* Pendant la navigation, l'onglet Trajet reste marqué — même couleur que l'actif.
+   `:not(.nav-overlay-open)` en écho à styles.css : quand Objectifs ou Profil est ouvert
+   par-dessus le trajet, c'est LUI l'onglet actif, et deux onglets marqués ne veulent
+   plus rien dire. Les deux feuilles doivent porter la même condition. */
+body.theme-crepuscule.nav-active:not(.nav-overlay-open) #nav-tab-trajet { color: var(--cr-amber); }
+body.theme-crepuscule.nav-active:not(.nav-overlay-open) #nav-tab-trajet::before { background: var(--cr-amber); box-shadow: none; }
 
 
 /* === 7. OBJECTIFS DE LA SEMAINE ============================================ */
@@ -695,6 +712,7 @@ body.theme-crepuscule #weather-desc { font-size: 10px; font-weight: 600; color: 
 /* === 10. MODALES ET CONFIRMATIONS ========================================== */
 
 body.theme-crepuscule #exit-confirm-box,
+body.theme-crepuscule #stop-course-box,
 body.theme-crepuscule #trip-modal,
 body.theme-crepuscule #stats-modal,
 body.theme-crepuscule #export-json-box,
@@ -706,6 +724,7 @@ body.theme-crepuscule #nav-panel-overlay-body {
     color: var(--cr-ink-2);
 }
 body.theme-crepuscule #exit-confirm-box h3,
+body.theme-crepuscule #stop-course-box h3,
 body.theme-crepuscule #trip-modal h3,
 body.theme-crepuscule #stats-modal-header h2,
 body.theme-crepuscule #nav-panel-overlay-title,
@@ -721,6 +740,20 @@ body.theme-crepuscule #exit-confirm-no {
     border: 1px solid rgba(255,179,92,0.3); border-radius: 14px;
 }
 body.theme-crepuscule #exit-confirm-yes {
+    background: rgba(255,107,107,0.10); color: var(--cr-danger);
+    border: 1px solid rgba(255,107,107,0.28); border-radius: 14px;
+}
+
+/* Fin de trajet (croix de la barre de navigation, 31/08/2026). Elle pose la même
+   question que la sortie d'application et prend donc exactement la même peinture :
+   l'ambre à qui continue, le rouge à qui s'arrête. Le sous-titre suit l'encre du
+   thème — laissé au gris bleuté de styles.css, il trahissait la fenêtre à lui seul. */
+body.theme-crepuscule #stop-course-sub { color: var(--cr-ink-3); }
+body.theme-crepuscule #stop-course-no {
+    background: rgba(255,179,92,0.12); color: var(--cr-amber);
+    border: 1px solid rgba(255,179,92,0.3); border-radius: 14px;
+}
+body.theme-crepuscule #stop-course-yes {
     background: rgba(255,107,107,0.10); color: var(--cr-danger);
     border: 1px solid rgba(255,107,107,0.28); border-radius: 14px;
 }
@@ -796,8 +829,16 @@ body.theme-crepuscule #compagnon-bulle {
 }
 
 /* Le titre suit le texte du hero : plus de marge basse, c'est .itin-hero qui
-   porte l'espacement jusqu'à la cellule Destination. */
-body.theme-crepuscule .itin-hero .itin-title { margin: 0; }
+   porte l'espacement jusqu'à la cellule Destination. Le margin-top le
+   redescend de 50px : collé à la bulle du compagnon, il paraissait trop haut.
+   ⚠ Le sélecteur doit reprendre l'id #ui-panel-title : la règle du § 12 ligne
+   ~169 (`body.theme-crepuscule .itin-title, #ui-panel-title, ...`) cible
+   directement cet id, et un id bat trois classes en spécificité — sans le
+   reprendre ici, ce margin-top était silencieusement ignoré. */
+body.theme-crepuscule .itin-hero .itin-title,
+body.theme-crepuscule .itin-hero #ui-panel-title {
+    margin: 20px 0 0;
+}
 
 /* ⚠ LA RÈGLE DE SÉCURITÉ.
    Dès que la navigation démarre, le compagnon quitte l'écran — aucune
@@ -1023,4 +1064,151 @@ body.theme-crepuscule #gas-scan-list .gas-station-card.focused {
    et le marqueur mis en avant sur la carte parlent la même langue. */
 body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
     border-color: rgba(127,216,232,0.55); background: rgba(127,216,232,0.10);
+}
+
+
+/* === 14. TROIS PAGES OUBLIÉES DE LA REFONTE ================================
+   Historique des trajets, Mon véhicule et Aide à la conduite ouvrent dans la
+   même page pleine que les autres sections du Profil (#profil-sheet, voir
+   § 3) mais n'existaient pas encore quand ce thème a été construit : elles
+   gardaient le fond bleu nuit et les bordures bleues de l'ancien thème,
+   couleur par couleur, à côté d'un Profil désormais violet partout ailleurs. */
+
+/* --- Le cadre de la page pleine (le titre est déjà couvert au § 3, ligne
+   ~171 : il ne restait que le fond et le bouton de fermeture). --- */
+body.theme-crepuscule #profil-sheet {
+    background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
+    border: 1px solid var(--cr-line);
+    box-shadow: 0 20px 60px rgba(10,6,24,0.7);
+}
+body.theme-crepuscule #profil-sheet-close {
+    background: rgba(255,107,107,0.10);
+    border: 1px solid rgba(255,107,107,0.28);
+    color: var(--cr-danger);
+}
+
+/* --- Historique des trajets. #trip-history-body est stylé par sélecteur
+   (styles.css), pas en inline : une reprise CSS classique suffit ici, sans
+   !important. --- */
+body.theme-crepuscule #trip-history-body {
+    background: linear-gradient(170deg, var(--cr-sky-2), var(--cr-sky-1));
+    border-top: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .th-year {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .th-year-label { color: var(--cr-ink); }
+body.theme-crepuscule .th-month { border-left-color: var(--cr-line-2); }
+body.theme-crepuscule .th-month-label { color: var(--cr-ink-3); }
+body.theme-crepuscule .th-count-pill { background: var(--cr-surface-2); color: var(--cr-ink-3); }
+body.theme-crepuscule .th-chevron { color: var(--cr-ink-3); }
+body.theme-crepuscule .th-day { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-row {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .trip-row-head:active { background: var(--cr-surface-2); }
+body.theme-crepuscule .trip-row-date { color: var(--cr-ink); }
+body.theme-crepuscule .trip-row-places { color: var(--cr-turq); }
+body.theme-crepuscule .trip-row-summary { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-row-pts { color: var(--cr-ink); }
+body.theme-crepuscule .trip-row-pts-unit { color: var(--cr-ink-4); }
+/* Le drapeau reprend la sémantique du thème : mint pour une conduite propre,
+   danger pour un excès — jamais l'inverse. */
+body.theme-crepuscule .trip-row-flag.ok  { color: var(--cr-mint); background: rgba(111,227,160,0.14); }
+body.theme-crepuscule .trip-row-flag.bad { color: var(--cr-danger); background: rgba(255,107,107,0.14); }
+body.theme-crepuscule .trip-row-chevron { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-row-detail { border-top: 1px solid var(--cr-line); }
+body.theme-crepuscule .trip-endpoint { background: var(--cr-sunken); }
+body.theme-crepuscule .trip-endpoint-role { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-endpoint-addr { color: var(--cr-ink); }
+body.theme-crepuscule .trip-endpoint-go {
+    border: 1px solid rgba(255,179,92,0.4);
+    background: rgba(255,179,92,0.15);
+    color: var(--cr-amber);
+}
+body.theme-crepuscule .trip-endpoint-go:active { background: rgba(255,179,92,0.3); }
+body.theme-crepuscule .trip-detail-cell { background: var(--cr-sunken); }
+body.theme-crepuscule .trip-detail-label { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-detail-value { color: var(--cr-ink); }
+/* `.stats-empty` est partagée avec la modale Statistiques (hors périmètre ici) :
+   la portée reste donc scopée à cette page, pour ne rien changer ailleurs. */
+body.theme-crepuscule #trip-history-body .stats-empty,
+body.theme-crepuscule .trip-history-hint { color: var(--cr-ink-4); }
+
+/* --- Mon véhicule. Le corps (#vehicle-panel-body) est en style inline dans
+   index.html — un choix déjà pris pour cet écran, noté dans le HTML : les
+   couleurs y sont corrigées en dur, pas ici (une règle CSS perdrait contre
+   l'inline sans !important). Les composants partagés qui, eux, passent par
+   des classes restent pilotables ici. --- */
+body.theme-crepuscule .vcell-label { color: var(--cr-ink-4); }
+body.theme-crepuscule .vcell-input {
+    background: var(--cr-sunken);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-ink);
+}
+body.theme-crepuscule .vcell-input:focus { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .vtype-btn {
+    background: var(--cr-surface);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-ink-3);
+}
+body.theme-crepuscule .vtype-btn:hover { border-color: var(--cr-line-2); color: var(--cr-ink-2); }
+body.theme-crepuscule .vtype-btn.active {
+    background: rgba(255,179,92,0.15);
+    border-color: rgba(255,179,92,0.45);
+    color: var(--cr-amber);
+}
+/* Le Crit'Air INACTIF suit le thème ; les couleurs de vignette ACTIVE
+   (vert/violet/jaune/orange/marron/gris) restent celles, réglementaires, de
+   la vraie pastille Crit'Air — les repeindre en ambre ou en violet romprait
+   leur seul intérêt, être reconnaissables d'un coup d'œil. */
+body.theme-crepuscule .critair-pill {
+    background: var(--cr-sunken);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-ink-3);
+}
+body.theme-crepuscule .critair-pill:hover { color: var(--cr-ink-2); }
+body.theme-crepuscule .zfe-select {
+    background: var(--cr-sunken);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-ink);
+}
+body.theme-crepuscule .zfe-select:focus { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .fuel-kind-pill { color: var(--cr-ink-3); }
+body.theme-crepuscule .fuel-kind-pill:hover { color: var(--cr-ink-2); }
+body.theme-crepuscule .fuel-kind-pill.active {
+    background: rgba(255,179,92,0.15);
+    border-color: rgba(255,179,92,0.45);
+    color: var(--cr-amber);
+}
+body.theme-crepuscule .fuel-manual-check { color: var(--cr-ink-3); }
+body.theme-crepuscule .fuel-manual-check input { accent-color: var(--cr-amber); }
+body.theme-crepuscule .fuel-refresh-btn {
+    background: var(--cr-sunken);
+    border: 1px solid var(--cr-line);
+    color: var(--cr-amber);
+}
+body.theme-crepuscule .fuel-refresh-btn:hover { border-color: rgba(255,179,92,0.45); }
+
+/* --- Aide à la conduite. #aide-conduite-body est stylé par sélecteur, comme
+   #trip-history-body ci-dessus : pas d'inline à contourner ici. --- */
+body.theme-crepuscule #aide-conduite-body {
+    background: linear-gradient(170deg, var(--cr-sky-2), var(--cr-sky-1));
+    border-top: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .ac-row { border-bottom-color: var(--cr-line); }
+body.theme-crepuscule .ac-row-label { color: var(--cr-ink); }
+body.theme-crepuscule .ac-row-hint { color: var(--cr-ink-4); }
+body.theme-crepuscule .ac-toggle-slider { background: var(--cr-sunken); }
+body.theme-crepuscule .ac-toggle-switch input:checked + .ac-toggle-slider { background: var(--cr-amber); }
+
+/* --- Animaux sauvés. Même oubli, même fond bleu nuit sur le conteneur —
+   mais les cartes .cpx-* qu'il abrite (partagées avec la fenêtre « Qui
+   sauvons-nous ? ») étaient déjà dans la palette du thème, seul le fond du
+   panneau restait à reprendre. --- */
+body.theme-crepuscule #animaux-sauves-body {
+    background: linear-gradient(170deg, var(--cr-sky-2), var(--cr-sky-1));
+    border-top: 1px solid var(--cr-line);
 }

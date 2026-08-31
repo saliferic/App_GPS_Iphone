@@ -112,6 +112,7 @@
         /* La fin de trajet libre pose la même question oui/non : elle partage donc les
            mêmes sélecteurs plutôt qu'une troisième copie du gabarit. */
         #profile-use-overlay,
+        #stop-course-overlay,
         #freecourse-end-overlay {
             display: none; position: fixed; inset: 0; z-index: 10000;
             background: rgba(0,0,0,0.75);
@@ -119,8 +120,10 @@
             align-items: center; justify-content: center;
         }
         #profile-use-overlay.open,
+        #stop-course-overlay.open,
         #freecourse-end-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
         #profile-use-box,
+        #stop-course-box,
         #freecourse-end-box {
             background: linear-gradient(170deg, #0f1825, #0a0e17);
             border: 1px solid rgba(0,140,255,0.25); border-radius: 20px;
@@ -130,6 +133,7 @@
             box-shadow: 0 12px 50px rgba(0,0,0,0.7);
         }
         #profile-use-box h3,
+        #stop-course-box h3,
         #freecourse-end-box h3 {
             margin: 0 0 clamp(6px, 2vw, 10px);
             font-size: clamp(15px, 4.5vw, 17px);
@@ -137,6 +141,7 @@
             color: #e2e8f0; letter-spacing: 0.5px;
         }
         #profile-use-sub,
+        #stop-course-sub,
         #freecourse-end-sub {
             margin: 0 0 clamp(12px, 3vw, 20px);
             font-size: clamp(11px, 3.2vw, 12px); line-height: 1.5; color: #7b8794;
@@ -166,6 +171,12 @@
         #freecourse-end-no:active  { background: rgba(0,150,255,0.18); }
         #freecourse-end-yes { background: rgba(248,81,73,0.10); color: #f85149; border: 1px solid rgba(248,81,73,0.30); }
         #freecourse-end-yes:active { background: rgba(248,81,73,0.20); }
+        /* Fin de trajet guidé : même répartition des rôles — continuer est l'action par
+           défaut, terminer est l'action sortante, en rouge. */
+        #stop-course-no  { background: rgba(0,150,255,0.08); color: #58a6ff; border: 1px solid rgba(0,150,255,0.25); }
+        #stop-course-no:active  { background: rgba(0,150,255,0.18); }
+        #stop-course-yes { background: rgba(248,81,73,0.10); color: #f85149; border: 1px solid rgba(248,81,73,0.30); }
+        #stop-course-yes:active { background: rgba(248,81,73,0.20); }
 
 
         /* === VOLET AIDE CONDUITE === */
@@ -1677,6 +1688,12 @@
         #ui-panel.panel-min .panel-tab-content { display: none !important; }
         #ui-panel.panel-min #ui-panel-title { margin-bottom: 0; }
         #ui-panel.panel-min #toggle-icon::after { content: "▲"; }
+        /* Mode saisie : l'état interne reste 'full' (le panneau est libéré de son
+           plafond de hauteur pour se coller au clavier), donc aucune classe `collapsed`
+           n'est posée et la flèche restait ▼. Or l'appui suivant REMONTE le panneau
+           entier — clavier refermé, compagnon et adresses de retour (voir togglePanel
+           dans js/08). La flèche doit annoncer ce geste-là. */
+        #ui-panel.search-focus #toggle-icon::after { content: "▲"; }
 
         /* === MODE SAISIE DESTINATION ===
            Quand l'utilisateur tape dans le champ "Où allez-vous ?", on réduit le panneau
@@ -1696,10 +1713,14 @@
         #ui-panel.search-focus #status,
         #ui-panel.search-focus .itin-footer { display: none !important; }
         #ui-panel.search-focus #ui-panel-title { margin-bottom: 12px; }
-        /* Le compagnon est un ornement d'accueil : pendant la saisie il quitte l'écran,
-           sinon ses ~100 px de haut mangent la place laissée aux suggestions au-dessus
-           du clavier. L'accroche, elle, reste : c'est le repère de l'écran. */
-        #ui-panel.search-focus #compagnon-dessin { display: none; }
+        /* ⚠ LE COMPAGNON RESTE PENDANT LA SAISIE (31/08/2026) — ne pas le remasquer.
+           Il était escamoté pour rendre ses ~100 px aux suggestions au-dessus du clavier ;
+           le prix était un écran qui change de tête au premier appui sur le champ, alors
+           que rien d'autre n'a bougé. L'en-tête d'accueil est un repère : accroche ET
+           animal ensemble, ou l'utilisateur croit avoir changé de page.
+           La place perdue n'est pas prise sur les suggestions : en portrait elles
+           s'ouvrent VERS LE HAUT par-dessus la carte (`bottom: 100%`, plus bas dans ce
+           fichier), hors du panneau — ce sont deux hauteurs indépendantes. */
         #ui-panel.search-focus .itin-hero { margin-bottom: 12px; }
         #ui-panel.search-focus .form-group { margin-bottom: 2px; }
 
@@ -2289,6 +2310,40 @@
         /* L'heure d'arrivée est un FAIT, pas un score : ni vert de réussite ni rouge
            d'alerte, la teinte reste celle du texte courant. Le bleu est déjà pris par
            le temps restant juste à côté, et deux bleus voisins se seraient confondus. */
+        /* ═══ PORTRAIT DU COMPAGNON — MIROIR DU COMPTEUR DE VITESSE ═══
+           Mêmes ancrages verticaux que #nav-speed-display (110 px, 200 px quand les deux
+           barres du bas sont là), mais à gauche : les deux coins bas doivent rester sur
+           la même ligne, sinon l'écran penche. Toute retouche de l'un se recopie sur
+           l'autre — c'est la seule règle à retenir ici.
+           `display: none` par défaut : hors navigation, la carte n'a aucune raison de
+           porter l'animal, et l'écran d'accueil a déjà le sien dans le hero. */
+        #nav-compagnon-portrait {
+            position: absolute; left: 50%; bottom: calc(100% - 10px);
+            transform: translateX(-50%);
+            width: 96px; height: 96px; z-index: 1;
+            display: flex; align-items: flex-end; justify-content: center;
+            pointer-events: none;
+            /* Invisible tant que le véhicule roule. `opacity` et non `display` : le fondu
+               est ce qui rend l'apparition supportable en pleine navigation — un animal
+               qui surgit d'un coup au feu rouge fait exactement ce qu'on cherche à
+               éviter. `visibility` s'y ajoute pour qu'il ne soit pas lu par les
+               lecteurs d'écran entre deux arrêts. */
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+        }
+        #nav-compagnon-portrait.visible {
+            opacity: 1; visibility: visible;
+            transition: opacity 0.35s ease, visibility 0s;
+        }
+        /* ⚠ LE SVG DU COMPAGNON EST CALÉ POUR LA CARTE : `.pulse-marker-animal` est en
+           `position: absolute; left: 50%; bottom: 50%`, ce qui le pose AU-DESSUS du point
+           GPS — la moitié basse de sa case. Réutilisé tel quel ici, l'animal flotterait
+           au-dessus de son cadre. On le remet dans le flux ; l'ombre portée reste, elle
+           le détache d'une carte claire comme d'une carte de nuit. */
+        #nav-compagnon-portrait .pulse-marker-animal {
+            position: static; left: auto; bottom: auto; transform: none;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+        }
         #nav-arrivee { color: #e2e8f0; }
         #nav-multiplier { color: #f39c12; }
         #nav-eta { color: #58a6ff; font-size: 20px; }
@@ -2398,6 +2453,12 @@
 
             #trip-modal-overlay { align-items: flex-end; }
             #trip-modal { border-radius: 20px 20px 0 0; height: var(--sheet-h, calc(50dvh - var(--panel-bottom-offset, 64px))); max-height: calc(92vh - 64px); }
+            /* ANNULER / LANCER LE TRAJET décollés de la barre d'onglets (31/08/2026) :
+               la feuille s'arrête juste au-dessus d'elle, les deux boutons se retrouvaient
+               donc au ras d'ITINÉRAIRE / OBJECTIFS / PROFIL — deux rangées de commandes qui
+               se touchent, avec le risque de viser l'onglet en voulant lancer le trajet. */
+            #trip-modal .modal-actions { margin-bottom: 16px; }
+            #trip-modal .trip-modal-body { padding-bottom: 28px; }
             #ui-panel {
                 top: auto; left: 0; width: 100%; max-width: none;
                 /* Toujours ancré au-dessus de la barre de navigation permanente.
@@ -2523,6 +2584,10 @@
                horizontales. En colonne latérale, réduit se lit « déployer vers la droite ». */
             #ui-panel.panel-collapsed #toggle-icon::after { content: "▶"; }
             #ui-panel.minimized #toggle-icon::after { content: "▶"; }
+            /* Même raison que pour .panel-collapsed juste au-dessus : la règle portrait
+               du mode saisie est plus spécifique et poserait un ▲ parmi des flèches
+               horizontales. */
+            #ui-panel.search-focus #toggle-icon::after { content: "▶"; }
             #ui-panel.minimized .toggle-panel-btn { left: 50%; transform: translateX(-50%); right: auto; }
 
             #nav-side-controls { top: 15px; right: 15px; }
@@ -2623,6 +2688,10 @@
                 width: 86px; height: 86px;
             }
             body.nav-active #nav-speed-value { font-size: 26px; }
+            /* En paysage, la barre de navigation est une boîte étroite en bas à droite :
+               un animal de 96 px posé dessus déborderait de l'écran. Il rétrécit, sa
+               place au-dessus de la barre de vie ne change pas. */
+            #nav-compagnon-portrait { width: 64px; height: 64px; }
             body.nav-active #speed-limit-badge,
             body.bottom-bars-active.nav-active #speed-limit-badge {
                 bottom: calc(var(--panel-bottom-offset, 64px) + 22px); right: 100px; top: auto;
@@ -2764,9 +2833,16 @@
         /* La barre de navigation reste visible même pendant un trajet */
         /* body.nav-active #main-bottom-nav { display: none; } — désactivé volontairement */
 
-        /* Pendant la nav, onglet Trajet actif par défaut visuellement */
-        body.nav-active #nav-tab-trajet { color: #58a6ff; }
-        body.nav-active #nav-tab-trajet::before {
+        /* Pendant la nav, onglet Trajet actif par défaut visuellement.
+           ⚠ SAUF QUAND OBJECTIFS OU PROFIL EST OUVERT PAR-DESSUS (31/08/2026). Cette règle
+           marquait Trajet en permanence dès `nav-active`, sans regarder ce qui était
+           réellement à l'écran : en ouvrant Profil pendant un trajet, DEUX onglets
+           portaient le trait et la couleur d'actif. Or `switchMainTab()` gère déjà la
+           classe `.active` correctement — c'est cette règle CSS, plus spécifique, qui la
+           contredisait. `body.nav-overlay-open` est posée à l'ouverture de la feuille
+           Objectifs/Profil (js/14) et retirée à sa fermeture. */
+        body.nav-active:not(.nav-overlay-open) #nav-tab-trajet { color: #58a6ff; }
+        body.nav-active:not(.nav-overlay-open) #nav-tab-trajet::before {
             content: ''; position: absolute; top: 0; left: 20%; right: 20%;
             height: 2px; border-radius: 0 0 2px 2px;
             background: #58a6ff; box-shadow: 0 0 8px rgba(88,166,255,0.6);

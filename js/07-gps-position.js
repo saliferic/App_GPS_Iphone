@@ -692,10 +692,71 @@
                 // Valeur non confirmée (déduite de la classe de route ou repli aveugle) :
                 // contour gris pointillé pour ne pas faire passer une estimation pour un
                 // panneau relevé. Aucune pénalité n'est appliquée dans cet état.
-                const uncertain = isSpeedLimitUncertain();
-                limitBadge.classList.toggle('limit-uncertain', uncertain);
-                limitBadge.style.borderStyle = uncertain ? 'dashed' : 'solid';
-                limitBadge.style.borderColor = uncertain ? '#7b8794' : (isSpeeding ? '#ff3b30' : '#e74c3c');
+                /* ⚠ `isSpeedLimitUnknown()` ET NON `isSpeedLimitUncertain()` : le gris
+                   pointillé dit « aucune donnée sur cette route », pas « je m'interdis de
+                   pénaliser ». Les deux tests ont été séparés le 31/08/2026 — voir leur
+                   commentaire dans js/05. Reprendre le test large ici rendrait la pastille
+                   grise sur presque tous les 50 de ville. */
+                const inconnue = isSpeedLimitUnknown();
+                limitBadge.classList.toggle('limit-uncertain', inconnue);
+                limitBadge.style.borderStyle = inconnue ? 'dashed' : 'solid';
+                limitBadge.style.borderColor = inconnue ? '#7b8794' : (isSpeeding ? '#ff3b30' : '#e74c3c');
+            }
+
+            majPortraitCompagnonArret(speedKmh);
+        }
+
+        /* ═══ LE COMPAGNON NE SE MONTRE QU'À L'ARRÊT          (31/08/2026) ═══
+           Troisième et dernière place de l'animal pendant la navigation. Sur la carte il
+           masquait les carrefours ; en bas à gauche, à 96 px, il attirait l'œil pendant
+           la conduite — un jeu qui pousse à regarder ailleurs que la route est raté, quel
+           que soit le soin apporté au reste.
+           Il apparaît donc uniquement véhicule arrêté (feu rouge, bouchon, stationnement),
+           posé sur la barre de vie, et s'efface dès que ça repart. On voit l'état de son
+           animal quand on a le droit de le regarder, jamais quand on ne l'a pas.
+
+           ⚠ LE SEUIL EST DISSYMÉTRIQUE, ET C'EST LE CŒUR DE LA CHOSE : on se montre sous
+           2 km/h, on se cache au-dessus de 6. Un seuil unique ferait clignoter l'animal au
+           pas d'un bouchon, où la vitesse oscille sans arrêt autour de la valeur — ce
+           clignotement attirerait l'œil bien plus que sa présence permanente.
+           La disparition n'est PAS conditionnée à `isCourseStarted` : l'appelant l'est
+           déjà, et la fin de trajet retire la barre entière. */
+        /* Appelée à la fin du trajet (js/19) : plus aucun point GPS ne passera par
+           `majPortraitCompagnonArret`, c'est donc le seul moyen de rendre l'écran propre.
+           Sans elle, le portrait restait affiché — et il l'était forcément, puisqu'un
+           trajet se termine presque toujours à l'arrêt. */
+        function masquerPortraitCompagnon() {
+            _portraitArretVisible = false;
+            document.getElementById('nav-compagnon-portrait')?.classList.remove('visible');
+        }
+
+        const ARRET_SEUIL_APPARITION = 2;   // km/h — en dessous, le véhicule est à l'arrêt
+        const ARRET_SEUIL_DISPARITION = 6;  // km/h — au-dessus, il roule
+        let _portraitArretVisible = false;
+        function majPortraitCompagnonArret(speedKmh) {
+            const el = document.getElementById('nav-compagnon-portrait');
+            if (!el) return;
+            /* ⚠ HORS TRAJET, L'ANIMAL N'A RIEN À FAIRE LÀ (31/08/2026). Il est le témoin
+               de la vie qui se joue PENDANT la conduite ; en dehors, il ne fait que
+               couvrir la barre de vie et ce qui l'entoure. La garde est posée ici, sur
+               `isCourseStarted`, et non sur la seule visibilité de la barre : c'est
+               l'état du trajet qui commande, pas un effet de bord de mise en page.
+               `masquerPortraitCompagnon()` (js/19) fait la même chose à la fin du trajet,
+               quand plus aucun point GPS ne viendra repasser par ici. */
+            if (typeof isCourseStarted !== 'undefined' && !isCourseStarted) {
+                if (_portraitArretVisible) { _portraitArretVisible = false; el.classList.remove('visible'); }
+                return;
+            }
+            const v = speedKmh || 0;
+            if (!_portraitArretVisible && v <= ARRET_SEUIL_APPARITION) {
+                _portraitArretVisible = true;
+                // Peint au dernier moment : l'état de l'animal a pu changer depuis le
+                // dernier arrêt, et rien ne sert de tenir un SVG à jour hors de l'écran.
+                tenterSansBruit(() => rafraichirPortraitNav(), 'portraitArret/dessin');
+                el.classList.add('visible');
+            } else if (_portraitArretVisible && v >= ARRET_SEUIL_DISPARITION) {
+                _portraitArretVisible = false;
+                el.classList.remove('visible');
             }
         }
 

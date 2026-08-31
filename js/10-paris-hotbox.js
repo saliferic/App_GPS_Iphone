@@ -76,15 +76,32 @@
                 // Rayon élargi à 50m pour capter les grands axes (trunk, primary) qui peuvent
                 // être légèrement décalés du centre GPS, surtout sur un pont ou une voie rapide.
                 const query = `[out:json][timeout:10];way(around:50,${lat},${lng})["highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service)$"];out tags 8;`;
-                const res = await fetchResilient('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    body: 'data=' + encodeURIComponent(query)
-                }, { timeoutMs: 8000, retries: 0 });
-                const data = await res.json();
-                const elements = data.elements || [];
+                /* ⚠ MIROIRS PARTAGÉS DEPUIS LE 31/08/2026 — ne pas revenir à un serveur
+                   unique. Cette fonction tapait `overpass-api.de` en direct, timeout 8 s,
+                   sans reprise : or c'est l'instance officielle, la plus sollicitée du
+                   lot, et js/19 documente qu'elle applique un quota par IP (« rate_limited »
+                   dès la deuxième requête rapprochée). Elle n'y figure qu'en DERNIER
+                   recours, derrière cinq autres miroirs. La limite de vitesse était le
+                   seul consommateur Overpass resté sur l'ancien chemin — bornes, parkings,
+                   aires et ZFE passent tous par le hedging. Une relève qui n'aboutit pas,
+                   c'est une valeur périmée conservée à l'écran : exactement le « 50 » resté
+                   trente secondes sur l'A9 lors de l'essai du 31/08.
+                   Délais resserrés : la requête est minuscule et se rejoue souvent, elle
+                   n'a pas besoin des 25 s taillées pour les bbox d'autoroute. */
+                /* ⚠ CE REPLI ABOUTIT RAREMENT, ET C'EST ASSUMÉ (mesuré le 01/09/2026).
+                   Le seul miroir qui réponde à l'app empaquetée met une vingtaine de
+                   secondes (voir EV_TIMEOUT_MS, js/19) : à 110 km/h, une limite qui arrive
+                   20 s trop tard décrit une route qu'on a quittée depuis 600 m — elle serait
+                   plus dangereuse que le silence. On garde donc un budget court : ce qui
+                   passe est un bonus en ville, à l'arrêt ou au ralenti, et la source qui
+                   compte reste l'annotation Mapbox de l'itinéraire.
+                   `isFetchingSpeedLimit` interdisant deux appels de front, un budget long
+                   bloquerait en prime toutes les relèves pendant sa durée. */
+                const data = await _fetchOverpassHedged(query, { timeoutMs: 10000, hedgeMs: 2500 });
+                const elements = (data && data.elements) || [];
 
                 if (elements.length === 0) {
-                    if (inParis) { currentSpeedLimitKmh = 30; _overpassSource = 'fallback'; }
+                    if (inParis) { currentSpeedLimitKmh = 30; currentSpeedLimitTs = Date.now(); _overpassSource = 'fallback'; }
                     _speedLimitDebug = { tags: null, highway: null, note: 'aucun tronçon dans 50 m', ts: Date.now() };
                     return;
                 }
@@ -111,7 +128,7 @@
                 };
                 if (best?.tags?.maxspeed) {
                     const parsed = parseMaxspeedTag(best.tags.maxspeed);
-                    if (parsed !== null) { currentSpeedLimitKmh = parsed; _overpassSource = 'overpass-tag'; return; }
+                    if (parsed !== null) { currentSpeedLimitKmh = parsed; currentSpeedLimitTs = Date.now(); _overpassSource = 'overpass-tag'; return; }
                 }
                 // Si le segment de tête n'a pas de maxspeed, on accepte celui d'un segment de
                 // MÊME classe (même rang) avant de retomber sur l'inférence.
@@ -119,7 +136,7 @@
                 if (sameClass) {
                     const parsed = parseMaxspeedTag(sameClass.tags.maxspeed);
                     if (parsed !== null) {
-                        currentSpeedLimitKmh = parsed;
+                        currentSpeedLimitKmh = parsed; currentSpeedLimitTs = Date.now();
                         _overpassSource = 'overpass-same-class';
                         _speedLimitDebug.sameClassTags = sameClass.tags;
                         return;
@@ -141,7 +158,7 @@
                     );
                     const inferred = inferSpeedFromHighwayTag(tags.highway, isUrban, inParis);
                     if (inferred !== null) {
-                        currentSpeedLimitKmh = inferred;
+                        currentSpeedLimitKmh = inferred; currentSpeedLimitTs = Date.now();
                         _overpassSource = 'overpass-inference';
                         _speedLimitDebug.isUrban = isUrban;
                         _speedLimitDebug.inferred = inferred;
@@ -150,7 +167,7 @@
             } catch (e) {
                 console.error("Erreur récupération limite de vitesse :", e);
                 _speedLimitDebug = { tags: null, highway: null, note: 'échec requête Overpass', ts: Date.now() };
-                if (inParis && !currentSpeedLimitKmh) { currentSpeedLimitKmh = 30; _overpassSource = 'fallback'; }
+                if (inParis && !currentSpeedLimitKmh) { currentSpeedLimitKmh = 30; currentSpeedLimitTs = Date.now(); _overpassSource = 'fallback'; }
             } finally {
                 isFetchingSpeedLimit = false;
             }
@@ -159,16 +176,33 @@
         // Déclenche (si nécessaire) une mise à jour de la limite de vitesse.
         // Mapbox annotations en priorité — Overpass uniquement si annotations absentes.
         function maybeRefreshSpeedLimit(lng, lat) {
-            // Si Mapbox annotations couvre ce tronçon → pas besoin d'Overpass
+            /* ⚠ SEULE UNE ANNOTATION POSÉE SUR LE TRONÇON FOULÉ DISPENSE D'OVERPASS
+               (31/08/2026). Une valeur EMPRUNTÉE à un segment voisin suffisait à couper
+               la relève : en entrant sur l'A9, le 50 de la bretelle débordait sur les
+               premiers mètres d'autoroute ET empêchait d'aller chercher la vraie limite,
+               qui n'arrivait donc jamais. C'est ce tandem qui explique les trente secondes
+               à 50 relevées à l'essai — l'emprunt seul n'aurait duré que le temps de sortir
+               de sa tolérance de 250 m. */
             if (_routeMaxspeedAnnotations.length > 0) {
                 const _d = getRouteDistanceAlongKm(lng, lat);
-                if (_d !== null && getMapboxSpeedLimitAtDist(_d) !== null) return;
+                if (_d !== null && getMapboxSpeedLimitAtDist(_d) !== null && !_mapboxLimitWasBorrowed) return;
             }
             // Fallback Overpass uniquement si annotations absentes ou tronçon inconnu
             const now = Date.now();
             const currentSpeed = (drivers.length > 0) ? (drivers[0].actualSpeed || 0) : 0;
-            const refetchMeters = currentSpeed > 70 ? 80 : SPEED_LIMIT_REFETCH_METERS;
-            const refetchMs     = currentSpeed > 70 ? 6000 : SPEED_LIMIT_REFETCH_MS;
+            /* ⚠ LA CADENCE RAPIDE EN VOIE RAPIDE A ÉTÉ RETIRÉE (01/09/2026). Elle
+               relançait une requête toutes les 6 s au-delà de 70 km/h — une idée juste
+               tant qu'on croyait Overpass capable de répondre en une seconde ou deux.
+               Mesure du jour : le seul miroir joignable depuis l'app met une vingtaine
+               de secondes (voir EV_TIMEOUT_MS, js/19). Ces requêtes n'aboutissaient donc
+               jamais à temps ET consommaient les créneaux du même serveur, celui dont
+               dépendent le scan parkings et le relevé des bornes — deux fonctions où
+               l'attente, elle, est acceptable. On préfère une limite de vitesse qui
+               s'appuie sur l'annotation Mapbox (immédiate, sans réseau) et un scan
+               parkings qui aboutit, plutôt qu'un repli qui arrive trop tard en affamant
+               le reste. */
+            const refetchMeters = SPEED_LIMIT_REFETCH_METERS;
+            const refetchMs     = SPEED_LIMIT_REFETCH_MS;
             const movedEnough = !lastSpeedLimitCoords ||
                 turf.distance(turf.point(lastSpeedLimitCoords), turf.point([lng, lat]), { units: 'kilometers' }) * 1000 > refetchMeters;
             if (movedEnough && (now - lastSpeedLimitFetchTime > refetchMs)) {
@@ -291,7 +325,7 @@
             // Si l'itinéraire courant annote déjà ce point, la sonde est inutile.
             if (_routeMaxspeedAnnotations.length > 0) {
                 const _d = getRouteDistanceAlongKm(lng, lat);
-                if (_d !== null && getMapboxSpeedLimitAtDist(_d) !== null) return;
+                if (_d !== null && getMapboxSpeedLimitAtDist(_d) !== null && !_mapboxLimitWasBorrowed) return;
             }
             if (!navigator.onLine) return;
             const speed = (drivers.length > 0) ? (drivers[0].actualSpeed || 0) : 0;
@@ -327,6 +361,8 @@
            route, et un simple repli par défaut — trois cas qui affichaient le même chiffre. */
         const SPEED_SOURCE_LABELS = {
             'mapbox':              'Annotation Mapbox (itinéraire) — fiable',
+            'mapbox-neighbour':    'Annotation Mapbox d\'un segment VOISIN — INCERTAIN',
+            'stale':               'Dernière valeur connue, périmée (>20 s) — INCERTAIN',
             'mapbox-probe':        'Sonde Mapbox locale (trajet libre) — fiable',
             'overpass-tag':        'Tag maxspeed OpenStreetMap — fiable',
             'overpass-same-class': 'Tag maxspeed d\'un tronçon de même classe — moyen',

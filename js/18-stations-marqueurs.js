@@ -621,8 +621,10 @@
             );
             if (available.length === 0) return;
 
-            // Si le carburant sélectionné n'est pas disponible, prendre le premier dispo
-            if (!available.find(f => f.key === selectedFuelType)) {
+            // Si le carburant sélectionné n'est pas disponible, prendre le premier dispo.
+            // `null` n'est PAS un carburant indisponible : c'est l'état « aucun choix
+            // encore fait » (ou une pastille désélectionnée), qu'on doit conserver.
+            if (selectedFuelType && !available.find(f => f.key === selectedFuelType)) {
                 selectedFuelType = available[0].key;
             }
 
@@ -1415,6 +1417,17 @@
 
             buildFuelSelector(_allGasStations);
 
+            // Aucun carburant choisi (état initial, ou pastille désélectionnée) :
+            // les pastilles sont proposées, mais ni marqueurs ni cartes tant que
+            // l'utilisateur n'a pas dit ce qu'il met dans son réservoir.
+            if (!selectedFuelType) {
+                clearGasStationMarkers();
+                document.getElementById('gas-stations-list').innerHTML =
+                    `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Choisissez un carburant ci-dessus pour voir les stations.</div>`;
+                _appendMixedEvCards();
+                return;
+            }
+
             // Si le carburant sélectionné n'a aucune station dispo, prendre le premier disponible
             const hasFuel = _allGasStations.some(s => getEffectivePrice(s, selectedFuelType) != null);
             if (!hasFuel) {
@@ -1857,7 +1870,7 @@
             // Mise à jour SILENCIEUSE : pas de toast, pas de vocal.
             // On ne re-rend que si le panneau est effectivement ouvert, et jamais
             // par-dessus la liste des bornes qu'un hybride est en train de consulter.
-            if (_gasStationsPanelOpen && !(_panelIsMixed() && _gasPanelKind === 'ev')) {
+            if (_gasStationsPanelOpen && !(_panelIsMixed() && _gasPanelKind === 'ev') && selectedFuelType) {
                 const hasFuel = ahead.some(s => getEffectivePrice(s, selectedFuelType) != null);
                 if (!hasFuel) {
                     const firstAvail = FUEL_DEFS.find(f => ahead.some(s => getEffectivePrice(s, f.key) != null));

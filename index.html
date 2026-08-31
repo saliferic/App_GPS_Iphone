@@ -271,6 +271,22 @@
         </div>
     </div>
 
+    <!-- Fin de trajet demandée par la croix de la barre de navigation. Même gabarit que
+         la question de fin de trajet libre juste au-dessus : une seule identité visuelle
+         pour toutes les questions oui/non de l'app. Un trajet en cours ne s'arrête plus
+         d'un seul appui — la croix est désormais au centre de la barre, donc plus près
+         encore du pouce qu'avant. -->
+    <div id="stop-course-overlay" onclick="if(event.target===this)closeStopCourse()">
+        <div id="stop-course-box">
+            <h3>Terminer le trajet ?</h3>
+            <p id="stop-course-sub">La navigation s'arrête ici. Les points et la vie du compagnon sont conservés.</p>
+            <div class="exit-confirm-actions">
+                <button id="stop-course-no" onclick="closeStopCourse()">Continuer</button>
+                <button id="stop-course-yes" onclick="confirmStopCourse()">Terminer</button>
+            </div>
+        </div>
+    </div>
+
     <div id="screen-glow"></div>
 
     <!-- Bouton objectifs hebdomadaires (conservé pour compatibilité JS mais masqué) -->
@@ -1215,13 +1231,13 @@
                     <span class="profil-row-label">Mon véhicule</span>
                     <span id="vehicle-panel-chevron" class="profil-row-arrow">›</span>
                 </button>
-                <div id="vehicle-panel-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#0a0e17,#080b12);border-top:1px solid rgba(0,140,255,0.08);">
+                <div id="vehicle-panel-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#2B2048,#241C42);border-top:1px solid rgba(255,255,255,0.10);">
                     <!-- Points du permis -->
-                    <div style="margin-bottom:clamp(12px,3vw,16px);padding-bottom:clamp(12px,3vw,14px);border-bottom:1px solid rgba(0,140,255,0.10);">
+                    <div style="margin-bottom:clamp(12px,3vw,16px);padding-bottom:clamp(12px,3vw,14px);border-bottom:1px solid rgba(255,255,255,0.10);">
                         <label class="vcell-label"><span class="ui-dot sm"></span>Votre nombre de points sur le permis</label>
                         <div style="display:flex;align-items:center;gap:clamp(8px,2vw,12px);">
-                            <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig()" value="12" min="0" max="12" class="vcell-input" style="width:clamp(50px,15vw,70px);font-size:clamp(13px,3.8vw,14px);padding:clamp(8px,2vw,10px);border:1px solid rgba(0,140,255,0.15);border-radius:8px;background:rgba(10,14,23,0.7);color:#c9d1d9;text-align:center;">
-                            <span style="font-size:clamp(12px,3vw,13px);color:#4a5568;min-width:30px;text-align:center;font-weight:700;"id="points-display">/12</span>
+                            <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig()" value="12" min="0" max="12" class="vcell-input" style="width:clamp(50px,15vw,70px);font-size:clamp(13px,3.8vw,14px);padding:clamp(8px,2vw,10px);border:1px solid rgba(255,255,255,0.10);border-radius:8px;background:rgba(0,0,0,0.28);color:#F4EFFF;text-align:center;">
+                            <span style="font-size:clamp(12px,3vw,13px);color:#6E5F91;min-width:30px;text-align:center;font-weight:700;"id="points-display">/12</span>
                         </div>
                     </div>
                     <label class="vcell-label" style="display:block;margin-bottom:clamp(8px,2vw,10px);"><span class="ui-dot sm"></span>Votre type de véhicule</label>
@@ -1269,7 +1285,7 @@
                     <div class="trip-option-hint" style="margin-top:8px;">Utilisé pour estimer le coût énergie de chaque trajet</div>
 
                     <!-- === VIGNETTE CRIT'AIR (ZFE) === -->
-                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,140,255,0.10);">
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.10);">
                         <label class="vcell-label" style="display:block;margin-bottom:7px;">Vignette Crit'Air</label>
                         <div class="critair-row" id="critair-row">
                             <button type="button" class="critair-pill" data-level="EL" onclick="selectCritAir('EL')">E</button>
@@ -1364,7 +1380,7 @@
                     <div id="tenmin-contacts-section" style="display:none;margin-top:10px;">
                         <div class="ac-row-hint" style="margin-bottom:6px;">Contacts associés à tes adresses favorites :</div>
                         <div id="tenmin-contacts-list" style="display:flex;flex-direction:column;gap:8px;"></div>
-                        <div class="ac-row-hint" style="margin-top:6px;">Modifie le contact depuis <strong style="color:#58a6ff;">Trajet → Adresses enregistrées</strong></div>
+                        <div class="ac-row-hint" style="margin-top:6px;">Modifie le contact depuis <strong style="color:#7FD8E8;">Trajet → Adresses enregistrées</strong></div>
                     </div>
                 </div>
             </div>
@@ -1551,17 +1567,35 @@
              portrait de la carte de rang). L'id ne sert plus qu'à la mise en page
              propre à la barre de navigation. Retirer la classe laisserait une barre
              figée à 100 %, sans erreur. -->
+        <!-- ═══ LE COMPAGNON, POSÉ SUR SA BARRE DE VIE, À L'ARRÊT SEULEMENT ═══
+             Trois places essayées avant celle-ci (31/08/2026). Sur la carte, à la position
+             du conducteur, il masquait les carrefours en ville. Entre ARRIVÉE et TEMPS
+             RESTANT, la ligne de compteurs le réduisait à 44 px, illisible. En bas à
+             gauche à 96 px, il attirait l'œil PENDANT la conduite — le défaut le plus
+             grave des trois : un jeu qui fait regarder ailleurs que la route est raté.
+             Il n'apparaît donc qu'à l'arrêt, assis sur sa jauge, et s'efface dès que ça
+             repart (voir `majPortraitCompagnonArret`, js/07).
+             ⚠ IL EST ICI, DANS #nav-bottom-bar, PARCE QU'IL S'Y ANCRE : `bottom: 100%`
+             se mesure sur la barre, seul moyen de le poser sur le bord haut de la jauge
+             quelle que soit la hauteur de celle-ci. Le sortir de la barre le décrocherait.
+             Rempli par `rafraichirPortraitNav()` (js/04), vide si aucune image. -->
+        <div id="nav-compagnon-portrait" role="img" aria-label="État du compagnon"></div>
         <div id="vie-compagnon" class="vie-compagnon" role="img" aria-label="Vie du compagnon"></div>
         <div class="nav-stats-row">
-            <button id="nav-google-close" onclick="stopCourse()" title="Terminer la navigation">✕</button>
-            <!-- Les points du trajet ont quitté cette place le 25/08/2026 : la barre de
-                 vie du compagnon porte désormais l'enjeu du trajet, et deux compteurs de
-                 la même chose se contredisaient plus qu'ils n'informaient. Le score reste
-                 calculé et visible dans le widget d'info (`#info-points`). -->
+            <!-- ⚠ ORDRE VOULU (31/08/2026) : ARRIVÉE, croix, TEMPS RESTANT. La croix était
+                 en tête de ligne, collée au bord gauche, à portée du pouce qui tient le
+                 téléphone — un frôlement mettait fin au trajet. Au centre, encadrée par
+                 les deux compteurs, elle demande un geste délibéré ; et elle y demande en
+                 plus confirmation (voir askStopCourse). -->
             <div class="nav-stat-box">
                 <div class="nav-stat-label">ARRIVÉE</div>
                 <div class="nav-stat-value" id="nav-arrivee">--</div>
             </div>
+            <button id="nav-google-close" onclick="askStopCourse()" title="Terminer la navigation">✕</button>
+            <!-- Les points du trajet ont quitté cette place le 25/08/2026 : la barre de
+                 vie du compagnon porte désormais l'enjeu du trajet, et deux compteurs de
+                 la même chose se contredisaient plus qu'ils n'informaient. Le score reste
+                 calculé et visible dans le widget d'info (`#info-points`). -->
             <!-- Le MULTIPLICATEUR a quitté cette barre le 25/08/2026, en même temps que
                  la règle qui le produisait (x1.5 sur les quinze premiers kilomètres) :
                  elle servait un jeu où l'on cumulait des points, ce n'est plus celui-ci.

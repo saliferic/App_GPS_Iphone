@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aperçu — question de fin de trajet</title>
+<!-- Planche d'aperçu (31/08/2026) : la fenêtre « Terminer le trajet ? » sous le thème
+     Crépuscule. Charge les DEUX feuilles réelles, dans l'ordre de index.html, et pose
+     `theme-crepuscule` sur <body> comme l'app — sans cette classe le thème est inerte
+     et l'aperçu montrerait l'ancienne peinture bleue. -->
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="../css/theme-crepuscule.css">
+<style>html,body{margin:0;height:100%;background:#241C42;}</style>
+</head>
+<body class="theme-crepuscule">
+<div id="stop-course-overlay" class="open">
+    <div id="stop-course-box">
+        <h3>Terminer le trajet ?</h3>
+        <p id="stop-course-sub">La navigation s'arrête ici. Les points et la vie du compagnon sont conservés.</p>
+        <div class="exit-confirm-actions">
+            <button id="stop-course-no">Continuer</button>
+            <button id="stop-course-yes">Terminer</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

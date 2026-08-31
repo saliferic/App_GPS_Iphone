@@ -1,0 +1,278 @@
+/* ============================================================================
+   THÈME PELAGE — essai de direction claire, limité à l'onglet Itinéraire
+   ----------------------------------------------------------------------------
+   Surcouche POSÉE SUR theme-crepuscule, pas à sa place. Chaque règle est
+   préfixée `body.theme-pelage` : sans cette classe sur <body>, ce fichier est
+   totalement inerte et l'app reste en Crépuscule à l'identique. C'est le même
+   patron que theme-crepuscule.css lui-même — on n'édite ni styles.css ni le
+   thème existant.
+
+   ⚠ ORDRE DES <link> DANS <head> : styles.css, puis theme-crepuscule.css, puis
+   CE FICHIER. À spécificité égale (`body.CLASSE .cible`), c'est le dernier
+   déclaré qui gagne. Inverser l'ordre rendrait la moitié des règles muettes
+   sans qu'aucune erreur ne le signale.
+
+   ─── CE QUI EST REPEINT, ET POURQUOI SEULEMENT ÇA ───────────────────────────
+   Uniquement l'écran Itinéraire : la feuille #ui-panel quand l'onglet Trajet
+   est actif, son contenu, et la barre d'onglets du bas. Profil, Objectifs, le
+   HUD de navigation, les modales et la carte gardent Crépuscule.
+
+   La porte d'entrée est `body.tab-trajet`, posée et retirée par
+   js/28-theme-pelage.js d'après la classe `.active` de #panel-tab-trajet. Sans
+   cette classe, un fond crème serait aussi peint sous Profil et Objectifs, qui
+   dessinent leur texte en clair — texte blanc sur papier crème, illisible.
+   Le gardien est en CSS et non en JS pour la même raison qu'au § 12 de
+   Crépuscule : si le JS ne se charge pas, `tab-trajet` n'existe jamais et rien
+   n'est repeint — l'app retombe entièrement sur Crépuscule, qui est juste.
+   ============================================================================ */
+
+
+/* === 1. JETONS =============================================================
+   Le gros du travail tient ici : Crépuscule lit ses couleurs dans des
+   variables --cr-*, on les redéfinit SUR LES DEUX RACINES REPEINTES plutôt que
+   de réécrire ses règles une à une. Les variables étant héritées, la
+   déclaration la plus proche de l'élément gagne — pas besoin de spécificité
+   supérieure, seulement d'être plus bas dans l'arbre que <body>.
+
+   Les rôles ne changent pas, seules les valeurs : ambre → roux du dos,
+   encre violette → brun de truffe, ciel → papier. */
+
+body.theme-pelage.tab-trajet #ui-panel,
+body.theme-pelage.tab-trajet #main-bottom-nav {
+    /* Papier — du plus clair (surfaces posées) au plus chaud (bas de feuille) */
+    --cr-sky-0: #FDF7EC;
+    --cr-sky-1: #FDF7EC;
+    --cr-sky-2: #FFFDF8;
+
+    /* Surfaces posées sur le papier. Opaques : la feuille de Pelage n'est pas
+       un verre, il n'y a rien à laisser transparaître. */
+    --cr-surface:   #FFFDF8;
+    --cr-surface-2: #F3E6D4;
+    --cr-sunken:    rgba(120,86,58,0.10);
+    --cr-line:      rgba(120,86,58,0.18);
+    --cr-line-2:    rgba(120,86,58,0.32);
+
+    /* Encre — brun de truffe, jamais du noir pur : sur un fond crème le noir
+       fait un trou, le brun tient l'ensemble dans la même famille. */
+    --cr-ink:   #33241A;
+    --cr-ink-2: #6B5340;
+    --cr-ink-3: #8A7259;
+    --cr-ink-4: #A08A70;
+
+    /* Lumière — mêmes rôles qu'en Crépuscule, transposés au jour. Les valeurs
+       claires (ambre pâle, menthe, turquoise) sont redescendues : elles étaient
+       calibrées pour être lues sur du violet sombre et disparaissent sur crème. */
+    --cr-amber:   #E05A28;   /* action principale */
+    --cr-amber-2: #C24E1F;
+    --cr-violet:  #B5552B;   /* le compagnon */
+    --cr-turq:    #3F7F88;   /* le temps, les délais */
+    --cr-mint:    #4F7F45;   /* éco, réussite */
+    --cr-rose:    #C43F58;   /* chaleur, accent doux */
+    --cr-danger:  #C6303C;   /* danger UNIQUEMENT */
+
+    /* Géométrie. Le rayon de ligne passe au rond complet : c'est la signature
+       de Pelage (galet, coussinet), et il suffit d'y toucher ici pour que
+       champs, listes et bascule suivent. */
+    --cr-r-sheet: 28px;
+    --cr-r-card:  20px;
+    --cr-r-row:   999px;
+
+    /* Aucun flou : les surfaces sont opaques, le blur ne ferait que coûter du
+       GPU pour un effet invisible. */
+    --cr-blur: 0px;
+}
+
+
+/* === 2. LA FEUILLE =========================================================
+   #ui-panel est un ancêtre des jetons ci-dessus, il ne peut pas les lire —
+   d'où ces valeurs écrites en clair. C'est la seule duplication du fichier. */
+
+body.theme-pelage.tab-trajet #ui-panel {
+    background: linear-gradient(180deg, #FDF7EC, #F6EADA);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid rgba(120,86,58,0.18);
+    box-shadow: 0 -18px 44px rgba(120,80,40,0.20);
+    color: #6B5340;
+}
+
+/* La poignée de glissement (::before dans styles.css) est un trait bleu à 25 %
+   d'opacité : sur crème il devient un cheveu bleuté. Recolorée, pas masquée —
+   c'est la seule affordance qui dit que la feuille se tire au doigt. */
+body.theme-pelage.tab-trajet #ui-panel::before { background: rgba(120,86,58,0.30); }
+
+body.theme-pelage.tab-trajet .toggle-panel-btn,
+body.theme-pelage.tab-trajet .itin-hamburger { color: #A08A70; }
+body.theme-pelage.tab-trajet .toggle-panel-btn:hover,
+body.theme-pelage.tab-trajet .itin-hamburger:hover { color: #33241A; }
+
+
+/* === 3. CHAMPS =============================================================
+   Le liseré blanc en `inset` de Crépuscule simule une arête éclairée par le
+   haut sur une surface sombre. Sur crème, blanc sur crème ne se voit pas et
+   laisse la ligne plate : on le remplace par une ombre portée courte et
+   chaude, qui pose la carte SUR le papier au lieu de la creuser dedans. */
+
+body.theme-pelage.tab-trajet .itin-input-row,
+body.theme-pelage.tab-trajet .itin-select-row {
+    box-shadow: 0 1px 2px rgba(120,80,40,0.07);
+}
+body.theme-pelage.tab-trajet .itin-input-row:focus-within {
+    border-color: rgba(224,90,40,0.55);
+    box-shadow: 0 1px 2px rgba(120,80,40,0.07);
+}
+
+/* Les suggestions restent une carte à angles doux : un rayon de 999px sur une
+   liste de quatre lignes ne dessinerait plus une liste. */
+body.theme-pelage.tab-trajet .addr-suggestions {
+    background: #FFFDF8;
+    border-radius: 20px;
+    box-shadow: 0 14px 34px rgba(120,80,40,0.22);
+}
+
+/* La flèche du <select> natif est peinte par le navigateur d'après la couleur
+   du texte : sans ça elle reste claire et disparaît sur le papier. */
+body.theme-pelage.tab-trajet .itin-select-row select { color: #33241A; }
+
+
+/* === 4. BOUTONS ============================================================
+   Même règle qu'en Crépuscule — un seul bouton plein dans tout l'écran — mais
+   tout devient rond. Le rayon est écrit en dur et non pris dans --cr-r-card :
+   les cartes (suggestions, feuille) gardent leurs angles doux, seuls les
+   éléments sur lesquels on appuie deviennent des galets. */
+
+body.theme-pelage.tab-trajet .itin-start-btn {
+    background: linear-gradient(135deg, #F09052, #E05A28);
+    border-radius: 999px;
+    color: #FFF6EC;
+    box-shadow: 0 8px 22px rgba(224,90,40,0.34);
+}
+body.theme-pelage.tab-trajet .itin-start-btn:hover,
+body.theme-pelage.tab-trajet .itin-start-btn:active {
+    color: #FFF6EC;
+    box-shadow: 0 5px 14px rgba(224,90,40,0.40);
+}
+
+/* `.itin-free-btn` porte encore le fond sombre d'origine (styles.css) :
+   Crépuscule ne repeint que sa variante `.itin-place-btn`, et « Trajet libre »
+   passait donc au travers. Sur fond crème ça se voyait tout de suite. */
+body.theme-pelage.tab-trajet .itin-free-btn,
+body.theme-pelage.tab-trajet .itin-place-btn {
+    background: #FFFDF8;
+    border: 1px solid rgba(120,86,58,0.18);
+    border-radius: 999px;
+    color: #6B5340;
+    box-shadow: 0 1px 2px rgba(120,80,40,0.07);
+}
+body.theme-pelage.tab-trajet .itin-free-btn:hover,
+body.theme-pelage.tab-trajet .itin-place-btn:hover {
+    background: #FBF1E2;
+    border-color: rgba(224,90,40,0.32);
+    color: #33241A;
+}
+body.theme-pelage.tab-trajet .itin-place-btn.has-place { border-color: rgba(224,90,40,0.34); }
+body.theme-pelage.tab-trajet .itin-free-icon { color: #E05A28; }
+
+/* Bascule Réel / Simu */
+body.theme-pelage.tab-trajet .itin-slider { background: rgba(120,86,58,0.14); }
+body.theme-pelage.tab-trajet .itin-slider::before { background: #A08A70; }
+body.theme-pelage.tab-trajet .itin-switch input:checked + .itin-slider {
+    background: rgba(224,90,40,0.20);
+    border-color: rgba(224,90,40,0.42);
+}
+body.theme-pelage.tab-trajet .itin-switch input:checked + .itin-slider::before { background: #E05A28; }
+
+/* Formulaires contact / domicile-travail : leurs couleurs sont écrites en
+   `style=` dans index.html (bleu #58a6ff hérité d'avant la refonte). Un style
+   en ligne ne se bat qu'avec !important — c'est le seul endroit du fichier où
+   il est justifié, et il disparaîtra si ces attributs sont un jour nettoyés. */
+body.theme-pelage.tab-trajet .contact-form-title { color: #C24E1F !important; }
+body.theme-pelage.tab-trajet .itin-save-fav {
+    background: rgba(224,90,40,0.10) !important;
+    border: 1px solid rgba(224,90,40,0.28) !important;
+    border-radius: 999px !important;
+    color: #C24E1F !important;
+}
+body.theme-pelage.tab-trajet #btn-delete-place { color: #C6303C !important; }
+
+
+/* === 5. LE COMPAGNON =======================================================
+   Le dessin lui-même ne bouge pas : c'est un SVG de couleurs propres, repeindre
+   un renard en fonction du thème n'aurait aucun sens. Seule l'ombre au sol,
+   masquée par Crépuscule sur le hero, le reste ici. */
+
+body.theme-pelage.tab-trajet #compagnon-bulle { color: #8A7259; }
+
+
+/* === 6. BARRE D'ONGLETS ====================================================
+   Elle est repeinte AVEC l'écran parce qu'elle le touche : une barre violet
+   nuit collée sous une feuille crème ferait une couture. Elle redevient
+   Crépuscule dès qu'on quitte l'onglet Trajet — le changement est visible, et
+   c'est voulu : il dit que l'essai ne porte que sur cet écran. */
+
+body.theme-pelage.tab-trajet #main-bottom-nav {
+    background: rgba(253,247,236,0.94);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-top: 1px solid rgba(120,86,58,0.18);
+    box-shadow: 0 -6px 20px rgba(120,80,40,0.14);
+}
+body.theme-pelage.tab-trajet .main-nav-tab { color: #A08A70; }
+body.theme-pelage.tab-trajet .main-nav-tab.active { color: #C24E1F; }
+body.theme-pelage.tab-trajet .main-nav-tab.active::before { background: #E05A28; box-shadow: none; }
+
+
+/* === 7. LE BOUTON D'ESSAI ==================================================
+   Hors thème à dessein : il doit être visible dans les DEUX états, donc il
+   n'est scopé ni sur .theme-pelage ni sur .tab-trajet. Il n'existe que pour la
+   durée de l'essai — le retirer, c'est retirer ce bloc, le <script> et le
+   <link> correspondants, rien d'autre.
+
+   z-index 1600 : au-dessus du widget info ouvert (1500), sous les modales. */
+
+#theme-pelage-switch {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 15px);
+    right: 15px;
+    z-index: 1600;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    background: rgba(36,28,66,0.86);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 6px 18px rgba(10,6,24,0.4);
+    color: #B9A9D8;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+#theme-pelage-switch .tps-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #6E5F91;
+    transition: background 0.2s;
+}
+#theme-pelage-switch:focus-visible { outline: 2px solid #FFB35C; outline-offset: 2px; }
+
+/* En Pelage, le bouton prend la peau de l'écran qu'il vient d'allumer. */
+body.theme-pelage #theme-pelage-switch {
+    background: rgba(253,247,236,0.94);
+    border-color: rgba(120,86,58,0.20);
+    box-shadow: 0 6px 18px rgba(120,80,40,0.22);
+    color: #6B5340;
+}
+body.theme-pelage #theme-pelage-switch .tps-dot { background: #E05A28; }
+body.theme-pelage #theme-pelage-switch:focus-visible { outline-color: #E05A28; }
+
+/* Pendant la navigation, plus rien d'accessoire à l'écran : même règle de
+   sécurité que pour le compagnon, en CSS pour qu'un JS en défaut ne puisse pas
+   laisser un bouton d'essai au-dessus de la carte au volant. */
+body.nav-active #theme-pelage-switch { display: none !important; }

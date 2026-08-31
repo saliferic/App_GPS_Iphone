@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Aperçu — ombres au sol des vignettes</title>
+<!-- Planche de calage (31/08/2026) : les six compagnons débloqués, dessinés par le
+     MÊME appel que la grille « Animaux sauvés » (Compagnon.catalogue().vignette).
+     Le trait rouge marque y=356 dans le viewBox, la ligne où dessinImageInterieur()
+     pose l'ombre : on voit d'un coup d'œil quels animaux y posent les pieds. -->
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="../css/theme-crepuscule.css">
+<style>
+    html,body { margin:0; background:#241C42; color:#EDE6FF; font-family:'Nunito',sans-serif; }
+    #grille { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; }
+    .case { background:rgba(255,255,255,0.055); border:1px solid rgba(255,255,255,0.10);
+            border-radius:16px; padding:8px; text-align:center; }
+    .case .cpx-vignette { max-width:120px; }
+    .nom { font-size:12px; font-weight:800; margin-top:4px; }
+    /* Repère : la ligne d'ombre théorique, projetée par-dessus le dessin. */
+    .case { position:relative; }
+</style>
+</head>
+<body class="theme-crepuscule">
+<div id="grille"></div>
+<script src="../js/22-compagnon.js"></script>
+<script>
+    const grille = document.getElementById('grille');
+    (Compagnon.catalogue() || []).forEach(c => {
+        if (!c.debloque) return;
+        const d = document.createElement('div');
+        d.className = 'case';
+        d.innerHTML = `<div class="cpx-vignette" style="--cpx-accent:${c.accent}">${c.vignette}</div>
+                       <div class="nom">${c.nom}</div>`;
+        grille.appendChild(d);
+    });
+</script>
+</body>
+</html>

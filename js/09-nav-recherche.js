@@ -75,6 +75,32 @@
             document.getElementById('freecourse-end-overlay').classList.remove('open');
         }
 
+        /* ═══ LA CROIX DE LA BARRE DE NAVIGATION DEMANDE CONFIRMATION (31/08/2026) ═══
+           Elle appelait `stopCourse()` directement : un appui, et le trajet était fini —
+           points arrêtés, guidage coupé, panneau Itinéraire de retour, sans retour
+           possible. Elle vient en plus de passer au CENTRE de la barre, entre les deux
+           compteurs, donc encore plus près du pouce. Une action irréversible en un geste
+           à cet endroit-là ne tient pas.
+           Le trajet libre a sa propre question (`openFreeCourseEnd`), qui affiche en plus
+           les kilomètres parcourus : on la laisse répondre pour lui plutôt que de poser
+           deux fois la même question avec des mots différents. */
+        function askStopCourse() {
+            if (typeof isFreeCourseActive === 'function' && isFreeCourseActive()) {
+                openFreeCourseEnd();
+                return;
+            }
+            document.getElementById('stop-course-overlay')?.classList.add('open');
+        }
+
+        function closeStopCourse() {
+            document.getElementById('stop-course-overlay')?.classList.remove('open');
+        }
+
+        function confirmStopCourse() {
+            closeStopCourse();
+            stopCourse();
+        }
+
         function confirmEndFreeCourse() {
             closeFreeCourseEnd();
             // Fin de trajet standard : points, coffre, badges, objectifs, panneau Itinéraire.

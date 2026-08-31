@@ -132,8 +132,13 @@
         let isFetchingSpeedLimit = false;
         let lastSpeedLimitFetchTime = 0;
         let lastSpeedLimitCoords = null;
-        const SPEED_LIMIT_REFETCH_METERS = 120; // on ne redemande que si on a assez bougé...
-        const SPEED_LIMIT_REFETCH_MS = 12000;   // ...et pas plus souvent que ça (évite de spammer Overpass)
+        const SPEED_LIMIT_REFETCH_METERS = 200; // on ne redemande que si on a assez bougé...
+        /* ...et pas plus souvent que ça. 25 s et non 12 : le repli Overpass partage un
+           unique serveur joignable avec le scan parkings et le relevé des bornes (voir
+           maybeRefreshSpeedLimit, js/10), et ce serveur limite le nombre de requêtes
+           simultanées par adresse. Interroger toutes les 12 s pour une réponse qui met
+           vingt secondes revenait à occuper la file en permanence. */
+        const SPEED_LIMIT_REFETCH_MS = 25000;
 
         /* === TRAÇABILITÉ DE LA LIMITE AFFICHÉE ===
            Un « 50 » à l'écran pouvait vouloir dire trois choses très différentes : une valeur
@@ -152,10 +157,52 @@
         let _speedLimitSource = null;
         let _overpassSource = null;    // provenance de currentSpeedLimitKmh (couche Overpass seule)
         let _speedLimitDebug = null;   // { tags, highway, dist, ts } du tronçon Overpass retenu
-        // Sources sur lesquelles on refuse d'infliger une pénalité de vitesse.
-        const UNCERTAIN_SPEED_SOURCES = ['overpass-inference', 'steps', 'fallback'];
+
+        /* ═══ DATE DE LA VALEUR OVERPASS — ESSAI AUTOROUTE DU 31/08/2026 ═══
+           `currentSpeedLimitKmh` n'avait aucun âge : une valeur relevée à l'entrée d'une
+           bretelle (50) restait la vérité de l'app tant qu'aucune autre ne la remplaçait.
+           Sur l'A9 la relève suivante n'arrive pas forcément — Overpass est lent, saturé ou
+           hors d'atteinte en 4G le long d'une voie rapide — et le « 50 » observé pendant
+           une trentaine de secondes à 110 km/h a coûté l'essentiel de la vie du compagnon.
+           On horodate donc la valeur : passé SPEED_LIMIT_STALE_MS sans confirmation, elle
+           reste AFFICHÉE (mieux qu'un écran vide) mais passe pour incertaine, ce qui coupe
+           les pénalités. Perdre une pénalité méritée est sans gravité ; en infliger une
+           imméritée vide la jauge d'un trajet entier. */
+        let currentSpeedLimitTs = 0;
+        const SPEED_LIMIT_STALE_MS = 20000;
+        function isSpeedLimitStale() {
+            return !currentSpeedLimitTs || (Date.now() - currentSpeedLimitTs) > SPEED_LIMIT_STALE_MS;
+        }
+
+        /* Sources sur lesquelles on refuse d'infliger une pénalité de vitesse.
+           'mapbox-neighbour' : la valeur ne vient PAS du tronçon foulé mais d'un segment
+           voisin de l'itinéraire (jusqu'à 250 m), emprunté faute d'annotation sur place.
+           C'est exactement ce qui se produit en entrant sur une autoroute : le dernier
+           segment annoté est la bretelle, et sa limite déborde sur les premières centaines
+           de mètres de l'autoroute. On l'affiche — c'est la meilleure estimation qu'on ait —
+           mais on ne punit pas sur une limite qu'on a été chercher ailleurs.
+           'stale' : valeur Overpass périmée, voir ci-dessus. */
+        const UNCERTAIN_SPEED_SOURCES = ['mapbox-neighbour', 'stale', 'overpass-inference', 'steps', 'fallback'];
         function isSpeedLimitUncertain() {
             return !_speedLimitSource || UNCERTAIN_SPEED_SOURCES.includes(_speedLimitSource);
+        }
+
+        /* ═══ DEUX QUESTIONS DIFFÉRENTES, DEUX DRAPEAUX      (31/08/2026) ═══
+           « Ai-je le droit de pénaliser ? » et « dois-je afficher un chiffre douteux ? »
+           partageaient le même test, et la pastille passait donc en gris pointillé dès
+           qu'une valeur venait d'un segment voisin ou avait vingt secondes — c'est-à-dire
+           presque partout en ville, sur des 50 parfaitement justes. Un panneau grisé en
+           permanence ne dit plus rien : il devient le nouvel état normal, et le vrai
+           « je ne sais pas » ne se distingue plus.
+           On garde donc la prudence là où elle coûte (aucune pénalité, la liste large
+           au-dessus) et la franchise à l'écran : le gris est réservé aux cas où l'on n'a
+           RIEN lu sur cette route — une déduction depuis la classe de voie, une moyenne
+           de steps, ou le repli aveugle 30/50. Une limite empruntée au tronçon voisin ou
+           vieille de vingt secondes reste, elle, la meilleure information disponible :
+           elle s'affiche normalement. */
+        const UNKNOWN_SPEED_SOURCES = ['overpass-inference', 'steps', 'fallback'];
+        function isSpeedLimitUnknown() {
+            return !_speedLimitSource || UNKNOWN_SPEED_SOURCES.includes(_speedLimitSource);
         }
 
         let fullRouteLine = null;

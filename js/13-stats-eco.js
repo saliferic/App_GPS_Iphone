@@ -478,7 +478,7 @@
                0/100 qui accuserait à tort une conduite désastreuse. */
             const ecoTexte = Number.isFinite(eco) ? `${Math.round(eco)}/100` : '—';
             const ecoCouleur = Number.isFinite(eco)
-                ? (eco >= 80 ? '#28a745' : eco >= 50 ? '#f39c12' : '#e74c3c')
+                ? (eco >= 80 ? '#6FE3A0' : eco >= 50 ? '#FFB35C' : '#FF6B6B')
                 : null;
 
             cell('Durée', formatTripDuration(t.durationMin));
@@ -486,7 +486,7 @@
             cell('Score éco', ecoTexte, ecoCouleur);
             const brusques = (Number(t.hardBrakings) || 0) + (Number(t.hardAccels) || 0);
             cell('Freinages / accél.', `${Number(t.hardBrakings) || 0} / ${Number(t.hardAccels) || 0}`,
-                 brusques > 0 ? '#f39c12' : '#28a745');
+                 brusques > 0 ? '#FFB35C' : '#6FE3A0');
         }
 
         /* `_thOpen` n'est PAS réinitialisé ici : les sections dépliées la fois précédente le
@@ -870,6 +870,31 @@
         let _ecoLastMotionMs = 0;
         let _ecoSpeedHistory = [];  // [{t, v}] sur ~2 s, pour corroborer avec le GPS
 
+        /* ══════════════════════════════════════════════════════════════════
+           LES MARQUEURS DE DIAGNOSTIC DE LA DÉTECTION      (31/08/2026)
+           ------------------------------------------------------------------
+           La détection franchit six portes et SORT EN SILENCE à chacune : un
+           freinage qui ne produit aucun toast ne dit pas laquelle l'a arrêté.
+           Sur le téléphone, où se font les vrais essais, il n'y a par ailleurs
+           aucune console — le « [Éco] Accéléromètre actif » de
+           `startEcoMotionTracking()` n'y a jamais été lisible par personne.
+
+           ⚠ `logDiag()`, JAMAIS `console.log()` : même règle qu'en js/16. Le
+           journal se lit dans l'app, bouton 🩺 du panneau Profil.
+
+           ⚠ UN MARQUEUR PAR TRAJET, PAS UN PAR MESURE. `gps_diag_log` ne garde
+           que 12 entrées (`DIAG_LOG_MAX`, js/01) : un log par événement
+           `devicemotion` — soit plusieurs dizaines par seconde — chasserait du
+           journal tout le reste, y compris ce qu'on est venu y chercher. D'où
+           les drapeaux à déclenchement unique ci-dessous, remis à zéro au
+           départ du trajet : cinq lignes au plus par essai. */
+        let _ecoDiagVu     = false;  // une mesure du capteur est arrivée
+        let _ecoDiagSeuil  = false;  // la magnitude a franchi le seuil
+        let _ecoDiagDuree  = false;  // elle a tenu les 350 ms exigées
+        let _ecoDiagRefus  = false;  // le GPS a refusé de confirmer
+        let _ecoDiagEvt    = false;  // la chaîne est allée au bout
+        let _ecoDiagMagMax = 0;      // la plus forte magnitude du trajet
+
         function startEcoMotionTracking() {
             if (_ecoMotionActive) return;
             // Repartir d'un état propre : sans ça, la gravité estimée et l'historique de vitesse
@@ -880,30 +905,80 @@
             _ecoOverSince = 0;
             _ecoLastEventMs = 0;
             _ecoSpeedHistory = [];
+            /* Les drapeaux de diagnostic repartent avec le trajet : sans ça, le
+               deuxième essai d'une session serait muet et on croirait à une panne. */
+            _ecoDiagVu = _ecoDiagSeuil = _ecoDiagDuree = _ecoDiagRefus = _ecoDiagEvt = false;
+            _ecoDiagMagMax = 0;
             const start = () => {
                 window.addEventListener('devicemotion', _onDeviceMotion, { passive: true });
                 _ecoMotionActive = true;
                 console.log('[Éco] Accéléromètre actif');
+                logDiag('eco-capteur', { etat: 'ecoute-posee' });
             };
             // iOS 13+ : demande de permission obligatoire
             if (typeof DeviceMotionEvent !== 'undefined' &&
                 typeof DeviceMotionEvent.requestPermission === 'function') {
                 DeviceMotionEvent.requestPermission()
-                    .then(state => { if (state === 'granted') start(); })
-                    .catch(() => console.log('[Éco] Permission accéléromètre refusée'));
+                    /* ⚠ UN REFUS NE LÈVE RIEN : `requestPermission()` TIENT sa
+                       promesse avec 'denied'. Le `.catch()` seul ne voyait donc
+                       jamais le cas le plus courant — il n'attrape qu'une erreur
+                       d'appel (geste utilisateur manquant). Les deux sont
+                       journalisés séparément, ils ne se corrigent pas pareil. */
+                    .then(state => {
+                        if (state === 'granted') { start(); return; }
+                        console.log('[Éco] Permission accéléromètre refusée');
+                        logDiag('eco-capteur', { etat: 'permission-refusee', reponse: String(state) });
+                    })
+                    .catch(e => {
+                        console.log('[Éco] Demande de permission impossible');
+                        logDiag('eco-capteur', { etat: 'demande-impossible', err: String(e && e.message || e) });
+                    });
             } else if (typeof DeviceMotionEvent !== 'undefined') {
                 start();
             } else {
                 console.log('[Éco] DeviceMotionEvent non supporté sur ce navigateur');
+                logDiag('eco-capteur', { etat: 'non-supporte' });
             }
         }
 
         function stopEcoMotionTracking() {
             window.removeEventListener('devicemotion', _onDeviceMotion);
             _ecoMotionActive = false;
+            /* LE BILAN DU TRAJET — la ligne à lire en premier quand rien ne s'est
+               déclenché. Le record de magnitude tranche la question que les autres
+               marqueurs laissent ouverte : à 0, le capteur n'a rien mesuré (support,
+               permission, WebView) ; juste sous le seuil, c'est le seuil qui est trop
+               haut pour ce montage ; bien au-dessus alors qu'aucun `eco-duree` n'a été
+               posé, la secousse était trop brève. Écrit à l'arrêt du suivi, donc une
+               seule fois par trajet — et seulement si le capteur a parlé, pour ne pas
+               remplir le journal quand la course n'a jamais démarré. */
+            if (_ecoDiagVu) {
+                logDiag('eco-bilan', {
+                    magMax: +_ecoDiagMagMax.toFixed(2),
+                    seuilFrein: ECO_THRESHOLD_BRAKE,
+                    seuilPasse: _ecoDiagSeuil,
+                    dureeTenue: _ecoDiagDuree,
+                    gpsRefus:   _ecoDiagRefus,
+                    evenement:  _ecoDiagEvt
+                });
+            }
         }
 
         function _onDeviceMotion(event) {
+            /* ⚠ AVANT LES GARDES, PAS APRÈS. Placé plus bas, ce marqueur serait
+               muet dans les deux cas qu'on cherche justement à distinguer : un
+               capteur silencieux, et un capteur qui parle à une app qui n'écoute
+               pas (trajet non lancé, ou téléphone à l'arrêt sous les 5 km/h). */
+            if (!_ecoDiagVu) {
+                _ecoDiagVu = true;
+                const a0 = event && event.accelerationIncludingGravity;
+                logDiag('eco-capteur', {
+                    etat: 'premiere-mesure',
+                    valeurs: a0 && a0.x != null ? 'oui' : 'VIDES',
+                    trajet: !!isCourseStarted,
+                    vitesse: drivers.length ? Math.round(drivers[0].actualSpeed) : null
+                });
+            }
             if (!isCourseStarted || drivers.length === 0) return;
             const d = drivers[0];
             if (d.finished || d.actualSpeed < 5) return; // ignorer à l'arrêt
@@ -996,9 +1071,21 @@
 
             // 5) Exigence de DURÉE : un vrai freinage dure plusieurs centaines de ms.
             // Un choc isolé (nid-de-poule, pavé, téléphone qui bouge dans son support) est bref.
+            /* Le record du trajet, gardé même quand rien ne se déclenche : c'est
+               lui qui distingue « le seuil est trop haut » (record à 3,2 quand il
+               en faut 3,5) de « le capteur ne mesure rien » (record à 0,1). */
+            if (magnitude > _ecoDiagMagMax) _ecoDiagMagMax = magnitude;
             if (magnitude < threshold) { _ecoOverSince = 0; return; }
+            if (!_ecoDiagSeuil) {
+                _ecoDiagSeuil = true;
+                logDiag('eco-seuil', { mag: +magnitude.toFixed(2), seuil: threshold });
+            }
             if (!_ecoOverSince) { _ecoOverSince = now; return; }
             if (now - _ecoOverSince < ECO_MIN_DURATION_MS) return;
+            if (!_ecoDiagDuree) {
+                _ecoDiagDuree = true;
+                logDiag('eco-duree', { mag: +magnitude.toFixed(2), ms: now - _ecoOverSince });
+            }
 
             if (now - _ecoLastEventMs < ECO_COOLDOWN_MS) return;
 
@@ -1007,10 +1094,32 @@
             // forcément par une variation de vitesse mesurable.
             const oldest = _ecoSpeedHistory[0];
             const deltaKmh = oldest ? (d.actualSpeed - oldest.v) : 0;
-            if (Math.abs(deltaKmh) < ECO_MIN_SPEED_DELTA) { return; }
+            if (Math.abs(deltaKmh) < ECO_MIN_SPEED_DELTA) {
+                /* La porte la plus sévère sur un freinage de test : la secousse est
+                   là, mais le GPS (~1 Hz, lissé) n'a pas vu passer 4 km/h en 2 s. */
+                if (!_ecoDiagRefus) {
+                    _ecoDiagRefus = true;
+                    logDiag('eco-gps-refus', {
+                        mag: +magnitude.toFixed(2),
+                        deltaKmh: +deltaKmh.toFixed(1),
+                        exige: ECO_MIN_SPEED_DELTA,
+                        mesures: _ecoSpeedHistory.length
+                    });
+                }
+                return;
+            }
 
             _ecoOverSince = 0;
             _ecoLastEventMs = now;
+            /* Une seule ligne par trajet : les suivants se comptent dans
+               `hardBrakings` / `hardAccels`, le journal n'a pas à les répéter. */
+            if (!_ecoDiagEvt) {
+                _ecoDiagEvt = true;
+                logDiag('eco-evenement', {
+                    type: deltaKmh < 0 ? 'freinage' : 'acceleration',
+                    mag: +magnitude.toFixed(2), deltaKmh: +deltaKmh.toFixed(1)
+                });
+            }
 
             // 7) Le SIGNE de la variation de vitesse détermine le type d'événement.
             // L'ancienne version déduisait le type de l'amplitude (>4 = freinage, >3.5 =

@@ -185,19 +185,99 @@
               d'y arriver.
               Un `Promise.any` d'emblée serait plus rapide encore, mais quadruplerait la
               charge sur des serveurs bénévoles pour rien neuf fois sur dix. */
+        /* ⚠ DEUX MIROIRS DE SECOURS AJOUTÉS EN QUEUE (30/08/2026), APRÈS UNE PANNE
+           SIMULTANÉE DES QUATRE PREMIERS. Journal du soir, scan parkings ET relevé d'aires :
+             private.coffee   → « Failed to fetch » — et la console précise CORS : réponse
+                                 SANS `Access-Control-Allow-Origin`, donc une page d'erreur
+                                 du frontal, pas une réponse Overpass
+             kumi.systems     → idem
+             maps.mail.ru     → timeout à 25 s
+             openstreetmap.ru → ERR_CONNECTION_TIMED_OUT
+           Les quatre tombant ensemble, `_fetchOverpassHedged` n'avait plus rien à proposer :
+           la feuille parkings affichait « Recherche impossible » et le relevé d'aires levait
+           « aucun tronçon relevé (1/1) ». Rien n'avait changé dans le code — c'est la liste
+           qui était trop courte pour encaisser une panne groupée.
+           `overpass.osm.ch` et `overpass-api.de` répondent 200 avec
+           `Access-Control-Allow-Origin: *` (revérifié ce jour, User-Agent de navigateur et
+           `Origin: null` compris).
+           ⚠ CECI CONTREDIT LE PAVÉ CI-DESSUS sur le « 406 à tout navigateur » de
+           overpass-api.de : la mesure ne se reproduit plus, et js/10 interroge cette même
+           instance depuis le navigateur sans que rien n'ait jamais été signalé. Le 406 était
+           vraisemblablement une réponse anti-abus transitoire, pas une règle sur l'UA.
+           On ne les met pas en tête pour autant : overpass-api.de applique un quota par IP
+           (« rate_limited » obtenu ici dès la deuxième requête rapprochée) et c'est
+           l'instance officielle, la plus sollicitée du lot. Elle joue le filet, pas le
+           premier rideau — le hedging ne l'atteint que si les autres tardent vraiment. */
+        /* ⛔ `overpass.osm.ch` RETIRÉ LE 01/09/2026 — NE PAS LE REMETTRE.
+           Ajouté en filet le 30/08 après une panne groupée, il a été vérifié « répond 200
+           avec Access-Control-Allow-Origin » — ce qui est vrai, et ne suffisait pas. Cette
+           instance ne contient QUE LA SUISSE. Mesuré ce jour, même requête parkings :
+             Courbevoie (FR) → 200 en 0,3 s, 0 élément
+             Berne (CH)      → 200 en 0,3 s, 228 éléments
+           En France elle rend donc un succès vide, INSTANTANÉMENT — et comme le premier
+           miroir qui répond gagne la course, elle battait `maps.mail.ru` (17 s sur la même
+           requête) à tous les coups. Résultat : « Aucun parking recensé dans 1.5 km » en
+           plein Courbevoie, sans la moindre erreur nulle part. Un miroir régional n'est pas
+           un miroir de secours : il est pire qu'un miroir en panne, parce qu'il ment vite.
+           La garde `exigerResultat` ci-dessous couvre la même classe de panne pour les
+           miroirs restants — les deux vont ensemble. */
         const EV_MIRRORS = [
             'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
             'https://overpass.private.coffee/api/interpreter',
             'https://overpass.kumi.systems/api/interpreter',
             'https://overpass.openstreetmap.ru/cgi/interpreter',
+            'https://overpass-api.de/api/interpreter',
         ];
         const EV_HEDGE_MS   = 6000;    // sans réponse à 6 s, on double la mise sur le suivant
-        const EV_TIMEOUT_MS = 25000;   // > aux 4,7 s mesurés sur le pire segment, avec marge
+        /* ⚠⚠ 45 s, ET CE N'EST PAS DU CONFORT — MESURE DU 01/09/2026, DANS LE NAVIGATEUR,
+           PAGE CHARGÉE EN `file://` (outil : `node tools/_test-overpass.js`). Sur la même
+           requête parkings à Perpignan :
+             maps.mail.ru               200 en 20,6 s — 131 éléments
+             overpass.private.coffee    CORS : bloqué (Origin: null)
+             overpass.kumi.systems      CORS : bloqué
+             overpass-api.de            CORS : bloqué
+             overpass.openstreetmap.ru  injoignable (21 s)
+           Autrement dit : **un seul miroir répond réellement à l'application empaquetée**,
+           et il met une vingtaine de secondes. Les 25 s précédentes le coupaient une fois
+           sur deux — d'où « Recherche indisponible » alors que rien n'était cassé.
+           ⚠ NE PAS CHRONOMÉTRER AVEC curl OU node POUR RÉGLER CETTE VALEUR : sans CORS ni
+           interdiction de poser `User-Agent`, ils voient quatre miroirs répondre là où le
+           navigateur n'en voit qu'un. Trois candidats supplémentaires ont été essayés le
+           même jour (overpass.osm.jp, overpass.monicz.dev, lz4/z.overpass-api.de) : tous
+           refusent l'origine `null`. Il n'y a pas de liste plus longue à écrire, il y a un
+           seul serveur et il faut lui laisser le temps.
+           Le prix est borné : le hedging écarte les miroirs morts en moins d'une seconde,
+           donc ces 45 s ne sont attendues que par celui qui va répondre. */
+        const EV_TIMEOUT_MS = 45000;
 
-        function _fetchOverpassHedged(query) {
+        /* `opts` ajouté le 31/08/2026 pour la limite de vitesse (js/10), qui partage
+           désormais ces miroirs : sa requête est minuscule (un rayon de 50 m) et se rejoue
+           toutes les 6 à 12 s. Les 25 s de EV_TIMEOUT_MS, taillées pour une bbox de 100 km,
+           y auraient bloqué la relève suivante — `isFetchingSpeedLimit` interdit deux
+           appels de front. Sans `opts`, rien ne change : les appelants existants gardent
+           exactement les valeurs d'avant. */
+        function _courseOverpass(query, opts) {
+            const _timeout = (opts && opts.timeoutMs) || EV_TIMEOUT_MS;
+            const _hedge   = (opts && opts.hedgeMs)   || EV_HEDGE_MS;
+            /* `exigerResultat` : une réponse VIDE ne remporte plus la course, elle est mise
+               de côté et les autres miroirs continuent. Le premier qui rapporte quelque
+               chose gagne ; si aucun n'y arrive, la réponse vide mise de côté est rendue —
+               on ne fabrique donc jamais une erreur là où il n'y a réellement rien.
+               Née du miroir suisse (voir EV_MIRRORS), mais elle ne le vise pas lui : elle
+               vaut pour toute instance à couverture partielle, base en cours de rechargement
+               ou requête tombant sur un fragment vide. Un « 0 » instantané est le pire cas
+               possible d'une course au plus rapide.
+               ⚠ RÉSERVÉE AUX APPELS OÙ « AUCUN » EST UNE AFFIRMATION MONTRÉE À
+               L'UTILISATEUR (parkings, bornes). Les balayages par tronçons de js/09 et la
+               limite de vitesse de js/10 rencontrent des vides parfaitement normaux, très
+               souvent : les faire attendre tous les miroirs à chaque fois coûterait des
+               dizaines de secondes pour rien. Sans l'option, comportement inchangé. */
+            const _exigerResultat = !!(opts && opts.exigerResultat);
+            const _vide = (d) => !d || !Array.isArray(d.elements) || d.elements.length === 0;
             return new Promise((resolve, reject) => {
                 const ctrls = [];
                 let lances = 0, echecs = 0, gagne = false;
+                let reponseVide = null;   // premier succès vide mis de côté
                 /* Causes retenues pour l'agrégat final. Sans elles, l'échec se résumait à
                    « tous les miroirs Overpass ont échoué » — vrai, mais muet sur la seule
                    question qui compte : `Failed to fetch` (CORS depuis `file://`, ou réseau)
@@ -211,7 +291,7 @@
                     const nom  = url.split('/')[2];
                     const ctrl = new AbortController();
                     ctrls.push(ctrl);
-                    const minuteur = setTimeout(() => ctrl.abort(), EV_TIMEOUT_MS);
+                    const minuteur = setTimeout(() => ctrl.abort(), _timeout);
 
                     /* `fetch` avec un corps en chaîne pose `Content-Type: text/plain` ;
                        Overpass attend un formulaire `data=…`. Les miroirs retenus tolèrent
@@ -226,6 +306,17 @@
                         .then(res => res.ok ? res.json() : Promise.reject(new Error(`${nom} → ${res.status}`)))
                         .then(data => {
                             if (gagne) return;
+                            if (_exigerResultat && _vide(data)) {
+                                /* Succès, mais rien dedans : on le garde sous le coude et on
+                                   laisse la course continuer. Compté comme un échec pour la
+                                   relance, pas pour le verdict final. */
+                                if (!reponseVide) reponseVide = data;
+                                console.warn(`[EV/Overpass] ${nom} : réponse vide, on continue`);
+                                causes.push(`${nom}: 0 élément`);
+                                if (++echecs >= EV_MIRRORS.length) { gagne = true; resolve(reponseVide); }
+                                else lancer();
+                                return;
+                            }
                             gagne = true;
                             ctrls.forEach(c => c.abort());   // libère les miroirs encore en vol
                             console.log(`[EV/Overpass] servi par ${nom}`);
@@ -236,6 +327,9 @@
                             console.warn(`[EV/Overpass] ${nom} :`, e.message);
                             causes.push(`${nom}: ${e.name === 'AbortError' ? 'timeout' : e.message}`);
                             if (++echecs >= EV_MIRRORS.length) {
+                                /* Une réponse vide mise de côté vaut mieux qu'une erreur :
+                                   au moins un miroir a répondu, il n'y a simplement rien. */
+                                if (reponseVide) { gagne = true; resolve(reponseVide); return; }
                                 reject(new Error('tous les miroirs Overpass ont échoué — ' + causes.join(' | ')));
                             }
                             else lancer();
@@ -243,9 +337,59 @@
                         .finally(() => clearTimeout(minuteur));
 
                     // Renfort différé : ne part que si le précédent tarde vraiment.
-                    setTimeout(lancer, EV_HEDGE_MS);
+                    setTimeout(lancer, _hedge);
                 };
                 lancer();
+            });
+        }
+
+        /* ═══ UNE SECONDE CHANCE, ET UNE SEULE      (01/09/2026) ═══
+           `_courseOverpass` ci-dessus mène la course entre miroirs. Elle ne rend rien
+           quand ils échouent tous — ce qui, dans l'app empaquetée, veut dire « le seul
+           miroir joignable est occupé » : `maps.mail.ru` rend alors 504, ou dépasse le
+           budget. Mesuré ce jour, deux tentatives d'affilée sur la même requête : 504,
+           puis 131 éléments trois minutes plus tard. Le serveur n'est pas en panne, il
+           régule — Overpass limite les créneaux par adresse.
+           On rejoue donc UNE fois, après une courte pause. Pas deux, pas en boucle : le
+           serveur est bénévole, et l'utilisateur qui attend déjà vingt secondes ne doit
+           pas en attendre quatre-vingt-dix.
+           ⚠ ON NE REJOUE QUE SI UN MIROIR A VRAIMENT RÉPONDU (5xx) OU A DÉPASSÉ LE
+           BUDGET. Un « Failed to fetch » est un refus CORS : il est définitif, le rejouer
+           ne ferait que perdre le temps de l'utilisateur pour le même échec. */
+        const OVERPASS_PAUSE_REPRISE_MS = 2500;
+
+        /* ═══ UN SEUL APPEL OVERPASS À LA FOIS       (01/09/2026) ═══
+           Le serveur unique qui répond à l'app limite les créneaux par adresse IP :
+           deux requêtes qui se chevauchent, et la seconde repart en 504. C'est ce que
+           montre le journal du 31/08 à 22:07 et 22:25 — `maps.mail.ru → 504` pendant que
+           le scan parkings était ouvert, les quatre autres miroirs étant de toute façon
+           bloqués par CORS.
+           Les deux veilles de fond (stations js/11, parkings js/27) ne se gardaient que
+           d'elles-mêmes : chacune vérifiait SA feuille et SON drapeau d'occupation, et
+           tirait donc allègrement pendant que l'autre travaillait. Ce compteur leur donne
+           enfin de quoi se voir. Il ne bloque PAS les appels au premier plan — un scan
+           demandé par l'utilisateur passe toujours ; ce sont les préchargements
+           opportunistes qui s'effacent, c'est exactement leur rôle. */
+        let _overpassEnVol = 0;
+        function overpassOccupe() { return _overpassEnVol > 0; }
+
+        function _fetchOverpassHedged(query, opts) {
+            _overpassEnVol++;
+            const _fin = (v) => { _overpassEnVol = Math.max(0, _overpassEnVol - 1); return v; };
+            return _courseOverpassAvecReprise(query, opts).then(_fin, (e) => { _fin(); throw e; });
+        }
+
+        function _courseOverpassAvecReprise(query, opts) {
+            return _courseOverpass(query, opts).catch(err => {
+                const msg = String(err && err.message || '');
+                /* 5xx = le miroir a répondu, il est juste débordé → une reprise a du sens.
+                   « Failed to fetch » = refus CORS, définitif : rejouer ne ferait que
+                   faire attendre l'utilisateur pour le même échec. */
+                const reessayable = /→ 5\d\d/.test(msg) || /timeout/.test(msg);
+                if (!reessayable) throw err;
+                console.warn('[EV/Overpass] miroir occupé, seconde tentative dans', OVERPASS_PAUSE_REPRISE_MS + ' ms');
+                return new Promise(r => setTimeout(r, OVERPASS_PAUSE_REPRISE_MS))
+                    .then(() => _courseOverpass(query, opts));
             });
         }
 
@@ -256,7 +400,9 @@
             // le parseur ci-dessous n'a jamais rien fait. Même résultat, charge allégée.
             const query = `[out:json][timeout:25];nwr["amenity"="charging_station"](${bbox});out center tags;`;
             try {
-                const data = await _fetchOverpassHedged(query);
+                // Voir la note des parkings (js/27) : un « 0 borne » instantané venu d'un
+                // seul miroir ne doit pas clore la course.
+                const data = await _fetchOverpassHedged(query, { exigerResultat: true });
                 const elements = data?.elements || [];
                 const stations = elements.map(el => {
                     const tags = el.tags || {};
@@ -1259,6 +1405,8 @@
                doit être définitivement acquis, quoi qu'il arrive à l'application ensuite. */
             if (window.VieCompagnon) VieCompagnon.enregistrer();
             isCourseStarted = false; lastKnownBearing = 0; currentVisualBearing = 0;
+            // Le compagnon posé sur la barre de vie appartient au trajet : il s'en va avec lui.
+            tenterSansBruit(() => masquerPortraitCompagnon(), 'stopCourse/portraitCompagnon');
             // Masquer le toast hors ligne navigation
             const _offlineToast = document.getElementById('offline-nav-toast');
             if (_offlineToast) _offlineToast.classList.remove('visible');
@@ -1269,7 +1417,7 @@
                 const btn = document.getElementById('nav-btn-liveshare');
                 if (btn) btn.classList.remove('sharing');
             }
-            currentSpeedLimitKmh = null; lastSpeedLimitFetchTime = 0; lastSpeedLimitCoords = null;
+            currentSpeedLimitKmh = null; currentSpeedLimitTs = 0; lastSpeedLimitFetchTime = 0; lastSpeedLimitCoords = null;
             _speedLimitSource = null; _overpassSource = null; _speedLimitDebug = null; hideSpeedLimitDebug();
             resetMaxspeedProbe();
             routeTotalDistKm = 0; routeTotalDurationHours = 0;
@@ -1792,9 +1940,20 @@
             // Provenance de la valeur finalement retenue. Recalculée à chaque frame : une
             // valeur Mapbox qui disparaît (sortie de tronçon annoté) doit rendre la main à
             // la source Overpass, et non laisser croire qu'on est toujours sur du fiable.
-            if (mapboxLimit) _speedLimitSource = 'mapbox';
+            /* ⚠ TROIS NUANCES AJOUTÉES APRÈS L'ESSAI AUTOROUTE DU 31/08/2026 — elles ne
+               changent PAS la limite affichée, seulement la confiance qu'on lui accorde,
+               donc le droit de pénaliser (voir UNCERTAIN_SPEED_SOURCES dans js/05) :
+               - une valeur Mapbox EMPRUNTÉE à un segment voisin (bretelle d'entrée dont le
+                 50 déborde sur les premiers mètres d'autoroute) n'est plus donnée pour du
+                 relevé sur place ;
+               - une valeur Overpass PÉRIMÉE (plus de 20 s sans confirmation, cas courant en
+                 4G sur voie rapide) cesse de faire autorité ;
+               - le reste est inchangé. */
+            if (mapboxLimit) _speedLimitSource = _mapboxLimitWasBorrowed ? 'mapbox-neighbour' : 'mapbox';
             else if (probeLimit) _speedLimitSource = 'mapbox-probe';
-            else if (currentSpeedLimitKmh) _speedLimitSource = _overpassSource || 'overpass-inference';
+            else if (currentSpeedLimitKmh) {
+                _speedLimitSource = isSpeedLimitStale() ? 'stale' : (_overpassSource || 'overpass-inference');
+            }
             else _speedLimitSource = null;
             // Repli n°3 : inférence depuis la vitesse moyenne des steps Mapbox (distance/durée),
             // la même fonction que celle utilisée par le mode simulation — où elle donne de bons
@@ -1813,7 +1972,14 @@
             // Si Mapbox donne une valeur, on met à jour currentSpeedLimitKmh pour cohérence
             // (et sa provenance avec, sinon une valeur Mapbox mise en cache serait plus tard
             // réattribuée à Overpass et jugée incertaine à tort).
-            if (mapboxLimit) { currentSpeedLimitKmh = mapboxLimit; _overpassSource = 'mapbox'; }
+            if (mapboxLimit) {
+                currentSpeedLimitKmh = mapboxLimit;
+                currentSpeedLimitTs = Date.now();
+                /* Une valeur empruntée au voisinage est mise en cache comme telle : sans
+                   cette nuance, le 50 de la bretelle repartait plus tard sous l'étiquette
+                   'mapbox' — la plus fiable de toutes — et redevenait pénalisable. */
+                _overpassSource = _mapboxLimitWasBorrowed ? 'mapbox-neighbour' : 'mapbox';
+            }
             /* ⚠ `limit-<id>` N'EXISTE PLUS depuis le retrait de la ligne « Limite / points »
                de la carte conducteur (22/08/2026, js/14). Ce `.innerText` était le SEUL des
                quatre sites d'écriture à ne pas tester l'existence de l'élément : laissé tel
@@ -1994,24 +2160,73 @@
                 if (DOM.navSpeedDisplay) DOM.navSpeedDisplay.classList.toggle('over-limit', !!d.isSpeeding);
                 updateSpeedometer(d.actualSpeed, limitKmh, !!d.isSpeeding);
 
+                /* ═══ LE WIDGET REPLIÉ NE SE MET PAS À JOUR       (31/08/2026) ═══
+                   Les quatre lignes du widget « Info trajet » étaient réécrites à chaque
+                   point GPS, volet ouvert ou non — quatre `getElementById` et quatre
+                   écritures DOM par seconde pour un panneau que personne ne regarde. Il
+                   est replié par défaut (`#info-widget.open` gouverne son affichage), et
+                   `openInfoWidget()` (js/08) rejoue le rendu à l'ouverture… mais pas les
+                   valeurs : d'où le rafraîchissement immédiat à l'ouverture, ci-dessous.
+                   ⚠ CE QUI SORT DE LA GARDE Y RESTE : `updateGoogleEtaBar` et
+                   `checkTenMinAlert` ne sont PAS de l'affichage de widget — la première
+                   alimente le bandeau permanent du bas, la seconde déclenche l'alerte des
+                   dix minutes. Les enfermer ici les aurait rendues muettes tant que le
+                   widget est replié, c'est-à-dire presque toujours. */
+                /* Dernières valeurs connues, mémorisées même widget replié : c'est ce que
+                   `rafraichirInfoWidget()` (plus bas) écrira à l'ouverture, sans attendre
+                   le point GPS suivant. Une affectation d'objet par point GPS, contre
+                   quatre écritures DOM économisées. */
+                _infoDerniere = {
+                    guide: !!(exactEndCoords || navWaypoints.length > 0),
+                    distKm: remainingDistKm, tempsH: remainingTimeHours,
+                    parcouruKm: d.dist, ecouleH: d.timeHours, points: displayPoints
+                };
+                const _infoOuvert = !!DOM.infoWidget && DOM.infoWidget.classList.contains('open');
                 if (exactEndCoords || navWaypoints.length > 0) {
-                    document.getElementById('info-label-1').innerText = "🏁 Dist. restante:";
-                    document.getElementById('info-label-2').innerText = "⏳ Temps restant:";
-                    document.getElementById('info-dist-left').innerText = remainingDistKm.toFixed(2) + " km";
-                    document.getElementById('info-eta').innerText = formatTime(remainingTimeHours);
+                    if (_infoOuvert) {
+                        setText('info-label-1', "🏁 Dist. restante:");
+                        setText('info-label-2', "⏳ Temps restant:");
+                        setText('info-dist-left', remainingDistKm.toFixed(2) + " km");
+                        setText('info-eta', formatTime(remainingTimeHours));
+                        setText('info-points', displayPoints + " pts");
+                    }
                     if (DOM.navEtaBox) DOM.navEtaBox.classList.add('visible');
                     if (DOM.navEta)    DOM.navEta.innerText = formatTime(remainingTimeHours);
                     updateGoogleEtaBar(remainingDistKm, remainingTimeHours);
                     if (exactEndCoords) checkTenMinAlert(remainingTimeHours);
                 } else {
-                    document.getElementById('info-label-1').innerText = "• Distance parcourue:";
-                    document.getElementById('info-label-2').innerText = "⏱️ Temps écoulé:";
-                    document.getElementById('info-dist-left').innerText = d.dist.toFixed(2) + " km";
-                    document.getElementById('info-eta').innerText = formatTime(d.timeHours);
+                    if (_infoOuvert) {
+                        setText('info-label-1', "• Distance parcourue:");
+                        setText('info-label-2', "⏱️ Temps écoulé:");
+                        setText('info-dist-left', d.dist.toFixed(2) + " km");
+                        setText('info-eta', formatTime(d.timeHours));
+                        setText('info-points', displayPoints + " pts");
+                    }
                     if (DOM.navEtaBox) DOM.navEtaBox.classList.remove('visible');
                 }
-                document.getElementById('info-points').innerText = displayPoints + " pts";
             }
+        }
+
+        /* Le widget « Info trajet » n'est plus rafraîchi tant qu'il est replié (voir la
+           garde dans handleRealMovement). Il faut donc le peindre au moment où on l'ouvre,
+           à partir des dernières valeurs relevées. Sans données encore (avant le premier
+           point GPS), on ne touche à rien : le balisage porte déjà des tirets. */
+        let _infoDerniere = null;
+        function rafraichirInfoWidget() {
+            const v = _infoDerniere;
+            if (!v) return;
+            if (v.guide) {
+                setText('info-label-1', "🏁 Dist. restante:");
+                setText('info-label-2', "⏳ Temps restant:");
+                setText('info-dist-left', v.distKm.toFixed(2) + " km");
+                setText('info-eta', formatTime(v.tempsH));
+            } else {
+                setText('info-label-1', "• Distance parcourue:");
+                setText('info-label-2', "⏱️ Temps écoulé:");
+                setText('info-dist-left', v.parcouruKm.toFixed(2) + " km");
+                setText('info-eta', formatTime(v.ecouleH));
+            }
+            setText('info-points', v.points + " pts");
         }
 
         function startFreeCourse() {
@@ -2061,6 +2276,11 @@
 
             document.getElementById('nav-arrivee').innerText = "--";
             document.getElementById('nav-bottom-bar').classList.add('visible');
+            /* Le portrait du compagnon est peint à l'ouverture de la barre : sinon il
+               resterait vide jusqu'au premier CHANGEMENT d'état physique, seul signal qui
+               appelle rafraichirMarqueurCompagnon() — donc tout un trajet sans animal si
+               la conduite est bonne, exactement le cas où l'on veut le voir intact. */
+            tenterSansBruit(() => rafraichirPortraitNav(), 'navBar/portraitCompagnon');
             /* ⚠ ON NE REMET PAS LA VIE À 100 %. `monter()` affiche la valeur COURANTE du
                compagnon, celle où le trajet précédent l'a laissé — c'est la décision du
                24/08/2026 (js/22, A_VENIR). Un simple rendu, jamais une réinitialisation. */
@@ -2119,6 +2339,15 @@
             statusBox.style.color = "#ff6b6b"; statusBox.innerText = "Préparation de l'itinéraire...";
 
             clearRouteLine();
+            /* ⚠ LE POINT VERT DE DÉPART EST UN MARQUEUR D'APERÇU — il ne survit pas au
+               lancement (31/08/2026). Posé par le calcul d'itinéraire (js/16) pour montrer
+               d'où part le tracé, il n'était retiré qu'à `stopCourse()` ou à l'annulation
+               de l'aperçu : pendant tout le trajet, un rond vert restait planté à l'adresse
+               de départ, à des kilomètres derrière, sans plus rien vouloir dire — et à
+               deux pas du point bleu du conducteur au moment du démarrage, où les deux se
+               confondent. Le marqueur rouge d'arrivée reste, LUI : il désigne un point
+               qu'on n'a pas encore atteint. */
+            if (startTempMarker) { startTempMarker.remove(); startTempMarker = null; }
             if (animationFrame) cancelAnimationFrame(animationFrame);
             currentTurfLine = null; updateScreenGlow(false, false);
             currentVisualBearing = 0;
@@ -2190,6 +2419,11 @@
 
                 document.getElementById('nav-arrivee').innerText = "--";
                 document.getElementById('nav-bottom-bar').classList.add('visible');
+            /* Le portrait du compagnon est peint à l'ouverture de la barre : sinon il
+               resterait vide jusqu'au premier CHANGEMENT d'état physique, seul signal qui
+               appelle rafraichirMarqueurCompagnon() — donc tout un trajet sans animal si
+               la conduite est bonne, exactement le cas où l'on veut le voir intact. */
+            tenterSansBruit(() => rafraichirPortraitNav(), 'navBar/portraitCompagnon');
                 // Voir startFreeCourse() : on affiche la vie en cours, on ne la refait pas.
                 if (window.VieCompagnon) VieCompagnon.monter();
                 document.getElementById('nav-speed-display').classList.add('visible');
@@ -2417,17 +2651,37 @@
                         let currentAvgSpeed = d.timeHours > 0 ? (d.dist / d.timeHours) : 0;
                         let remainingDistKm = 0;
                         let remainingTimeHours = 0;
-                        
+
+                        /* ═══ LES CHIFFRES NE SE RÉÉCRIVENT PAS 60 FOIS PAR SECONDE ═══
+                           (31/08/2026) Cette boucle tourne à la fréquence de l'écran et
+                           réécrivait une vingtaine de champs texte à chaque image :
+                           distances, ETA, vitesses, points, heure d'arrivée. Aucun de ces
+                           nombres n'a de sens à cette cadence — le deuxième chiffre après
+                           la virgule d'un kilométrage ne se lit pas à 60 Hz — et chaque
+                           écriture est un accès au DOM suivi d'un recalcul de mise en page.
+                           Le MOUVEMENT, lui, reste à pleine fréquence : marqueur, caméra,
+                           tracé et zoom sont au-dessus de cette garde et n'y touchent pas.
+                           Seul l'affichage chiffré est ralenti.
+                           ⚠ La garde est posée pour le conducteur PRINCIPAL seulement dans
+                           son propre bloc plus bas ; ici elle vaut pour tous, adversaires
+                           simulés compris — leurs cartes sont hors écran la plupart du
+                           temps. */
+                        const _majTexte = !animate._lastTexte || (timestamp - animate._lastTexte) > 200;
+                        if (_majTexte) animate._lastTexte = timestamp;
+
                         if (currentTurfLine) {
                             remainingDistKm = simState.distanceKm - d.dist;
                             if (remainingDistKm < 0) remainingDistKm = 0;
                             // Temps restant = proportion de distance restante × durée totale du trajet
                             const progressRatio = simState.distanceKm > 0 ? remainingDistKm / simState.distanceKm : 0;
                             remainingTimeHours = simState.totalDurationHours * progressRatio;
-                            setText(`dist-left-${d.id}`, remainingDistKm.toFixed(2) + " km");
-                            setText(`eta-${d.id}`, formatTime(remainingTimeHours));
+                            if (_majTexte) {
+                                setText(`dist-left-${d.id}`, remainingDistKm.toFixed(2) + " km");
+                                setText(`eta-${d.id}`, formatTime(remainingTimeHours));
+                            }
                         }
 
+                        if (_majTexte) {
                         setText(`dist-${d.id}`, d.dist.toFixed(2) + " km");
                         setText(`time-${d.id}`, formatTime(d.timeHours));
                         setText(`speed-${d.id}`, Math.round(d.actualSpeed));
@@ -2468,6 +2722,7 @@
                             }
                             setText('info-points', displayPoints + " pts");
                         }
+                        }   /* fin de la garde _majTexte — voir son commentaire plus haut */
                       } catch (err) {
                         // Log limité à une fois par seconde pour ne pas noyer la console
                         if (!animate._lastErr || timestamp - animate._lastErr > 1000) {

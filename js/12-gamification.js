@@ -401,7 +401,7 @@
                 bonusEl.innerHTML = '';
             } else {
                 const remaining = data.goals.filter(g => g.progress < g.target).length;
-                bonusEl.innerHTML = `<div class="wg-remaining">Encore ${remaining} mission${remaining > 1 ? 's' : ''} et ${nomCompagnon()} franchit une étape.</div>`;
+                bonusEl.innerHTML = `<div class="wg-remaining">Encore ${remaining} objectif${remaining > 1 ? 's' : ''} et ${nomCompagnon()} franchit une étape.</div>`;
             }
         }
 

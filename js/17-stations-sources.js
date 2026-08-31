@@ -150,7 +150,12 @@
         let selectedGasStation = null;       // { lng, lat, name, addr, sp95, gazole } ou null
         let gasStationAlertFired = false;    // bannière "5 min" déjà affichée pour ce trajet
         let gasStopWaypoint = null;          // coords [lng, lat] du stop choisi (copié au lancement)
-        let selectedFuelType = 'sp95';       // carburant affiché : 'sp95'|'gazole'|'e10'|'sp98'
+        /* null au départ, et volontairement : aucun carburant n'est présélectionné.
+           Avec 'sp95' par défaut, l'ouverture du panneau peignait d'emblée une liste
+           et une volée de pastilles sur la carte, pour un carburant que l'utilisateur
+           n'avait pas demandé. Il choisit lui-même sa pastille une fois le trajet
+           entré ; tant qu'il ne l'a pas fait, la carte reste lisible. */
+        let selectedFuelType = null;         // 'sp95'|'gazole'|'e10'|'sp98' ou null (aucun)
         let _allGasStations = [];            // cache toutes les stations pour re-filtrer sans rappel API
 
 

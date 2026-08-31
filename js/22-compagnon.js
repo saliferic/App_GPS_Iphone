@@ -669,8 +669,8 @@
                pour l'hippo. `taille` est recalculée pour que la hauteur apparente
                du personnage ne bouge pas (mêmes pieds, même centre horizontal). */
             fichier: 'Images/Animals/Gif/Elephant.webp',
-            boite: { x: 106, y: 130, w: 304, h: 340 },
-            x: -39.5, y: -5.5, taille: 395.9,   // contenu 304×340 à 106,130
+            boite: { x: 106, y: 130, w: 304, h: 308 },
+            x: -68.7, y: -30.2, taille: 453.8,   // contenu 304×308 à 106,130 (mesuré, cf. tools/_alpha-bbox.js)
             sol: { cx: 160, rx: 59 },
             larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]],
             /* Le calage d'avant la bascule webp, gardé pour le parcours (page
@@ -690,12 +690,12 @@
                Le calage (boite/x/y/taille) reste celui du PNG : à recalibrer si
                l'animation a un cadrage différent (voir la note plus haut sur le calage). */
             fichier: 'Images/Animals/Gif/Hippo.webp',
-            boite: { x: 73, y: 58, w: 362, h: 407 },
+            boite: { x: 128, y: 146, w: 250, h: 292 },
             /* Le seul animal qui ait ses trois états au 27/08/2026. Les six autres
                n'ont pas de `variantes` : ils affichent leur image Normal quel que soit
                leur état physique — voir `variante()` juste sous cette table. */
             variantes: {
-                blesse: { fichier: 'Images/Animals/Blesser/Hippo_Blesser.PNG',
+                blesse: { fichier: 'Images/Animals/Blesse/Hippo_Blesse.PNG',
                           boite: { x: 73, y: 58, w: 362, h: 407 } },
                 mort:   { fichier: 'Images/Animals/Dead/Hippo_dead.PNG',
                           boite: { x: 75, y: 59, w: 361, h: 427 } }
@@ -703,7 +703,7 @@
             /* +25% (test gif) : taille scalée depuis 336.5, x/y recalculés pour garder
                les pieds et le centre horizontal au même endroit qu'avant (sinon l'animal
                s'enfonce dans le sol ou flotte au-dessus de l'ombre). */
-            x: -49.0, y: -31.7, taille: 420.6,   // contenu 362×407 à 73,58 (×1.25)
+            x: -76.6, y: -51.5, taille: 478.7,   // contenu 250×292 à 128,146 (mesuré)
             sol: { cx: 160, rx: 63 },
             larme: [114, 181], zzz: [265, 98], etoiles: [[60, 106, 13], [258, 94, 10]],
             /* Le calage d'avant la bascule webp, gardé pour le parcours (page
@@ -712,6 +712,32 @@
                 fichier: 'Images/Animals/Normal/Hippo_Neutre.PNG',
                 boite: { x: 73, y: 58, w: 362, h: 407 },
                 x: -6.9, y: 52.4, taille: 336.5
+            }
+        },
+        pilou: {
+            /* Quatrième animal à avoir ses trois états physiques (30/08/2026, après
+               Bulle) — boîte alpha mesurée au seuil 64 sur le fichier RÉEL de chaque
+               dossier (tools/_alpha-bbox-chien.js, canvas natif : 256×256 pour le
+               webp ramené à l'échelle 512 comme Babi/Bulle, 512×512 nativement pour
+               les trois PNG). `taille` reste la valeur par défaut de la troupe
+               (336.5, celle de titi/zola/kiri/raya/sam) : Pilou n'a pas de calage
+               vidéo hérité à préserver comme Babi ou Bulle, rien ne justifiait de
+               s'en écarter. */
+            fichier: 'Images/Animals/Gif/chien.webp',
+            boite: { x: 76, y: 76, w: 326, h: 394 },
+            x: -5.6, y: 32.4, taille: 354.7,   // contenu 326×394 à 76,76 (mesuré)
+            sol: { cx: 160, rx: 65 },
+            larme: [127, 168], zzz: [261, 105], etoiles: [[54, 102, 13], [271, 102, 10]],
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesse/Chien_Blesse.PNG',
+                          boite: { x: 71, y: 34, w: 346, h: 430 } },
+                mort:   { fichier: 'Images/Animals/Dead/Chien.png',
+                          boite: { x: 74, y: 42, w: 366, h: 460 } }
+            },
+            statique: {
+                fichier: 'Images/Animals/Normal/Chien.png',
+                boite: { x: 76, y: 43, w: 340, h: 421 },
+                x: -1.7, y: 53.0, taille: 336.5
             }
         },
         titi: {
@@ -921,6 +947,42 @@
             interieur: (e, p, s) => dessinImageInterieur('bulle', e, p, s)
         },
 
+        /* Placé ici (3ᵉ rang, avant titi/zola/kiri/raya/sam) plutôt qu'en fin de
+           troupe : le débloquage se lit sur le RANG dans cet objet
+           (`23-choix-compagnon.js`, `i < ouverts`), pas sur une liste séparée.
+           Sorti d'A_VENIR le 30/08/2026 avec ses quatre états d'image complets,
+           il fallait bien un rang — celui-ci le rend sélectionnable après UN
+           seul sauvetage plutôt que six, pour qu'on puisse le tester tout de
+           suite. Effet de bord accepté : titi et les quatre après lui reculent
+           chacun d'un cran (demande utilisateur du 30/08/2026). */
+        pilou: {
+            nom: 'Pilou',
+            espece: 'chien',
+            accent: '#D9A15B',
+            /* Le seul de la troupe qui ne CONSTATE pas — il est content, et il le
+               dit. Pas de recul, pas de chiffre retenu, pas de raccourci : Pilou
+               est là, tout de suite, pour le trajet qui vient. Pas d'entorse à la
+               règle « jamais de reproche » pour autant, elle vaut pour tous : sa
+               marque à lui, c'est l'absence totale de recul, jamais le reproche
+               lui-même. */
+            phrases: {
+                accueil:        () => 'Salut !',
+                accueil_soir:   () => 'Bonsoir !',
+                destination_ok: () => "Parfait, j'arrive !",
+                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Toujours partant.`,
+                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
+                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
+                clairiere:      (v) => v.pousses === 0
+                                        ? "Rien n'a poussé au bord de l'eau cette semaine. Ça viendra."
+                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
+                trajet_doux:    () => 'Trajet nickel. On refait ça quand tu veux !',
+                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
+                defi_valide:    (v) => `Un de fait ! Il t'en reste ${v.reste}.`
+            },
+            dessin:    (e, p, s) => dessinerImage('pilou', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('pilou', e, p, s)
+        },
+
         titi: {
             nom: 'Titi',
             espece: 'singe',
@@ -1074,8 +1136,7 @@
        module de calcul, indexée par ces clés, jamais ici — ce module reste des
        dessins et des phrases. */
     const A_VENIR = {
-        nima:  { nom: 'Nima',  espece: 'chatte', silhouette: 'pointue' },
-        pilou: { nom: 'Pilou', espece: 'chien',  silhouette: 'tombante' }
+        nima:  { nom: 'Nima',  espece: 'chatte', silhouette: 'pointue' }
     };
 
     /* Une tête grise par espèce. Les oreilles portent tout : ce sont elles, et
