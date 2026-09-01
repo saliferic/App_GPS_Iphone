@@ -3628,13 +3628,6 @@
             font-size: 14px; font-weight: 800; letter-spacing: 3px;
             text-transform: uppercase; color: #c9d1d9; margin: 0;
         }
-        #profil-sheet-close {
-            flex-shrink: 0;
-            width: 30px; height: 30px; border-radius: 50%;
-            background: rgba(255,100,100,0.08); border: 1px solid rgba(255,100,100,0.2);
-            color: #f85149; font-size: 14px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-        }
         #profil-sheet-body {
             flex: 1; min-height: 0; overflow-y: auto;
             -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
@@ -3667,12 +3660,6 @@
         #stats-modal-header h2 {
             font-size: 14px; font-weight: 800; letter-spacing: 3px;
             text-transform: uppercase; color: #c9d1d9; margin: 0;
-        }
-        #stats-modal-close {
-            width: 30px; height: 30px; border-radius: 50%;
-            background: rgba(255,100,100,0.08); border: 1px solid rgba(255,100,100,0.2);
-            color: #f85149; font-size: 14px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
         }
         .stats-period-toggle {
             display: flex; gap: 6px; margin-bottom: 16px;
@@ -3719,56 +3706,92 @@
             border-top: 1px solid rgba(0,140,255,0.08);
         }
         /* La pastille `.th-count` de la ligne du Profil a ete retiree le 22/08/2026.
-           ⚠ NE PAS CONFONDRE avec `.th-count-pill` plus bas, qui vit TOUJOURS : celle-la
-           compte les trajets par annee et par mois DANS la page Historique, et reste utile
-           puisqu'elle qualifie une section repliee. */
+           Le repli par annee/mois qui suivait (`.th-count-pill`, `.th-chevron`, etc.) a
+           lui-meme ete remplace par le calendrier-mois le 01/09/2026 (voir plus bas). */
 
-        #trip-history-list { display: flex; flex-direction: column; gap: 8px; }
+        #trip-history-list { display: flex; flex-direction: column; gap: 16px; }
 
-        /* === SECTIONS ANNEE / MOIS === */
-        /* Deux niveaux repliables, volontairement distincts a l'oeil : l'annee porte un
-           fond et une bordure (c'est un bloc), le mois n'a qu'un filet a gauche (c'est une
-           subdivision). Sans cet ecart, deux en-tetes empiles se lisaient comme deux
-           sections de meme rang. */
-        .th-year {
-            border: 1px solid rgba(0,140,255,0.14); border-radius: 12px;
-            background: rgba(10,14,23,0.5); overflow: hidden;
+        /* === CALENDRIER-MOIS (01/09/2026) === */
+        .trip-cal-nav {
+            display: flex; align-items: center; justify-content: center; gap: 16px;
         }
-        .th-year-head, .th-month-head {
-            width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
-            background: none; border: none; color: inherit; font-family: inherit;
-            text-align: left; cursor: pointer;
+        .trip-cal-nav-btn {
+            width: 30px; height: 30px; border-radius: 50%;
+            border: 1px solid rgba(0,140,255,0.2); background: rgba(10,14,23,0.5);
+            color: #8892b0; font-size: 15px; line-height: 1; cursor: pointer;
         }
-        .th-year-head { padding: 11px 12px; }
-        .th-year-label {
-            flex: 1; font-size: 13px; font-weight: 800; color: #c9d1d9; letter-spacing: 1px;
+        .trip-cal-nav-btn:active { background: rgba(0,140,255,0.1); }
+        .trip-cal-nav-label {
+            min-width: 130px; text-align: center;
+            font-size: 13px; font-weight: 800; color: #c9d1d9; letter-spacing: 0.5px;
         }
-        .th-year-body, .th-month-body { display: none; }
-        .th-year.open > .th-year-body, .th-month.open > .th-month-body { display: block; }
-        .th-year-body { padding: 0 10px 10px; }
 
-        .th-month { border-left: 2px solid rgba(0,140,255,0.16); padding-left: 8px; margin-top: 6px; }
-        .th-month-head { padding: 7px 4px; }
-        .th-month-label { flex: 1; font-size: 12px; font-weight: 700; color: #8892b0; }
-        .th-month-body { padding: 2px 0 6px; }
-
-        .th-count-pill {
-            flex-shrink: 0; font-size: 10px; font-weight: 700; color: #4a5568;
-            background: rgba(0,140,255,0.08); border-radius: 20px; padding: 2px 7px;
+        .trip-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .trip-tile {
+            text-align: center; padding: 9px 4px;
+            background: rgba(10,14,23,0.5); border: 1px solid rgba(0,140,255,0.1);
+            border-radius: 12px;
         }
-        .th-chevron {
-            flex-shrink: 0; font-size: 13px; color: #4a5568; transition: transform 0.25s ease;
+        .trip-tile b { display: block; font-size: 14px; font-weight: 800; color: #c9d1d9; }
+        .trip-tile span {
+            font-size: 9px; font-weight: 700; color: #4a5568;
+            text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .th-year.open > .th-year-head .th-chevron,
-        .th-month.open > .th-month-head .th-chevron { transform: rotate(90deg); }
 
-        /* Le jour n'est pas repliable : simple intertitre au-dessus de ses trajets. */
-        .th-day {
+        .trip-cal {
+            background: rgba(10,14,23,0.5); border: 1px solid rgba(0,140,255,0.1);
+            border-radius: 14px; padding: 10px;
+        }
+        .trip-cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 4px; }
+        .trip-cal-dow span {
+            text-align: center; font-size: 10px; font-weight: 700; color: #4a5568;
+        }
+        .trip-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+        .trip-cal-day {
+            aspect-ratio: 1; border-radius: 9px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 3px;
+            font-size: 11px; font-weight: 600; color: #8892b0;
+            background: none; border: 1px solid transparent; font-family: inherit; cursor: pointer;
+        }
+        .trip-cal-day.empty { visibility: hidden; pointer-events: none; }
+        .trip-cal-day:active { background: rgba(0,140,255,0.08); }
+        .trip-cal-day.has-trips { color: #c9d1d9; }
+        .trip-cal-day-dot { width: 5px; height: 5px; border-radius: 50%; background: #4a5568; }
+        .trip-cal-day.lvl-good .trip-cal-day-dot { background: #28a745; }
+        .trip-cal-day.lvl-mid  .trip-cal-day-dot { background: #ffa500; }
+        .trip-cal-day.lvl-bad  .trip-cal-day-dot { background: #f85149; }
+        .trip-cal-day.sel {
+            background: rgba(0,140,255,0.14); border-color: #58a6ff; color: #58a6ff;
+        }
+
+        /* Reprend le meme intertitre pour « Trajets du ... » et « Lieux les plus visites » :
+           ce sont les deux seuls titres de section restants sous le calendrier. */
+        .trip-day-title {
             font-size: 10px; font-weight: 700; color: #4a5568;
             text-transform: uppercase; letter-spacing: 1.5px;
-            margin: 10px 0 5px 2px;
+            margin-bottom: 8px;
         }
-        .th-month-body .trip-row { margin-bottom: 6px; }
+        .trip-day-list { display: flex; flex-direction: column; gap: 8px; }
+
+        .trip-rank-section:empty { display: none; }
+        .trip-rank { display: flex; flex-direction: column; gap: 10px; }
+        .trip-rank-row { display: flex; align-items: center; gap: 10px; }
+        .trip-rank-num {
+            flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+            background: rgba(0,140,255,0.1); color: #58a6ff;
+            font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+        }
+        .trip-rank-body { flex: 1; min-width: 0; }
+        .trip-rank-top {
+            display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+            font-size: 12px; margin-bottom: 5px;
+        }
+        .trip-rank-top b {
+            color: #c9d1d9; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .trip-rank-top span { flex-shrink: 0; color: #4a5568; }
+        .trip-rank-bar { height: 5px; border-radius: 20px; background: rgba(0,140,255,0.08); overflow: hidden; }
+        .trip-rank-bar i { display: block; height: 100%; background: #58a6ff; border-radius: 20px; }
 
         .trip-row {
             background: rgba(10,14,23,0.6); border: 1px solid rgba(0,140,255,0.1);
@@ -3943,14 +3966,93 @@
             border-color: rgba(77,163,255,0.55); color: #4da3ff;
         }
 
-        /* === VÉHICULE TYPE BTNS === */
+        /* === ASSISTANT VÉHICULE — NAVIGATION PAR ÉTAPES (02/09/2026) === */
+        .veh-wiz-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; }
+        .veh-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18);
+            cursor: pointer; transition: 0.18s;
+        }
+        .veh-dot.on { background: #58a6ff; width: 20px; border-radius: 99px; }
+        .veh-step-lbl {
+            text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+            text-transform: uppercase; color: #58a6ff; margin-bottom: 6px;
+        }
+        .veh-step-q {
+            text-align: center; font-size: 17px; font-weight: 800; color: #c9d1d9; margin-bottom: 18px;
+        }
+
+        /* Étape 1 — cartes de type de véhicule : mêmes `.vtype-btn` (id, onclick,
+           bascule `.active` par selectVehicleType()), enveloppe visuelle seule changée. */
+        .veh-type-list { display: flex; flex-direction: column; gap: 8px; }
         .vtype-btn {
-            flex: 1; padding: clamp(5px, 1.5vw, 7px) clamp(2px, 0.8vw, 4px); border-radius: 10px; font-size: 10px; font-weight: 700;
-            border: 1px solid rgba(0,140,255,0.15); background: rgba(10,14,23,0.7);
+            display: flex; align-items: center; gap: 11px; width: 100%; box-sizing: border-box;
+            padding: 12px 13px; border-radius: 14px; text-align: left; font-family: inherit;
+            border: 1.5px solid rgba(0,140,255,0.15); background: rgba(10,14,23,0.7);
             color: #6e7681; cursor: pointer; transition: 0.18s; letter-spacing: 0.2px;
         }
         .vtype-btn:hover { border-color: rgba(0,140,255,0.35); color: #c9d1d9; }
-        .vtype-btn.active { background: rgba(0,120,255,0.15); border-color: rgba(0,150,255,0.45); color: #58a6ff; }
+        .vtype-btn.active { background: rgba(0,120,255,0.1); border-color: #58a6ff; color: #58a6ff; }
+        .vtype-ico {
+            flex: none; width: 36px; height: 36px; border-radius: 10px; font-size: 16px;
+            background: rgba(0,140,255,0.08); display: flex; align-items: center; justify-content: center;
+        }
+        .vtype-txt { display: flex; flex-direction: column; gap: 2px; }
+        .vtype-txt b { font-size: 13px; font-weight: 800; color: #c9d1d9; }
+        .vtype-txt span { font-size: 11px; font-weight: 500; color: #6b7785; line-height: 1.35; }
+        .vtype-check {
+            margin-left: auto; flex: none; width: 19px; height: 19px; border-radius: 50%;
+            border: 1.5px solid rgba(255,255,255,0.18); position: relative;
+        }
+        .vtype-btn.active .vtype-check { border-color: #58a6ff; background: #58a6ff; }
+        .vtype-btn.active .vtype-check::after {
+            content: '✓'; position: absolute; inset: 0; display: flex;
+            align-items: center; justify-content: center; font-size: 11px; color: #0a0e17;
+        }
+
+        /* Étape 2 — mêmes `.vcell-input`, entourés d'un ± plutôt que livrés au clavier
+           numérique seul (`_vehNudge()`, js/15, ne fait que déclencher un vrai événement
+           `input` : le champ garde son `oninput` d'origine comme seule source de vérité). */
+        .veh-stepper { display: flex; align-items: center; gap: 6px; }
+        .veh-step-btn {
+            flex: none; width: 26px; height: 26px; border-radius: 50%; font-family: inherit;
+            border: 1px solid rgba(0,140,255,0.2); background: rgba(10,14,23,0.7);
+            color: #c9d1d9; font-size: 14px; line-height: 1; cursor: pointer;
+        }
+        .veh-step-btn:hover { border-color: rgba(0,150,255,0.45); }
+        .veh-stepper-input { flex: 1; text-align: center; }
+
+        /* Étape 4 — cadran de points. Le dégradé conique est posé en JS
+           (`_vehSyncPointsDial()`) ; cette valeur de base ne sert qu'avant le tout
+           premier appel. */
+        .veh-dial-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 14px; }
+        .veh-dial {
+            width: 132px; height: 132px; border-radius: 50%; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center;
+            background: conic-gradient(#58a6ff 0turn 1turn, rgba(255,255,255,0.08) 1turn 1turn);
+        }
+        .veh-dial i {
+            width: 104px; height: 104px; border-radius: 50%; background: #0a0e17;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .veh-dial i b { font-size: 30px; font-weight: 800; color: #c9d1d9; }
+        .veh-dial i span { font-size: 11px; color: #6b7785; font-weight: 700; }
+        .veh-dial-steppers { display: flex; gap: 16px; }
+        .veh-dial-steppers button {
+            width: 36px; height: 36px; border-radius: 50%; font-size: 17px; cursor: pointer; font-family: inherit;
+            border: 1px solid rgba(0,140,255,0.2); background: rgba(10,14,23,0.7); color: #c9d1d9;
+        }
+        .veh-points-label { display: block; text-align: center; margin: 4px 0 6px; }
+        .veh-points-input { max-width: 90px; margin: 0 auto; display: block; text-align: center; }
+
+        /* Barre Retour/Suivant commune aux quatre étapes. */
+        .veh-wiz-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+        .veh-nav-back, .veh-nav-next {
+            padding: 10px 20px; border-radius: 99px; font-size: 12px; font-weight: 800;
+            font-family: inherit; cursor: pointer;
+        }
+        .veh-nav-back { background: none; border: 1px solid rgba(255,255,255,0.18); color: #8892b0; }
+        .veh-nav-next { background: #58a6ff; border: none; color: #0a0e17; }
+
         /* Cellules véhicule */
         .vcell { display: flex; flex-direction: column; gap: 4px; }
         .vcell-label { font-size: 10px; color: #6b7785; font-weight: 600; }
@@ -4909,10 +5011,6 @@
             display: flex; justify-content: space-between; align-items: center;
             font-size: clamp(12px, 3.4vw, 14px); font-weight: 900; letter-spacing: 1.5px;
             color: #f1c40f; margin-bottom: clamp(10px, 3vw, 14px);
-        }
-        #classement-header button {
-            background: none; border: none; color: #aaa;
-            font-size: clamp(17px, 5vw, 20px); cursor: pointer;
         }
         .cl-status { font-size: clamp(10px, 2.9vw, 12px); color: #8892b0; margin-bottom: 8px; }
         .cl-status:empty { display: none; }

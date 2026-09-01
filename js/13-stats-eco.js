@@ -180,32 +180,45 @@
            `js/00-noyau-calculs.js` et couverte par `node tests/noyau.test.js` — ici il
            ne reste que du DOM. */
 
-        /* ═══ REGROUPEMENT ANNÉE → MOIS → JOUR (21/08/2026) ═══
+        /* ═══ CALENDRIER-MOIS (01/09/2026) ═══
 
-           La liste à plat devenait interminable : l'historique retient jusqu'à 365 trajets,
-           et une pagination « afficher 40 de plus » ne faisait que repousser le problème
-           sans jamais permettre d'atteindre un mois précis. Le repli par sections y répond
-           mieux, et remplace donc la pagination plutôt que de s'y ajouter.
+           Remplace l'ancien repli année → mois → jour : celui-ci demandait plusieurs
+           appuis pour atteindre un jour précis et ne montrait jamais la FORME du mois
+           (quels jours ont roulé, lesquels non) sans tout déplier. Le calendrier répond
+           aux deux d'un coup — un jour à problème (excès de vitesse) se repère à sa
+           couleur avant même de l'ouvrir.
 
-           ⚠ CONSTRUCTION PARESSEUSE : le contenu d'un mois n'est bâti qu'à sa PREMIÈRE
-           ouverture (`_thBuilt`). C'est ce qui remplace la pagination — poser d'emblée les
-           365 lignes, même masquées par un `display:none`, coûterait exactement ce que
-           l'ancien découpage en paquets cherchait à éviter.
+           ⚠ L'état de navigation (`_thYear`/`_thMonth`/`_thSelDay`) suit la même logique
+           que l'ancien `_thOpen` : posé une seule fois au premier rendu, puis laissé au
+           choix de l'utilisateur — changer de mois ou de jour sélectionné ne doit jamais
+           être oublié entre deux ouvertures de la page. */
+        let _thYear = null, _thMonth = null, _thSelDay = null;
 
-           Le découpage lui-même est dans `groupTripsByDate()` (js/00, testé) ; ici il ne
-           reste que du DOM. */
-        const _thOpen  = new Set();   // clés de sections dépliées ('y:2026', 'm:2026-7')
-        const _thBuilt = new Set();   // clés de sections déjà construites
+        function _monthTrips(history, year, month) {
+            return history
+                .filter(t => {
+                    const d = new Date(t.date);
+                    return Number.isFinite(d.getTime()) && d.getFullYear() === year && d.getMonth() === month;
+                })
+                .sort((a, b) => (b.date || 0) - (a.date || 0));
+        }
+
+        function _shiftMonth(delta) {
+            let m = _thMonth + delta, y = _thYear;
+            if (m < 0) { m = 11; y -= 1; }
+            else if (m > 11) { m = 0; y += 1; }
+            _thYear = y; _thMonth = m; _thSelDay = null;
+            renderTripHistory();
+        }
 
         function renderTripHistory() {
             const host = document.getElementById('trip-history-list');
             if (!host) return;
             host.textContent = '';
-            _thBuilt.clear();
 
-            const groupes = groupTripsByDate(getTripHistory());
+            const history = getTripHistory();
 
-            if (!groupes.length) {
+            if (!history.length) {
                 const vide = document.createElement('div');
                 vide.className = 'stats-empty';
                 vide.textContent = 'Aucun trajet enregistré pour le moment.';
@@ -217,82 +230,244 @@
                 return;
             }
 
-            /* Ouverture par défaut : l'année la plus récente et son mois le plus récent —
-               c'est-à-dire les trajets d'à peine hier, ceux qu'on vient chercher neuf fois
-               sur dix. Tout replier obligerait à deux appuis avant de voir quoi que ce
-               soit, et donnerait un écran vide à l'ouverture. Posé une seule fois : après
-               quoi c'est le choix de l'utilisateur qui fait foi, y compris s'il replie tout. */
-            if (!_thOpen.size) {
-                _thOpen.add('y:' + groupes[0].year);
-                if (groupes[0].months.length) {
-                    _thOpen.add(`m:${groupes[0].year}-${groupes[0].months[0].month}`);
-                }
+            /* Mois par défaut : celui du trajet le plus récent — presque toujours le mois
+               en cours, sans dépendre de l'horloge locale si le dernier trajet date d'un
+               mois révolu (pas de trajet ce mois-ci). */
+            if (_thYear === null) {
+                const dernier = new Date(history[history.length - 1].date);
+                const ref = Number.isFinite(dernier.getTime()) ? dernier : new Date();
+                _thYear = ref.getFullYear();
+                _thMonth = ref.getMonth();
             }
 
-            groupes.forEach(an => host.appendChild(_buildYearSection(an)));
+            const moisTrips = _monthTrips(history, _thYear, _thMonth);
+
+            if (_thSelDay === null) {
+                let dernierJour = null;
+                moisTrips.forEach(t => {
+                    const j = new Date(t.date).getDate();
+                    if (dernierJour === null || j > dernierJour) dernierJour = j;
+                });
+                _thSelDay = dernierJour;
+            }
+
+            host.appendChild(_buildCalendarNav());
+            host.appendChild(_buildMonthTiles(moisTrips));
+            host.appendChild(_buildCalendarGrid(moisTrips));
+            host.appendChild(_buildSelectedDaySection(moisTrips));
+            host.appendChild(_buildTopPlaces(moisTrips));
         }
 
-        /* Une section repliable = un en-tête + un corps. Le `remplir` n'est appelé qu'à la
-           première ouverture, jamais à chaque bascule : replier puis rouvrir doit être
-           instantané et ne rien reconstruire. */
-        function _buildCollapsible(cle, classe, titre, compte, remplir) {
-            const bloc = document.createElement('div');
-            bloc.className = classe;
+        function _buildCalendarNav() {
+            const bar = document.createElement('div');
+            bar.className = 'trip-cal-nav';
 
-            const head = document.createElement('button');
-            head.type = 'button';
-            head.className = classe + '-head';
+            const prev = document.createElement('button');
+            prev.type = 'button'; prev.className = 'trip-cal-nav-btn'; prev.textContent = '‹';
+            prev.setAttribute('aria-label', 'Mois précédent');
+            prev.addEventListener('click', () => _shiftMonth(-1));
 
-            const lbl = document.createElement('span');
-            lbl.className = classe + '-label';
-            lbl.textContent = titre;
-            const cpt = document.createElement('span');
-            cpt.className = 'th-count-pill';
-            cpt.textContent = String(compte);
-            const chev = document.createElement('span');
-            chev.className = 'th-chevron';
-            chev.textContent = '›';
-            head.appendChild(lbl); head.appendChild(cpt); head.appendChild(chev);
+            const label = document.createElement('span');
+            label.className = 'trip-cal-nav-label';
+            label.textContent = `${TRIP_MOIS[_thMonth]} ${_thYear}`;
 
-            const body = document.createElement('div');
-            body.className = classe + '-body';
+            const next = document.createElement('button');
+            next.type = 'button'; next.className = 'trip-cal-nav-btn'; next.textContent = '›';
+            next.setAttribute('aria-label', 'Mois suivant');
+            next.addEventListener('click', () => _shiftMonth(1));
 
-            const ouvrir = (ouvert) => {
-                bloc.classList.toggle('open', ouvert);
-                head.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
-                if (ouvert && !_thBuilt.has(cle)) { _thBuilt.add(cle); remplir(body); }
+            bar.appendChild(prev); bar.appendChild(label); bar.appendChild(next);
+            return bar;
+        }
+
+        /* Quatre chiffres qui résument le mois affiché — pas le total de l'historique,
+           qui vivrait mal la navigation (« pourquoi ce nombre ne bouge pas en changeant
+           de mois ? »). */
+        function _buildMonthTiles(trips) {
+            const wrap = document.createElement('div');
+            wrap.className = 'trip-tiles';
+
+            const distTotal = trips.reduce((s, t) => s + (Number(t.distKm) || 0), 0);
+            const dureeTotal = trips.reduce((s, t) => s + (Number(t.durationMin) || 0), 0);
+            const ecoVals = trips.map(t => Number(t.ecoScore)).filter(Number.isFinite);
+            const ecoMoy = ecoVals.length ? Math.round(ecoVals.reduce((s, v) => s + v, 0) / ecoVals.length) : null;
+
+            const tile = (valeur, label) => {
+                const t = document.createElement('div');
+                t.className = 'trip-tile';
+                const b = document.createElement('b'); b.textContent = valeur;
+                const s = document.createElement('span'); s.textContent = label;
+                t.appendChild(b); t.appendChild(s);
+                wrap.appendChild(t);
             };
-            head.addEventListener('click', () => {
-                const ouvert = !_thOpen.has(cle);
-                if (ouvert) _thOpen.add(cle); else _thOpen.delete(cle);
-                ouvrir(ouvert);
-            });
-
-            bloc.appendChild(head);
-            bloc.appendChild(body);
-            ouvrir(_thOpen.has(cle));
-            return bloc;
+            tile(trips.length ? formatTripDistance(distTotal) : '—', 'distance');
+            tile(String(trips.length), trips.length > 1 ? 'trajets' : 'trajet');
+            tile(ecoMoy === null ? '—' : String(ecoMoy), 'éco moy.');
+            tile(dureeTotal > 0 ? formatTripDuration(dureeTotal) : '—', 'conduite');
+            return wrap;
         }
 
-        function _buildYearSection(an) {
-            return _buildCollapsible('y:' + an.year, 'th-year', String(an.year), an.count, body => {
-                an.months.forEach(mois => body.appendChild(_buildMonthSection(an.year, mois)));
+        function _buildCalendarGrid(trips) {
+            const wrap = document.createElement('div');
+            wrap.className = 'trip-cal';
+
+            const dow = document.createElement('div');
+            dow.className = 'trip-cal-dow';
+            ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(j => {
+                const s = document.createElement('span'); s.textContent = j; dow.appendChild(s);
             });
+            wrap.appendChild(dow);
+
+            const grid = document.createElement('div');
+            grid.className = 'trip-cal-grid';
+
+            const parJour = new Map();
+            trips.forEach(t => {
+                const j = new Date(t.date).getDate();
+                if (!parJour.has(j)) parJour.set(j, []);
+                parJour.get(j).push(t);
+            });
+
+            /* `getDay()` rend 0 pour dimanche ; le calendrier français ouvre sur lundi,
+               d'où ce décalage plutôt qu'un simple tableau de 7 colonnes fixes. */
+            const premier = new Date(_thYear, _thMonth, 1).getDay();
+            const decalage = (premier + 6) % 7;
+            for (let i = 0; i < decalage; i++) {
+                const vide = document.createElement('div');
+                vide.className = 'trip-cal-day empty';
+                grid.appendChild(vide);
+            }
+
+            const nbJours = new Date(_thYear, _thMonth + 1, 0).getDate();
+            for (let j = 1; j <= nbJours; j++) {
+                const cell = document.createElement('button');
+                cell.type = 'button';
+                cell.className = 'trip-cal-day';
+
+                const trajetsJour = parJour.get(j);
+                if (trajetsJour) {
+                    cell.classList.add('has-trips');
+                    const exces = trajetsJour.some(t => t.hasSpeeded);
+                    const ecoVals = trajetsJour.map(t => Number(t.ecoScore)).filter(Number.isFinite);
+                    const ecoMoy = ecoVals.length ? ecoVals.reduce((s, v) => s + v, 0) / ecoVals.length : null;
+                    cell.classList.add(exces ? 'lvl-bad' : (ecoMoy !== null && ecoMoy >= 80) ? 'lvl-good' : 'lvl-mid');
+                }
+                if (j === _thSelDay) cell.classList.add('sel');
+
+                const num = document.createElement('span');
+                num.className = 'trip-cal-day-num';
+                num.textContent = String(j);
+                cell.appendChild(num);
+                if (trajetsJour) {
+                    const dot = document.createElement('i');
+                    dot.className = 'trip-cal-day-dot';
+                    cell.appendChild(dot);
+                }
+
+                cell.addEventListener('click', () => {
+                    _thSelDay = j;
+                    renderTripHistory();
+                });
+                grid.appendChild(cell);
+            }
+
+            wrap.appendChild(grid);
+            return wrap;
         }
 
-        function _buildMonthSection(annee, mois) {
-            return _buildCollapsible(`m:${annee}-${mois.month}`, 'th-month', mois.label, mois.count, body => {
-                mois.days.forEach(jour => {
-                    /* Le jour n'est PAS repliable : à ce niveau il ne contient qu'un ou deux
-                       trajets, et un troisième cran de repli coûterait un appui de plus pour
-                       ne rien raccourcir. C'est un simple intertitre. */
-                    const titre = document.createElement('div');
-                    titre.className = 'th-day';
-                    titre.textContent = jour.label;
-                    body.appendChild(titre);
-                    jour.trips.forEach(t => body.appendChild(_buildTripRow(t)));
+        function _buildSelectedDaySection(moisTrips) {
+            const wrap = document.createElement('div');
+            wrap.className = 'trip-day-section';
+
+            const titre = document.createElement('div');
+            titre.className = 'trip-day-title';
+
+            if (_thSelDay === null) {
+                titre.textContent = 'Aucun trajet ce mois-ci';
+                wrap.appendChild(titre);
+                return wrap;
+            }
+
+            const jourTrips = moisTrips.filter(t => new Date(t.date).getDate() === _thSelDay);
+            const label = formatTripDayLabel(new Date(_thYear, _thMonth, _thSelDay).getTime());
+            titre.textContent = label === "Aujourd'hui" ? "Trajets d'aujourd'hui"
+                : label === 'Hier' ? "Trajets d'hier"
+                : `Trajets du ${label}`;
+            wrap.appendChild(titre);
+
+            if (!jourTrips.length) {
+                const vide = document.createElement('div');
+                vide.className = 'trip-history-hint';
+                vide.textContent = 'Aucun trajet ce jour-là.';
+                wrap.appendChild(vide);
+                return wrap;
+            }
+
+            const liste = document.createElement('div');
+            liste.className = 'trip-day-list';
+            jourTrips.forEach(t => liste.appendChild(_buildTripRow(t)));
+            wrap.appendChild(liste);
+            return wrap;
+        }
+
+        /* Classement des adresses (départ ET arrivée confondus) sur le mois affiché —
+           répond directement à « où je vais le plus souvent ». `tripPlacesLabel` fait déjà
+           le travail de troncature d'adresse, on ne le refait pas ici. */
+        function _buildTopPlaces(trips) {
+            const wrap = document.createElement('div');
+            wrap.className = 'trip-rank-section';
+            if (!trips.length) return wrap;
+
+            const compte = new Map();
+            trips.forEach(t => {
+                const places = tripPlacesLabel(t);
+                [places.from, places.to].forEach(lieu => {
+                    if (!lieu) return;
+                    compte.set(lieu, (compte.get(lieu) || 0) + 1);
                 });
             });
+            if (!compte.size) return wrap;
+
+            const classement = [...compte.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const max = classement[0][1];
+
+            const titre = document.createElement('div');
+            titre.className = 'trip-day-title';
+            titre.textContent = 'Lieux les plus visités';
+            wrap.appendChild(titre);
+
+            const liste = document.createElement('div');
+            liste.className = 'trip-rank';
+            classement.forEach(([lieu, n], i) => {
+                const row = document.createElement('div');
+                row.className = 'trip-rank-row';
+
+                const rang = document.createElement('span');
+                rang.className = 'trip-rank-num';
+                rang.textContent = String(i + 1);
+
+                const body = document.createElement('div');
+                body.className = 'trip-rank-body';
+                const top = document.createElement('div');
+                top.className = 'trip-rank-top';
+                const nom = document.createElement('b');
+                nom.textContent = lieu;
+                const cnt = document.createElement('span');
+                cnt.textContent = n > 1 ? `${n} trajets` : `${n} trajet`;
+                top.appendChild(nom); top.appendChild(cnt);
+
+                const barWrap = document.createElement('div');
+                barWrap.className = 'trip-rank-bar';
+                const bar = document.createElement('i');
+                bar.style.width = Math.round((n / max) * 100) + '%';
+                barWrap.appendChild(bar);
+
+                body.appendChild(top); body.appendChild(barWrap);
+                row.appendChild(rang); row.appendChild(body);
+                liste.appendChild(row);
+            });
+            wrap.appendChild(liste);
+            return wrap;
         }
 
         /* Une ligne = un en-tête toujours visible + un détail replié. Le détail n'est PAS
@@ -489,10 +664,9 @@
                  brusques > 0 ? '#FFB35C' : '#6FE3A0');
         }
 
-        /* `_thOpen` n'est PAS réinitialisé ici : les sections dépliées la fois précédente le
-           restent. Quelqu'un qui consulte souvent un mois donné le retrouve ouvert, et le
-           coût est nul puisque la construction reste paresseuse. Seul le tout premier rendu
-           choisit une ouverture par défaut (voir `renderTripHistory`). */
+        /* `_thYear`/`_thMonth`/`_thSelDay` ne sont PAS réinitialisés ici : le mois et le
+           jour consultés la fois précédente le restent. Seul le tout premier rendu choisit
+           un mois et un jour par défaut (voir `renderTripHistory`). */
         function openTripHistory() {
             renderTripHistory();
         }
@@ -1187,9 +1361,25 @@
             el.style.color = color;
         }
 
+        /* ⚠ PURGE PONCTUELLE DES POINTS DE SIMULATION (01/09/2026). Avant le correctif de
+           `stopCourse()` (js/19), rejouer « Simulation Salif » créditait le profil actif
+           exactement comme un vrai trajet — aucune marque ne distingue, dans les points déjà
+           accumulés, ceux gagnés en simulation de ceux gagnés en conduisant. Impossible de
+           purger sélectivement : on remet tous les profils à 0 pt une seule fois, au premier
+           chargement qui suit ce correctif. Le verrou `gps_sim_points_purged` empêche que
+           cette remise à zéro ne se reproduise à chaque démarrage. */
+        function _purgerPointsSimulationUneFois() {
+            if (localStorage.getItem('gps_sim_points_purged')) return;
+            let changed = false;
+            profiles.forEach(p => { if (p.totalPoints) { p.totalPoints = 0; changed = true; } });
+            if (changed) saveProfilesToStorage();
+            localStorage.setItem('gps_sim_points_purged', '1');
+        }
+
         function loadProfilesFromStorage() {
             const stored = localStorage.getItem('gps_profiles');
             if (stored) { try { profiles = JSON.parse(stored); } catch(e) { profiles = []; } }
+            _purgerPointsSimulationUneFois();
             const lastActive = localStorage.getItem('gps_active_profile_id');
             if (lastActive && profiles.some(p => p.id === lastActive)) activeProfileId = lastActive;
             renderProfilesDropdown(); updateProfileSummary();

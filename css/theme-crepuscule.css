@@ -1075,18 +1075,15 @@ body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
    couleur par couleur, à côté d'un Profil désormais violet partout ailleurs. */
 
 /* --- Le cadre de la page pleine (le titre est déjà couvert au § 3, ligne
-   ~171 : il ne restait que le fond et le bouton de fermeture). --- */
+   ~171). Le bouton de fermeture n'est plus repris ici depuis le 01/09/2026 :
+   il porte `.cpx-fermer`, la même croix neutre que « Qui sauvons-nous ? »
+   dans tous les thèmes (demande utilisateur — les croix de fermeture du
+   Profil devaient s'aligner sur celle-là, pas garder leur rouge propre). --- */
 body.theme-crepuscule #profil-sheet {
     background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
     border: 1px solid var(--cr-line);
     box-shadow: 0 20px 60px rgba(10,6,24,0.7);
 }
-body.theme-crepuscule #profil-sheet-close {
-    background: rgba(255,107,107,0.10);
-    border: 1px solid rgba(255,107,107,0.28);
-    color: var(--cr-danger);
-}
-
 /* --- Historique des trajets. #trip-history-body est stylé par sélecteur
    (styles.css), pas en inline : une reprise CSS classique suffit ici, sans
    !important. --- */
@@ -1094,16 +1091,38 @@ body.theme-crepuscule #trip-history-body {
     background: linear-gradient(170deg, var(--cr-sky-2), var(--cr-sky-1));
     border-top: 1px solid var(--cr-line);
 }
-body.theme-crepuscule .th-year {
-    background: var(--cr-surface);
-    border: 1px solid var(--cr-line);
+body.theme-crepuscule .trip-cal-nav-btn {
+    background: var(--cr-surface); border: 1px solid var(--cr-line); color: var(--cr-ink-3);
 }
-body.theme-crepuscule .th-year-label { color: var(--cr-ink); }
-body.theme-crepuscule .th-month { border-left-color: var(--cr-line-2); }
-body.theme-crepuscule .th-month-label { color: var(--cr-ink-3); }
-body.theme-crepuscule .th-count-pill { background: var(--cr-surface-2); color: var(--cr-ink-3); }
-body.theme-crepuscule .th-chevron { color: var(--cr-ink-3); }
-body.theme-crepuscule .th-day { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-cal-nav-btn:active { background: var(--cr-surface-2); }
+body.theme-crepuscule .trip-cal-nav-label { color: var(--cr-ink); }
+body.theme-crepuscule .trip-tile {
+    background: var(--cr-surface); border: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .trip-tile b { color: var(--cr-ink); }
+body.theme-crepuscule .trip-tile span { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-cal {
+    background: var(--cr-surface); border: 1px solid var(--cr-line);
+}
+body.theme-crepuscule .trip-cal-dow span { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-cal-day { color: var(--cr-ink-3); }
+body.theme-crepuscule .trip-cal-day.has-trips { color: var(--cr-ink); }
+body.theme-crepuscule .trip-cal-day:active { background: var(--cr-surface-2); }
+body.theme-crepuscule .trip-cal-day-dot { background: var(--cr-ink-4); }
+/* Meme semantique que le drapeau .trip-row-flag : mint = propre, ambre = correct,
+   rouge = exces — jamais l'inverse. */
+body.theme-crepuscule .trip-cal-day.lvl-good .trip-cal-day-dot { background: var(--cr-mint); }
+body.theme-crepuscule .trip-cal-day.lvl-mid  .trip-cal-day-dot { background: var(--cr-amber); }
+body.theme-crepuscule .trip-cal-day.lvl-bad  .trip-cal-day-dot { background: var(--cr-danger); }
+body.theme-crepuscule .trip-cal-day.sel {
+    background: rgba(255,179,92,0.16); border-color: var(--cr-amber); color: var(--cr-amber);
+}
+body.theme-crepuscule .trip-day-title { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-rank-num { background: var(--cr-surface-2); color: var(--cr-turq); }
+body.theme-crepuscule .trip-rank-top b { color: var(--cr-ink); }
+body.theme-crepuscule .trip-rank-top span { color: var(--cr-ink-4); }
+body.theme-crepuscule .trip-rank-bar { background: var(--cr-sunken); }
+body.theme-crepuscule .trip-rank-bar i { background: linear-gradient(90deg, var(--cr-turq), var(--cr-violet)); }
 body.theme-crepuscule .trip-row {
     background: var(--cr-surface);
     border: 1px solid var(--cr-line);
@@ -1191,6 +1210,36 @@ body.theme-crepuscule .fuel-refresh-btn {
     color: var(--cr-amber);
 }
 body.theme-crepuscule .fuel-refresh-btn:hover { border-color: rgba(255,179,92,0.45); }
+
+/* --- Assistant véhicule (02/09/2026). L'accent de navigation (points, libellé
+   d'étape) reprend le turquoise déjà associé au temps/aux lieux ; la carte de
+   type de véhicule sélectionnée reprend le violet de son icône dans la ligne
+   du Profil (`#vehicle-panel-toggle`, `color:#A88BFF` en inline) plutôt que
+   l'ambre déjà pris par le bouton « Suivant ». --- */
+body.theme-crepuscule .veh-dot { background: var(--cr-line-2); }
+body.theme-crepuscule .veh-dot.on { background: var(--cr-turq); }
+body.theme-crepuscule .veh-step-lbl { color: var(--cr-turq); }
+body.theme-crepuscule .veh-step-q { color: var(--cr-ink); }
+body.theme-crepuscule .vtype-ico { background: var(--cr-surface-2); }
+body.theme-crepuscule .vtype-txt b { color: var(--cr-ink); }
+body.theme-crepuscule .vtype-txt span { color: var(--cr-ink-3); }
+body.theme-crepuscule .vtype-btn.active {
+    background: rgba(168,139,255,0.10); border-color: var(--cr-violet); color: var(--cr-violet);
+}
+body.theme-crepuscule .vtype-check { border-color: var(--cr-line-2); }
+body.theme-crepuscule .vtype-btn.active .vtype-check { border-color: var(--cr-violet); background: var(--cr-violet); }
+body.theme-crepuscule .veh-step-btn {
+    background: var(--cr-sunken); border: 1px solid var(--cr-line-2); color: var(--cr-ink);
+}
+body.theme-crepuscule .veh-step-btn:hover { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .veh-dial i { background: var(--cr-sky-0); }
+body.theme-crepuscule .veh-dial i b { color: var(--cr-ink); }
+body.theme-crepuscule .veh-dial i span { color: var(--cr-ink-3); }
+body.theme-crepuscule .veh-dial-steppers button {
+    background: var(--cr-surface); border: 1px solid var(--cr-line-2); color: var(--cr-ink);
+}
+body.theme-crepuscule .veh-nav-back { border-color: var(--cr-line-2); color: var(--cr-ink-3); }
+body.theme-crepuscule .veh-nav-next { background: var(--cr-amber); color: #1B1633; }
 
 /* --- Aide à la conduite. #aide-conduite-body est stylé par sélecteur, comme
    #trip-history-body ci-dessus : pas d'inline à contourner ici. --- */
