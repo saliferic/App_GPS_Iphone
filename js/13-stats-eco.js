@@ -203,10 +203,34 @@
                 .sort((a, b) => (b.date || 0) - (a.date || 0));
         }
 
+        /* Bornes de navigation du calendrier (02/09/2026) : le mois du PREMIER trajet
+           connu (`history[0]`, le plus ancien conservé — l'historique est trié du plus
+           ancien au plus récent) et le mois EN COURS. Sans ça, rien n'empêchait de
+           remonter en 2019 dans une app installée hier : les cases vides d'un mois sans
+           trajet n'annoncent pas « il n'y avait pas d'app ici », elles se lisent comme
+           n'importe quel mois sans trajet. */
+        function _monthBounds(history) {
+            const now = new Date();
+            let minY = now.getFullYear(), minM = now.getMonth();
+            if (history.length) {
+                const premier = new Date(history[0].date);
+                if (Number.isFinite(premier.getTime())) {
+                    minY = premier.getFullYear();
+                    minM = premier.getMonth();
+                }
+            }
+            return { minY, minM, maxY: now.getFullYear(), maxM: now.getMonth() };
+        }
+
+        // Compare deux couples année/mois : négatif si (y1,m1) est avant (y2,m2).
+        function _cmpYM(y1, m1, y2, m2) { return (y1 * 12 + m1) - (y2 * 12 + m2); }
+
         function _shiftMonth(delta) {
             let m = _thMonth + delta, y = _thYear;
             if (m < 0) { m = 11; y -= 1; }
             else if (m > 11) { m = 0; y += 1; }
+            const { minY, minM, maxY, maxM } = _monthBounds(getTripHistory());
+            if (_cmpYM(y, m, minY, minM) < 0 || _cmpYM(y, m, maxY, maxM) > 0) return;
             _thYear = y; _thMonth = m; _thSelDay = null;
             renderTripHistory();
         }
@@ -251,20 +275,22 @@
                 _thSelDay = dernierJour;
             }
 
-            host.appendChild(_buildCalendarNav());
+            host.appendChild(_buildCalendarNav(history));
             host.appendChild(_buildMonthTiles(moisTrips));
             host.appendChild(_buildCalendarGrid(moisTrips));
             host.appendChild(_buildSelectedDaySection(moisTrips));
             host.appendChild(_buildTopPlaces(moisTrips));
         }
 
-        function _buildCalendarNav() {
+        function _buildCalendarNav(history) {
             const bar = document.createElement('div');
             bar.className = 'trip-cal-nav';
+            const { minY, minM, maxY, maxM } = _monthBounds(history);
 
             const prev = document.createElement('button');
             prev.type = 'button'; prev.className = 'trip-cal-nav-btn'; prev.textContent = '‹';
             prev.setAttribute('aria-label', 'Mois précédent');
+            prev.disabled = _cmpYM(_thYear, _thMonth, minY, minM) <= 0;
             prev.addEventListener('click', () => _shiftMonth(-1));
 
             const label = document.createElement('span');
@@ -274,6 +300,7 @@
             const next = document.createElement('button');
             next.type = 'button'; next.className = 'trip-cal-nav-btn'; next.textContent = '›';
             next.setAttribute('aria-label', 'Mois suivant');
+            next.disabled = _cmpYM(_thYear, _thMonth, maxY, maxM) >= 0;
             next.addEventListener('click', () => _shiftMonth(1));
 
             bar.appendChild(prev); bar.appendChild(label); bar.appendChild(next);
