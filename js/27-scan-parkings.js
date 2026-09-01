@@ -558,8 +558,8 @@
             return `
                 <div class="gas-card-icon">🅿️</div>
                 <div class="gas-card-info">
-                    <div class="gas-card-name">${s.name}</div>
-                    <div class="gas-card-addr">${sousTitre}</div>
+                    <div class="gas-card-name">${echapperHtml(s.name)}</div>
+                    <div class="gas-card-addr">${echapperHtml(sousTitre)}</div>
                 </div>
                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
                     <span class="gas-price-pill" style="background:rgba(38,198,218,0.12);color:#26c6da;border-color:rgba(38,198,218,0.35);">${capTxt}</span>

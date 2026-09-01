@@ -245,11 +245,12 @@
 
         /* Les messages d'erreur sont du texte non maîtrisé : ils contiennent des URL, des
            fragments de code et parfois des chevrons (« Invalid <LngLat> »). Injectés tels
-           quels, ils tronqueraient l'affichage au premier < rencontré. */
+           quels, ils tronqueraient l'affichage au premier < rencontré.
+           Branché sur `echapperHtml()` (js/00-helpers-partages) le 01/09/2026 : le projet
+           en comptait TROIS copies identiques (ici, `_clEchappe` de js/21, et la nouvelle).
+           Corps identique, aucun changement de comportement. */
         function _escHtml(s) {
-            return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            return echapperHtml(s);
         }
 
         function readErrorLog() {
@@ -265,6 +266,79 @@
                 return Array.isArray(log) ? log : [];
             } catch (e) { return []; }
         }
+
+        /* ═══ INVENTAIRE DES ORIGINES RÉSEAU — OUTIL DE PRÉPARATION DE LA CSP ═══
+
+           But : établir la liste EXACTE des domaines que l'application contacte en usage
+           réel, avant d'écrire une `Content-Security-Policy`. Une CSP trop étroite ne
+           casse rien au lancement : elle casse un écran précis, des jours plus tard, chez
+           l'utilisateur. La liste des `fetch` visibles dans le code ne suffit pas — Mapbox
+           va chercher tuiles, sprites, polices et télémétrie à des domaines qu'aucun grep
+           ne révèle.
+
+           ⚠ POURQUOI PAS `Content-Security-Policy-Report-Only`, qui est fait pour ça : la
+           spec impose aux navigateurs de l'IGNORER quand elle vient d'une balise <meta>,
+           et l'APK charge en `file://`, donc sans en-tête HTTP. Le mode observation est
+           inutilisable ici. D'où ce relevé, qui n'en dépend pas.
+
+           ⚠ AUCUNE INTERCEPTION : on LIT `performance.getEntriesByType('resource')`, que le
+           navigateur tient de toute façon. Ni `fetch` ni `XMLHttpRequest` ne sont enveloppés
+           — un wrapper sur le chemin réseau de toute l'application, pour un simple
+           diagnostic, serait un risque hors de proportion. En prime, ce relevé voit AUSSI
+           les images, polices et scripts, qu'un wrapper de `fetch` manquerait.
+
+           Le tampon Resource Timing est plafonné et NE SURVIT PAS à un rechargement : d'où
+           le relevé périodique qui accumule dans le localStorage, et celui de `pagehide`
+           pour ne pas perdre la dernière minute d'usage.
+
+           Clé à part, pas `logDiag` : celui-ci est plafonné à 12 entrées et l'inventaire
+           les chasserait toutes. On stocke un ENSEMBLE d'origines, réécrit en place, qui ne
+           grandit donc jamais au-delà du nombre de domaines réellement contactés.
+
+           ⚠ CODE TEMPORAIRE, retirable une fois la CSP écrite et validée sur appareil. */
+        const ORIGINES_KEY = 'gps_origines_contactees';
+
+        function readOrigines() {
+            try {
+                const l = JSON.parse(localStorage.getItem(ORIGINES_KEY) || '[]');
+                return Array.isArray(l) ? l : [];
+            } catch (e) { return []; }
+        }
+
+        function releverOriginesReseau() {
+            try {
+                if (!window.performance || !performance.getEntriesByType) return;
+                const connues = new Set(readOrigines());
+                const avant = connues.size;
+                performance.getEntriesByType('resource').forEach(r => {
+                    try {
+                        const u = new URL(r.name, location.href);
+                        /* `blob:` et `data:` n'ont pas d'origine réseau mais comptent pour la
+                           CSP (Mapbox crée ses workers en blob:) : on les note tels quels. */
+                        if (u.protocol === 'blob:' || u.protocol === 'data:') connues.add(u.protocol);
+                        else if (u.protocol === 'http:' || u.protocol === 'https:') connues.add(u.origin);
+                    } catch (e) { /* URL inexploitable : sans intérêt pour l'inventaire */ }
+                });
+                if (connues.size !== avant) {
+                    localStorage.setItem(ORIGINES_KEY, JSON.stringify([...connues].sort()));
+                }
+            } catch (e) { /* stockage plein : un diagnostic ne doit jamais gêner l'app */ }
+        }
+
+        try { performance.setResourceTimingBufferSize(500); } catch (e) {}
+        setInterval(releverOriginesReseau, 20000);
+        window.addEventListener('pagehide', releverOriginesReseau);
+
+        /* Servira à la CSP une fois qu'elle sera posée : une violation n'est PAS une
+           exception JavaScript, elle n'atteint jamais `logAppError` et ne se voit que dans
+           la console — inaccessible dans un APK Website2APK. Cet écouteur est le seul moyen
+           qu'un blocage arrive jusqu'au journal 🩺 que l'utilisateur sait consulter.
+           Posé DÈS MAINTENANT, alors qu'aucune CSP n'existe : il ne coûte rien tant qu'il ne
+           se déclenche pas, et il serait oublié au moment où il devient indispensable. */
+        window.addEventListener('securitypolicyviolation', (e) => {
+            logAppError('CSP bloque ' + (e.violatedDirective || '?'),
+                new Error((e.blockedURI || '?') + ' — ' + (e.sourceFile || '') + ':' + (e.lineNumber || '')));
+        });
 
         function renderErrorLog() {
             const box = document.getElementById('error-log-list');
@@ -304,7 +378,15 @@
         }
 
         function copyErrorLog() {
-            const texte = JSON.stringify({ erreurs: readErrorLog(), diag: readDiagLog() }, null, 2);
+            /* Un dernier relevé avant la copie : l'intervalle de 20 s a pu ne pas passer
+               depuis le dernier écran visité, et c'est souvent celui qui vient d'être
+               ouvert qui contient le domaine cherché. */
+            releverOriginesReseau();
+            const texte = JSON.stringify({
+                erreurs: readErrorLog(),
+                diag: readDiagLog(),
+                origines: readOrigines(),
+            }, null, 2);
             const box = document.getElementById('error-log-copybox');
             try {
                 navigator.clipboard.writeText(texte).catch(() => { if (box) { box.style.display = 'block'; box.value = texte; box.select(); } });

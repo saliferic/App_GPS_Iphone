@@ -910,6 +910,50 @@
             console.log('[Debug] Troupe remise en cage : parcours effacé, objectifs à zéro, morts ressuscités, vies à 100 %, compagnon = Babi.');
         }
 
+        /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST                  (01/09/2026)
+           MODE ARRÊT : montre le compagnon posé sur sa barre de vie, tel qu'il
+           apparaît véhicule arrêté pendant la navigation, SANS avoir à lancer un
+           trajet et à s'arrêter pour le voir. C'est le seul moment où l'animal est
+           à l'écran en conduite (voir `majPortraitCompagnonArret`, js/07) — donc le
+           seul endroit où juger sa taille et son calage, et il n'était jusqu'ici
+           atteignable qu'au feu rouge.
+
+           ⚠ ON RÉUTILISE LE VRAI MÉCANISME, on ne recopie pas son rendu : même barre
+           (`#nav-bottom-bar`), même `VieCompagnon.monter()`, même
+           `rafraichirPortraitNav()`. Un aperçu qui se dessinerait à côté finirait par
+           montrer autre chose que ce qu'on verra sur la route — et c'est justement ce
+           qu'on cherche à vérifier.
+
+           ⚠ IL NE TOUCHE PAS À `isCourseStarted`. Le prochain point GPS repasse par
+           `majPortraitCompagnonArret`, qui cache le portrait hors trajet : l'aperçu
+           s'effacerait tout seul. Il pose donc son propre drapeau, et la barre reste
+           là tant qu'on ne rappuie pas — mais si un trajet démarre pendant l'aperçu,
+           c'est bien le mécanisme normal qui reprend la main, comme il doit. */
+        let _debugModeArret = false;
+        function _debugModeArret_toggle() {
+            const barre    = document.getElementById('nav-bottom-bar');
+            const portrait = document.getElementById('nav-compagnon-portrait');
+            if (!barre || !portrait) return;
+
+            _debugModeArret = !_debugModeArret;
+            if (!_debugModeArret) {
+                portrait.classList.remove('visible');
+                /* On ne referme la barre que si aucun trajet n'est en cours : elle
+                   appartient à la navigation, l'aperçu ne fait que l'emprunter. */
+                if (typeof isCourseStarted === 'undefined' || !isCourseStarted) {
+                    barre.classList.remove('visible');
+                }
+                console.log('[Debug] Mode arrêt : aperçu refermé.');
+                return;
+            }
+
+            barre.classList.add('visible');
+            if (window.VieCompagnon) tenterSansBruit(() => VieCompagnon.monter(), 'debug/modeArret/vie');
+            tenterSansBruit(() => rafraichirPortraitNav(), 'debug/modeArret/portrait');
+            portrait.classList.add('visible');
+            console.log('[Debug] Mode arrêt : compagnon affiché sur sa barre de vie. Rappuyer pour refermer.');
+        }
+
         /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
            Force les objectifs de la SEMAINE EN COURS à des cibles atteignables en
            une session d'essai : 20 km au total, 5 km sans excès, 30 points.

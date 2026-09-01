@@ -669,8 +669,16 @@
                pour l'hippo. `taille` est recalculée pour que la hauteur apparente
                du personnage ne bouge pas (mêmes pieds, même centre horizontal). */
             fichier: 'Images/Animals/Gif/Elephant.webp',
-            boite: { x: 106, y: 130, w: 304, h: 308 },
-            x: -68.7, y: -30.2, taille: 453.8,   // contenu 304×308 à 106,130 (mesuré, cf. tools/_alpha-bbox.js)
+            /* ⚠ BOÎTE DE TOUTE L'ANIMATION, PAS DE LA PREMIÈRE FRAME (01/09/2026).
+               Elle valait { 106, 130, 304, 308 } : la boîte de la frame 1, où
+               l'éléphant est ASSIS. Dès qu'il se lève, sa trompe et son oreille
+               droite sortaient du `viewBox` du marqueur — et un `<svg>` découpe à
+               son viewport : l'animal apparaissait coupé net dans la barre de
+               navigation. Mesurée sur les 120 frames par tools/_bbox-anim.js ;
+               `tools/_alpha-bbox.js` ne voit QUE la frame 1 (drawImage n'en rend pas
+               d'autre), il ne convient donc pas aux fichiers animés. */
+            boite: { x: 94, y: 44, w: 328, h: 408 },
+            x: -68.7, y: -30.2, taille: 453.8,   // calage du hero, réglé sur la frame 1 (304×308 à 106,130)
             sol: { cx: 160, rx: 59 },
             larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]],
             /* Le calage d'avant la bascule webp, gardé pour le parcours (page
@@ -690,7 +698,8 @@
                Le calage (boite/x/y/taille) reste celui du PNG : à recalibrer si
                l'animation a un cadrage différent (voir la note plus haut sur le calage). */
             fichier: 'Images/Animals/Gif/Hippo.webp',
-            boite: { x: 128, y: 146, w: 250, h: 292 },
+            /* Union des 106 frames — même correction que Babi, voir sa `boite`. */
+            boite: { x: 114, y: 14, w: 286, h: 426 },
             /* Le seul animal qui ait ses trois états au 27/08/2026. Les six autres
                n'ont pas de `variantes` : ils affichent leur image Normal quel que soit
                leur état physique — voir `variante()` juste sous cette table. */
@@ -724,8 +733,9 @@
                vidéo hérité à préserver comme Babi ou Bulle, rien ne justifiait de
                s'en écarter. */
             fichier: 'Images/Animals/Gif/chien.webp',
-            boite: { x: 76, y: 76, w: 326, h: 394 },
-            x: -5.6, y: 32.4, taille: 354.7,   // contenu 326×394 à 76,76 (mesuré)
+            /* Union des 120 frames — même correction que Babi, voir sa `boite`. */
+            boite: { x: 34, y: 30, w: 404, h: 448 },
+            x: -5.6, y: 32.4, taille: 354.7,   // calage du hero, réglé sur la frame 1 (326×394 à 76,76)
             sol: { cx: 160, rx: 65 },
             larme: [127, 168], zzz: [261, 105], etoiles: [[54, 102, 13], [271, 102, 10]],
             variantes: {

@@ -453,11 +453,15 @@
         const ANIMAL_SUR_CARTE = false;
         function imageCarte() { return ANIMAL_SUR_CARTE ? imageMarqueur() : null; }
 
-        /* Hauteur du portrait flottant en bas à gauche pendant la navigation. Réglé sur
-           la taille du compteur de vitesse d'en face (110 px de case) : les deux coins
-           bas se répondent, aucun ne domine l'autre. La case CSS est un peu plus haute,
-           l'animal s'y pose par le bas (`align-items: flex-end`). */
-        const TAILLE_PORTRAIT_PX = 96;
+        /* Hauteur du portrait flottant en bas à gauche pendant la navigation.
+           ⚠ DOIT SUIVRE `#nav-compagnon-portrait` EN CSS, qui pose la même valeur : la
+           case et l'animal qu'elle contient sont dimensionnés séparément, l'un ici et
+           l'autre là-bas. 96 px à l'origine, pour faire miroir au compteur de vitesse
+           d'en face ; passé à 144 (1,5×) le 01/09/2026 sur demande — l'animal se lisait
+           mal entre deux compteurs. L'animal se pose par le bas de sa case
+           (`align-items: flex-end`), et déborde vers le haut sans être rogné
+           (`overflow: visible`, voir la règle CSS). */
+        const TAILLE_PORTRAIT_PX = 144;
 
         function svgMarqueur(im, hauteurPx) {
             const b = im.boite;

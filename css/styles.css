@@ -281,21 +281,39 @@
         #next-turn-panel.visible { display: flex; }
         #next-turn-primary { display: flex; align-items: center; gap: 14px; }
         #next-turn-icon-container {
-            width: 46px; height: 46px; flex-shrink: 0;
+            width: 60px; height: 60px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
         }
-        #next-turn-icon-container svg { width: 34px; height: 40px; fill: #ffffff; }
+        #next-turn-icon-container svg { width: 48px; height: 54px; fill: #ffffff; }
         #next-turn-info { flex: 1; min-width: 0; color: #fff; }
         #next-turn-distance { font-size: clamp(18px, 5vw, 24px); font-weight: 800; color: #ffffff; letter-spacing: 0.5px; }
         #next-turn-street { font-size: clamp(13px, 3.5vw, 15px); color: #eafff2; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+        /* === PANNEAU DIRECTIONNEL RECONSTITUÉ (voies rapides) ===
+           Reprend les codes des vrais panneaux français : écusson bleu pour les autoroutes,
+           vert pour les nationales et euroroutes, badge blanc pour le numéro de sortie.
+           La ligne n'existe QUE quand Mapbox fournit `ref` ou `exits` — sur une rue de ville
+           elle est vide, et `display:none` évite qu'un blanc décale le nom de la rue. */
+        #next-turn-signage { display: none; gap: 6px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
+        #next-turn-signage.visible { display: flex; }
+        #next-turn-signage .sign-shield,
+        #next-turn-signage .sign-exit {
+            font-size: clamp(12px, 3.2vw, 14px); font-weight: 800; letter-spacing: 0.4px;
+            padding: 2px 8px; border-radius: 5px; line-height: 1.35; white-space: nowrap;
+        }
+        #next-turn-signage .sign-shield { background: #6b7683; color: #fff; border: 1.5px solid rgba(255,255,255,0.85); }
+        #next-turn-signage .sign-shield.autoroute { background: #0b4da2; }
+        /* Vert nettement plus sombre que le fond du bandeau (#1b6e52 vers #124a37) : le vert
+           des vrais panneaux s'y confondait, seul le liseré blanc les séparait. */
+        #next-turn-signage .sign-shield.nationale { background: #05341f; }
+        #next-turn-signage .sign-exit { background: #ffffff; color: #124a37; border: 1.5px solid rgba(255,255,255,0.9); }
         #next-turn-secondary {
             display: none; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px;
             border-top: 1px solid rgba(255,255,255,0.18); color: #cfe9dc;
         }
         #next-turn-secondary.visible { display: flex; }
         #next-turn-secondary .puis-label { font-size: 13px; font-weight: 700; opacity: 0.85; flex-shrink: 0; }
-        #next-turn-secondary-icon { width: 22px; height: 22px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; }
-        #next-turn-secondary-icon svg { width: 18px; height: 20px; fill: #cfe9dc; }
+        #next-turn-secondary-icon { width: 30px; height: 30px; flex-shrink: 0; display:flex; align-items:center; justify-content:center; }
+        #next-turn-secondary-icon svg { width: 26px; height: 28px; fill: #cfe9dc; }
         #next-turn-secondary-street { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         /* Décale les widgets du haut sous la bannière plein écran quand elle est active */
@@ -2320,7 +2338,11 @@
         #nav-compagnon-portrait {
             position: absolute; left: 50%; bottom: calc(100% - 10px);
             transform: translateX(-50%);
-            width: 96px; height: 96px; z-index: 1;
+            /* 1,5× la taille d'origine (96 px) — demande utilisateur du 01/09/2026 :
+              l'animal se lisait mal entre deux compteurs. Il ne fait donc PLUS miroir
+              au compteur de vitesse en taille ; les deux coins bas restent alignés,
+              c'est ce qui compte pour que l'écran ne penche pas. */
+            width: 144px; height: 144px; z-index: 1;
             display: flex; align-items: flex-end; justify-content: center;
             pointer-events: none;
             /* Invisible tant que le véhicule roule. `opacity` et non `display` : le fondu
@@ -2343,6 +2365,21 @@
         #nav-compagnon-portrait .pulse-marker-animal {
             position: static; left: auto; bottom: auto; transform: none;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+            /* ⚠ LA BOÎTE MET À L'ÉCHELLE, ELLE NE DÉCOUPE PAS (01/09/2026). Le `viewBox`
+               posé sur `boite` (js/22) sert à cadrer l'animal sur ses pixels visibles —
+               sans lui, un fichier de 512 px dont un tiers est transparent donnerait un
+               animal deux fois trop petit dans sa case. Mais un `<svg>` rogne à son
+               viewport : une image animée qui sort de sa boîte le temps d'une frame
+               était coupée net (trompe et oreille de Babi, signalées le 01/09/2026).
+               `overflow: visible` retire le rognage et garde la mise à l'échelle —
+               c'est déjà ce que fait le hero (`.cp-svg`, § 12 du thème crépuscule).
+               Le filet ne dispense PAS d'une boîte juste : mesurée sur la seule frame 1,
+               elle changerait aussi la TAILLE apparente de l'animal d'une pose à
+               l'autre. Voir tools/_bbox-anim.js. */
+            overflow: visible;
+            /* Le SVG porte ses dimensions en attributs (js/04) ; dans ce conteneur flex
+               il se ferait écraser en paysage, où la case est plus petite que lui. */
+            flex-shrink: 0;
         }
         #nav-arrivee { color: #e2e8f0; }
         #nav-multiplier { color: #f39c12; }
@@ -2628,10 +2665,13 @@
                 box-shadow: 0 10px 30px rgba(0,0,0,0.55);
             }
             body.nav-active #next-turn-primary { gap: 10px; }
-            body.nav-active #next-turn-icon-container { width: 34px; height: 34px; }
-            body.nav-active #next-turn-icon-container svg { width: 26px; height: 30px; }
+            body.nav-active #next-turn-icon-container { width: 44px; height: 44px; }
+            body.nav-active #next-turn-icon-container svg { width: 36px; height: 40px; }
             body.nav-active #next-turn-distance { font-size: 21px; }
             body.nav-active #next-turn-street { font-size: 12.5px; }
+            body.nav-active #next-turn-signage { margin-top: 4px; gap: 5px; }
+            body.nav-active #next-turn-signage .sign-shield,
+            body.nav-active #next-turn-signage .sign-exit { font-size: 11.5px; padding: 1px 6px; }
             body.nav-active #next-turn-secondary { margin-top: 8px; padding-top: 8px; gap: 8px; }
             body.nav-active #next-turn-secondary .puis-label,
             body.nav-active #next-turn-secondary-street { font-size: 12px; }
@@ -2689,9 +2729,10 @@
             }
             body.nav-active #nav-speed-value { font-size: 26px; }
             /* En paysage, la barre de navigation est une boîte étroite en bas à droite :
-               un animal de 96 px posé dessus déborderait de l'écran. Il rétrécit, sa
-               place au-dessus de la barre de vie ne change pas. */
-            #nav-compagnon-portrait { width: 64px; height: 64px; }
+               un animal de 144 px posé dessus déborderait de l'écran. Il rétrécit, sa
+               place au-dessus de la barre de vie ne change pas. Même rapport de 1,5
+               que la taille de base, pour que le paysage suive le portrait. */
+            #nav-compagnon-portrait { width: 96px; height: 96px; }
             body.nav-active #speed-limit-badge,
             body.bottom-bars-active.nav-active #speed-limit-badge {
                 bottom: calc(var(--panel-bottom-offset, 64px) + 22px); right: 100px; top: auto;

@@ -3,6 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         POLITIQUE DE SÉCURITÉ DU CONTENU — `connect-src` SEULEMENT, ET C'EST VOULU
+
+         CE QU'ELLE PROTÈGE. Les noms et adresses affichés par l'app viennent de flux que
+         n'importe qui peut éditer (OpenStreetMap via Overpass, jeux data.gouv). Ils sont
+         désormais échappés (`echapperHtml`, js/00), mais l'échappement est une défense de
+         premier rang : le jour où un gabarit lui échappe, cette liste blanche empêche le
+         code injecté d'EXPÉDIER quoi que ce soit — position GPS, localStorage (profils,
+         trajets, domicile/travail), session du classement. Elle ne l'empêche pas de
+         s'exécuter ; elle l'empêche de faire sortir les données. C'est le second rang.
+
+         ⚠ AUCUN `default-src`, ET SURTOUT NE PAS EN AJOUTER. Sans lui, toute directive non
+         déclarée ici reste LIBRE : images, polices, styles, et surtout les workers que
+         Mapbox crée en `blob:`. Poser `default-src` les soumettrait toutes d'un coup à la
+         liste blanche et casserait la carte — un `blob:` que le relevé d'origines ne voit
+         même pas (les workers ne laissent pas d'entrée Resource Timing ; seules les erreurs
+         `blob:null/…` du journal 🩺 trahissent leur existence).
+
+         ⚠ PAS DE `script-src` NON PLUS. index.html porte ~158 attributs `onclick` inline :
+         toute directive de script exigerait `'unsafe-inline'`, ce qui la viderait de son
+         sens, ou une refonte de tous les gestionnaires. Le gain réel est ici, sur la sortie
+         des données, pas sur l'exécution.
+
+         LISTE ÉTABLIE LE 01/09/2026 par DEUX sources croisées, jamais de mémoire :
+           · le relevé `origines` du journal 🩺 (usage réel) — c'est lui, et lui seul, qui a
+             révélé `events.mapbox.com`, la télémétrie de Mapbox, absente de tout le code ;
+           · une relecture des URL du code, pour les services non exercés ce jour-là
+             (géocodeurs de repli, météo, Supabase, Firebase).
+
+         ⚠ AJOUTER UN SERVICE = AJOUTER SON ORIGINE ICI, sans quoi il échouera. Le blocage
+         n'est PAS une exception JavaScript : il n'apparaît ni dans la console de l'APK
+         (inaccessible) ni spontanément dans le journal. L'écouteur `securitypolicyviolation`
+         de js/01 est ce qui l'y fait remonter — ne pas le retirer.
+
+         `file:` et `'self'` : l'APK charge en `file://`, où `'self'` est une origine opaque
+         qui ne correspond à rien ; le dev-server, lui, sert en http://127.0.0.1. Les deux
+         sont donc nécessaires pour couvrir les deux contextes.
+
+         ⚠ `static.data.gouv.fr` EST INDISPENSABLE ALORS QU'IL N'APPARAÎT NULLE PART DANS LE
+         CODE. La source ZFE (`www.data.gouv.fr/api/1/datasets/r/…`, js/16) répond par un 302
+         vers `static.data.gouv.fr/resources/…/aires.geojson`, et une CSP contrôle CHAQUE
+         saut d'une redirection, pas seulement l'URL de départ. Vérifié le 01/09/2026 :
+         c'est la seule source du projet qui redirige — les autres (adresse, prix des
+         carburants, OSRM, météo, Nominatim, Photon) répondent toutes en 200 direct.
+         Sans cette ligne, les alertes ZFE tombaient en panne SANS message, avec pour seul
+         symptôme le repli « périmètres approximatifs » du jeu embarqué.
+
+         `*.firebaseio.com` est listé alors que le partage live DORT (FIREBASE_DB_URL vaut
+         encore `TON_PROJET`) : le jour où il sera branché, l'oubli se manifesterait par un
+         partage muet, sans message. Autant que la porte soit déjà ouverte.
+         ═══════════════════════════════════════════════════════════════════════════ -->
+    <meta http-equiv="Content-Security-Policy" content="connect-src
+        'self' file: data: blob:
+        https://api.mapbox.com https://events.mapbox.com
+        https://api-adresse.data.gouv.fr https://www.data.gouv.fr https://static.data.gouv.fr
+        https://data.economie.gouv.fr
+        https://sedeaplicaciones.minetur.gob.es
+        https://overpass-api.de https://overpass.kumi.systems https://overpass.openstreetmap.ru
+        https://overpass.private.coffee https://maps.mail.ru
+        https://router.project-osrm.org
+        https://nominatim.openstreetmap.org https://photon.komoot.io
+        https://api.open-meteo.com
+        https://husqmdqwqunufgjbcmsk.supabase.co
+        https://cdn.jsdelivr.net
+        https://*.firebaseio.com">
     <title>Simulateur Récompenses GPS - Dark Mode & Néon</title>
     
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
@@ -498,6 +564,9 @@
             <div id="next-turn-icon-container"></div>
             <div id="next-turn-info">
                 <div id="next-turn-distance">--</div>
+                <!-- Panneau directionnel reconstitué (écusson de route, numéro de sortie).
+                     Rempli par buildSignageHtml() (js/08) ; vide et masqué hors voie rapide. -->
+                <div id="next-turn-signage"></div>
                 <div id="next-turn-street">--</div>
             </div>
         </div>
@@ -1525,6 +1594,11 @@
                 <button onclick="_debugRemettreEnCage()" style="background:rgba(168,139,255,0.15);border:1px dashed rgba(168,139,255,0.5);color:#a88bff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
                     🔒 DEBUG — Remettre la troupe en cage (et ressusciter les morts)
                 </button>
+                <!-- Aperçu du seul moment où l'animal est visible en conduite : à l'arrêt,
+                     posé sur sa barre de vie. Bascule — rappuyer referme (voir js/12). -->
+                <button onclick="_debugModeArret_toggle()" style="background:rgba(255,180,60,0.15);border:1px dashed rgba(255,180,60,0.5);color:#ffb43c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    🛑 DEBUG — Mode arrêt (compagnon sur la barre de vie)
+                </button>
             </div>
 
     </div><!-- fin panel-tab-objectifs -->
@@ -1921,7 +1995,35 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <!-- ═══ SDK EXTERNES : VERSION EXACTE + EMPREINTE OBLIGATOIRES ═══
+         `@turf/turf@6` et `@supabase/supabase-js@2` étaient des versions FLOTTANTES :
+         le CDN servait la dernière 6.x / 2.x du jour, et n'importe quelle publication
+         au fil de l'eau — bénigne, boguée ou malveillante — entrait dans l'application
+         sans que rien ne change ici. Dans une WebView qui détient la géolocalisation,
+         le localStorage (profils, trajets, domicile/travail) et la session Supabase du
+         classement, cela revenait à donner les clés à un tiers.
+
+         L'attribut `integrity` fait vérifier au navigateur l'empreinte SHA-384 du
+         fichier reçu : au moindre octet changé, le script est REJETÉ. `crossorigin`
+         est indispensable pour que la vérification ait lieu sur une ressource d'un
+         autre domaine (jsdelivr renvoie bien `Access-Control-Allow-Origin: *`).
+
+         ⚠ LES EMPREINTES SONT LIÉES À CES VERSIONS EXACTES. Changer un numéro sans
+         recalculer l'empreinte fait échouer le chargement EN SILENCE — pas d'exception,
+         pas de ligne en console côté application, juste un global absent. Les symptômes
+         diffèrent selon le paquet : `_clPret()` (js/21) est écrit pour survivre à un
+         Supabase manquant et se contente d'éteindre le classement, tandis que turf n'a
+         AUCUN garde-fou et emporterait tous les calculs géographiques.
+         Pour régénérer une empreinte : `openssl dgst -sha384 -binary fichier.js | openssl base64 -A`
+         Empreintes posées le 01/09/2026, sur les versions que le flottant servait déjà
+         ce jour-là — l'épinglage n'a donc rien changé au comportement.
+
+         Mapbox reste SANS empreinte, délibérément : son URL est déjà versionnée (v3.1.2)
+         et il sert aussi les tuiles et le style: s'il fallait s'en méfier, une empreinte
+         sur le seul fichier JS ne protégerait de rien. -->
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"
+            integrity="sha384-82q0nm29xZzIo5BMtDYnh2/NxeO6FoaK1S/0nF84w3cEsqbBfun3JdMyDVYWfVY5"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
  
 
@@ -1972,7 +2074,10 @@
          setTimeout(0) final qui restaure la session.
          ⚠ Build UMD explicite (dist/umd/) : la racine du paquet sert de l'ESM, qui ne
          définirait aucun global et resterait silencieusement inutilisable ici. -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <!-- Version exacte + empreinte : voir la note complète au chargement de turf. -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"
+            integrity="sha384-ysv13JVP3fufiEXfjML9OdCa/rRbMJvUBOWyor82wfuK8INNZAvmbxHgKIHi+oqz"
+            crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="js/21-classement.js"></script>
     <!-- Le compagnon. Après 21 mais AVANT </body> : il s'accroche à
          #ui-panel-title, qui doit déjà exister. Ne dépend de rien d'autre —

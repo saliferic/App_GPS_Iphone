@@ -561,10 +561,12 @@
         /* Les pseudos viennent d'autres utilisateurs : la contrainte SQL les limite à
            `[A-Za-z0-9._-]`, mais on n'insère JAMAIS du texte distant en `innerHTML` sans
            échapper — la contrainte peut changer, l'échappement, lui, ne coûte rien. */
+        /* Branché sur `echapperHtml()` (js/00-helpers-partages) depuis l'audit du
+           01/09/2026, pour qu'il n'existe qu'UNE définition de l'échappement dans le
+           projet. Le comportement ne change pas ici : la version partagée échappe les
+           guillemets en plus, ce qui est invisible dans un nœud de texte. */
         function _clEchappe(txt) {
-            const d = document.createElement('div');
-            d.textContent = String(txt == null ? '' : txt);
-            return d.innerHTML;
+            return echapperHtml(txt);
         }
 
         // --- Liaisons des boutons (l'attente réseau est visible, sinon rien ne bouge) ---

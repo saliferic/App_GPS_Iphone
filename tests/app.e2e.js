@@ -151,6 +151,25 @@ function demarrerServeur() {
     const exceptionsPage = [];
     page.on('pageerror', (e) => exceptionsPage.push(e.message));
 
+    /* Requêtes refusées ou avortées. Deux usages :
+       — un CDN épinglé dont l'empreinte SRI ne correspond plus n'aboutit pas ;
+       — une future Content-Security-Policy trop étroite bloquerait des appels d'API,
+         et cette liste nomme alors exactement les domaines qui manquent, au lieu de
+         les faire découvrir écran par écran.
+       Purement informatif : la liste n'échoue rien par elle-même, elle est imprimée
+       en pièce jointe des échecs de la section « SDK externes ». */
+    /* ⚠ LES ABANDONS SONT EXCLUS, SINON CE COLLECTEUR NE SERT À RIEN. Mapbox annule
+       lui-même les tuiles devenues inutiles dès que la vue change : trois `ERR_ABORTED`
+       par exécution, sur un domaine parfaitement autorisé. Les laisser noierait le seul
+       cas qui compte — une requête réellement refusée — sous un bruit permanent qu'on
+       finirait par ne plus lire. */
+    const requetesEchouees = [];
+    page.on('requestfailed', (r) => {
+        const cause = (r.failure() && r.failure().errorText) || '?';
+        if (cause.indexOf('ABORT') !== -1) return;
+        requetesEchouees.push(r.url().slice(0, 100) + ' (' + cause + ')');
+    });
+
     try {
         await page.goto(base + '/index.html', { waitUntil: 'load' });
         // La carte s'initialise en asynchrone ; sans elle, aucun cadrage n'a de sens.
@@ -182,6 +201,26 @@ function demarrerServeur() {
         for (const nom of globalesAttendues) {
             const present = await page.evaluate((n) => typeof window[n] !== 'undefined', nom);
             verifieVrai(`« ${nom} » est défini`, present);
+        }
+
+        /* ── SDK EXTERNES : la vérification que l'épinglage SRI rend indispensable ──
+           `index.html` charge turf et supabase-js en version EXACTE, avec une empreinte
+           `integrity`. Si l'empreinte ne correspond plus au fichier servi (numéro de
+           version changé sans recalcul, paquet republié), le navigateur rejette le script
+           EN SILENCE : aucune exception, aucune ligne dans le journal de l'app, juste un
+           global absent. Rien de ce qui précède ne l'aurait vu — d'où ces trois lignes.
+
+           ⚠ Un CDN réellement injoignable (poste hors ligne, réseau filtrant) fait échouer
+           cette section aussi. C'est voulu : mieux vaut un rouge explicite qu'un test vert
+           obtenu sans les bibliothèques. `requetesEchouees` distingue les deux cas — une
+           URL de CDN dans la liste désigne le réseau, une liste vide désigne l'empreinte. */
+        section('SDK externes');
+        for (const nom of ['turf', 'mapboxgl', 'supabase']) {
+            const present = await page.evaluate((n) => typeof window[n] !== 'undefined', nom);
+            verifieVrai(`SDK « ${nom} » chargé depuis son CDN`, present);
+        }
+        if (requetesEchouees.length) {
+            console.log('  ℹ requêtes non abouties : ' + requetesEchouees.join(' | '));
         }
 
         // ── 2. Débordements de mise en page ─────────────────────────────────────

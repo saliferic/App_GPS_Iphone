@@ -1171,6 +1171,45 @@
             return `<svg viewBox="0 0 24 24"><path d="M 12 22 L 12 4 M 6 9 L 12 2 L 18 9" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
         }
 
+        /* ═══ PANNEAU DIRECTIONNEL : ÉCUSSON DE ROUTE ET NUMÉRO DE SORTIE ═══
+           Mapbox livre déjà trois champs distincts sur chaque step : `ref` (le numéro de
+           route, « A9 » ou « A9;E15 »), `exits` (le numéro de sortie, « 42 »), et
+           `destinations` (les villes annoncées). Le bandeau les écrasait tous dans une
+           seule ligne de texte, où `destinations` gagnait toujours : sur une bretelle
+           d'autoroute, le conducteur lisait « Béziers, Montpellier » sans jamais voir le
+           numéro de sortie — la seule information qu'il cherche à cet instant précis.
+           On les rend donc séparément, aux couleurs des vrais panneaux.
+
+           ⚠ NE PAS CONFONDRE `step.exits` ET `step.maneuver.exit`. Le premier est le
+           NUMÉRO inscrit sur le panneau ; le second est le RANG de la sortie d'un
+           rond-point (« la 3ᵉ sortie »). Afficher « Sortie 3 » sur un rond-point serait
+           faux dans l'immense majorité des cas. D'où la restriction aux bretelles. */
+        const _SIGNAGE_SPLIT = /[;,/]/;
+        const _SIGNAGE_EXIT_TYPES = ['off ramp', 'on ramp', 'fork'];
+
+        function _signageParts(raw) {
+            return String(raw || '').split(_SIGNAGE_SPLIT).map(s => s.trim()).filter(Boolean).slice(0, 2);
+        }
+
+        function buildSignageHtml(step) {
+            const html = [];
+            if (_SIGNAGE_EXIT_TYPES.includes(step.maneuver.type)) {
+                const exits = _signageParts(step.exits);
+                if (exits.length) {
+                    html.push(`<span class="sign-exit">Sortie ${echapperHtml(exits.join('-'))}</span>`);
+                }
+            }
+            _signageParts(step.ref).forEach(ref => {
+                // Codes des panneaux français : autoroute en bleu, nationale et euroroute
+                // en vert, tout le reste en gris neutre plutôt qu'en couleur inventée.
+                let cls = 'sign-shield';
+                if (/^A\s?\d/i.test(ref)) cls += ' autoroute';
+                else if (/^[NE]\s?\d/i.test(ref)) cls += ' nationale';
+                html.push(`<span class="${cls}">${echapperHtml(ref)}</span>`);
+            });
+            return html.join('');
+        }
+
         function updateNextTurnPanel(step, distToManeuverM) {
             const panel = DOM.nextTurnPanel || document.getElementById('next-turn-panel');
             const iconContainer = DOM.nextTurnIconContainer || document.getElementById('next-turn-icon-container');
@@ -1186,18 +1225,34 @@
             document.getElementById('next-turn-distance').innerText =
                 (_positionIsEstimated ? '≈ ' : '') + distLabel;
 
+            // Écusson de route et numéro de sortie, rendus à part sur leur propre ligne.
+            const signageEl = DOM.nextTurnSignage || document.getElementById('next-turn-signage');
+            const signageHtml = buildSignageHtml(step);
+            if (signageEl) {
+                signageEl.innerHTML = signageHtml;
+                signageEl.classList.toggle('visible', !!signageHtml);
+            }
+
             // Nom affiché : on privilégie les destinations des panneaux directionnels (ex: "Paris,
             // Lyon") quand elles sont disponibles — c'est ce que le conducteur voit sur les vrais
-            // panneaux routiers. Sinon, on replie sur le nom de la rue, puis la référence de route.
-            let displayName = step.name || 'Prochaine manœuvre';
+            // panneaux routiers. Sinon, on replie sur le nom de la rue.
+            /* ⚠ `step.ref` N'EST PLUS REPRIS ICI quand l'écusson l'affiche déjà : le bandeau
+               montrait « A9 A9 » dès que la ligne d'écussons est apparue. Le repli textuel
+               subsiste pour le cas où buildSignageHtml() n'a rien rendu — une `ref` d'une
+               forme qu'on n'attendait pas reste alors visible plutôt que perdue. */
+            let displayName = step.name || '';
             if (step.destinations) {
                 // "destinations" contient les noms séparés par des virgules, on prend les 2 premiers
-                const dests = step.destinations.split(',').map(d => d.trim()).slice(0, 2).join(', ');
-                displayName = dests;
-            } else if (step.ref && step.ref !== step.name) {
+                displayName = step.destinations.split(',').map(d => d.trim()).slice(0, 2).join(', ');
+            } else if (!signageHtml && step.ref && step.ref !== step.name) {
                 displayName = (step.ref + ' ' + (step.name || '')).trim();
             }
-            (DOM.nextTurnStreet || document.getElementById('next-turn-street')).innerText = displayName;
+            /* Sans écusson, une ligne vide laisserait le bandeau amputé : on garde le libellé
+               générique. Avec écusson, il n'y a rien à combler — le panneau se suffit. */
+            if (!displayName) displayName = signageHtml ? '' : 'Prochaine manœuvre';
+            const streetEl = DOM.nextTurnStreet || document.getElementById('next-turn-street');
+            streetEl.innerText = displayName;
+            streetEl.style.display = displayName ? '' : 'none';
             panel.classList.add('visible');
             document.body.classList.add('nav-banner-active');
 

@@ -884,8 +884,8 @@
                 return `
                     <div class="gas-card-icon">⛽</div>
                     <div class="gas-card-info">
-                        <div class="gas-card-name">${s._isFavorite ? '⭐ ' : ''}${s.name}</div>
-                        <div class="gas-card-addr">${s.addr || '—'}</div>
+                        <div class="gas-card-name">${s._isFavorite ? '⭐ ' : ''}${echapperHtml(s.name)}</div>
+                        <div class="gas-card-addr">${echapperHtml(s.addr || '—')}</div>
                         ${st.status === 'unknown' ? '' :
                           `<div style="font-size:9px;color:${col};margin-top:2px;font-weight:600;">${dot} ${st.label}</div>`}
                         ${s._isFavorite && s._visits > 1

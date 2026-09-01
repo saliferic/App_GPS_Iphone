@@ -35,6 +35,44 @@
            à chaque lancement. */
         let _stationsHidden = false;
 
+        /* ÉCHAPPEMENT DU TEXTE VENU DU RÉSEAU — à utiliser dans TOUT gabarit `innerHTML`
+           qui interpole un nom, une adresse ou un libellé issu d'un flux tiers.
+
+           Les fiches détail (`_scanInfoRow`, js/11 et js/27) se construisent en nœuds DOM :
+           `textContent` échappe alors tout seul, et cela reste la voie à préférer pour tout
+           nouvel écran. Mais les CARTES DE LISTE des scans (⛽ js/11 et js/18, ⚡ js/19,
+           🅿️ js/27) sont, elles, écrites en gabarits `innerHTML` pour ne faire qu'UNE seule
+           écriture DOM par carte — un choix de performance assumé dans des boucles qui
+           rendent des dizaines d'éléments. Elles interpolaient `s.name` et `s.addr` BRUTS.
+
+           Or ces deux champs viennent d'OpenStreetMap (via Overpass) et des jeux data.gouv,
+           que n'importe qui peut éditer : un `name` contenant `<img src=x onerror=…>`
+           s'exécutait dans la page, avec accès à la géolocalisation, au localStorage
+           (profils, trajets, domicile/travail) et à la session Supabase du classement.
+           Le tag `capacity` d'un parking, lui, ne pose pas ce problème : js/27 le filtre
+           déjà par une regex de chiffres avant de l'afficher — le modèle à suivre quand un
+           champ tiers a une forme connue. Les libellés fermés du code (`FUEL_DEFS[].label`,
+           les connecteurs de js/19, `getStationOpeningStatus().label`) n'en ont pas besoin.
+
+           ⚠ Ne PAS retirer ces appels en jugeant qu'un nom de station « ne contient jamais
+           de balise » : c'est vrai de tous les noms légitimes, et c'est exactement ce qui
+           rend l'exception intéressante à exploiter. Un nom sain traverse cette fonction
+           sans qu'un seul caractère change.
+
+           Version pure chaîne, sans élément DOM intermédiaire (contrairement à `_clEchappe`,
+           js/21, désormais branché dessus) : créer un `<div>` jetable par champ coûterait
+           deux nœuds par carte dans des boucles tenues à une seule écriture DOM. Les
+           guillemets sont échappés en plus du strict nécessaire, pour que la fonction reste
+           correcte le jour où une valeur atterrit dans un attribut. */
+        function echapperHtml(txt) {
+            return String(txt == null ? '' : txt)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // `LICENSE_POINTS_MAX` a rejoint js/00-noyau-calculs.js (chargé avant ce fichier)
         // avec `_readLicensePoints()`, la fonction qui l'exploite.
 

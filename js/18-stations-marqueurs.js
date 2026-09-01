@@ -1050,8 +1050,8 @@
                     <div class="gas-selected-dot"></div>
                     <div class="gas-card-icon">⛽</div>
                     <div class="gas-card-info">
-                        <div class="gas-card-name">${s._isFavorite ? '⭐ ' : ''}${s.name}</div>
-                        <div class="gas-card-addr">${s.addr || '—'}</div>
+                        <div class="gas-card-name">${s._isFavorite ? '⭐ ' : ''}${echapperHtml(s.name)}</div>
+                        <div class="gas-card-addr">${echapperHtml(s.addr || '—')}</div>
                         ${(() => {
                             const st = getStationOpeningStatus(s);
                             if (st.status === 'unknown') return '';

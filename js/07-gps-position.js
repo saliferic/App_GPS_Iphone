@@ -455,9 +455,37 @@
         let liveShareTimer    = null;
         const LIVE_SHARE_INTERVAL_MS = 5000; // écriture toutes les 5s
 
-        // Génère un ID de session court et lisible (ex: "abc123")
+        /* IDENTIFIANT DE SESSION DU PARTAGE LIVE — LE SEUL SECRET QUI PROTÈGE LA POSITION.
+
+           Il n'y a pas d'authentification devant la base : quiconque connaît l'identifiant
+           lit la position GPS en direct, la vitesse et la destination. L'URL EST le mot de
+           passe, elle doit donc être indevinable.
+
+           ⚠ La version d'origine (`Math.random().toString(36).slice(2, 8)`) tenait en SIX
+           caractères, soit ~2 milliards de combinaisons — énumérables par un script en
+           quelques heures, et bien moins en pratique : `Math.random()` n'est pas
+           cryptographique, sa graine est prédictible, et deux appareils peuvent tomber sur
+           la même valeur. On tire donc 20 caractères sur un alphabet de 32 (~100 bits)
+           avec `crypto.getRandomValues`, présent dans toutes les WebView Android visées.
+
+           Alphabet sans `0/O/1/I/l` : le lien se copie et se recolle à la main, une
+           confusion de caractères mène à une session inexistante plutôt qu'à celle d'un
+           inconnu. Les 20 caractères ne coûtent rien — le lien est copié, jamais tapé.
+
+           ⚠ ALLONGER L'IDENTIFIANT NE SUFFIT PAS À SÉCURISER LA FONCTION. Il reste à poser
+           des règles de sécurité côté base (lecture limitée à `liveshare/<id>`, écriture
+           refusée aux tiers, expiration des sessions) — ce n'est PAS du code, c'est une
+           configuration console, et elle est à faire le jour où `FIREBASE_DB_URL` cesse de
+           valoir `TON_PROJET`. Sans elle, la base entière reste lisible quel que soit
+           l'identifiant. */
         function _lsGenId() {
-            return Math.random().toString(36).slice(2, 8);
+            const ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';   // 32 signes, sans 0/O/1/I/l
+            const octets = new Uint8Array(20);
+            crypto.getRandomValues(octets);
+            /* `% 32` sans biais : 256 est un multiple exact de 32, chaque signe a donc
+               exactement 8 chances sur 256. Le raccourci serait faux avec un alphabet
+               dont la taille ne divise pas 256 — ne pas changer l'un sans l'autre. */
+            return Array.from(octets, (o) => ALPHABET[o % 32]).join('');
         }
 
         // URL Firebase pour la session courante

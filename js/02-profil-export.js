@@ -179,17 +179,71 @@
                 try {
                     const data = JSON.parse(e.target.result);
 
-                    // Validation basique
-                    if (!data._version || !data._exportedAt) {
+                    /* VALIDATION DU FICHIER IMPORTÉ.
+
+                       Ce fichier arrive de l'extérieur : il a pu être bricolé à la main, ou
+                       provenir d'un autre appareil, d'une autre version. Il finit écrit tel
+                       quel dans le localStorage, que TOUT le reste de l'application relit
+                       ensuite en lui faisant confiance.
+
+                       ⚠ VOLONTAIREMENT PERMISSIVE. Une clé douteuse est IGNORÉE, jamais un
+                       motif de rejeter le fichier entier : les exports d'anciennes versions
+                       doivent continuer de passer, et refuser tout un profil pour un seul
+                       réglage aberrant transformerait une sauvegarde en presse-papier
+                       inutilisable. Seul un fichier qui n'est pas un export est refusé.
+
+                       `typeof null` vaut "object" et un tableau aussi : les deux sont donc
+                       écartés explicitement, sans quoi `data[key]` plus bas lirait des
+                       indices au lieu de clés. */
+                    if (!data || typeof data !== 'object' || Array.isArray(data)
+                        || !data._version || !data._exportedAt) {
                         throw new Error('Fichier invalide — ce n\'est pas un export Salif GPS.');
+                    }
+
+                    /* Chaque valeur DOIT être une chaîne : le localStorage ne stocke que du
+                       texte, et `setItem` convertit silencieusement le reste — un objet y
+                       entrerait comme "[object Object]", un tableau comme sa liste aplatie.
+                       La clé serait alors corrompue pour le module qui la relit, sans le
+                       moindre message. On écarte aussi les valeurs démesurées, qui feraient
+                       sauter le quota du stockage AU MILIEU de la boucle d'écriture et
+                       laisseraient le profil à moitié importé.
+
+                       La boucle d'écriture n'itère QUE sur PROFILE_EXPORT_KEYS : une clé
+                       inconnue glissée dans le fichier n'est jamais écrite, c'est déjà une
+                       liste blanche. Ce qui restait à vérifier, c'est la FORME des valeurs
+                       attendues — d'où ce tour de contrôle, et non un rejet global. */
+                    const TAILLE_MAX_VALEUR = 2 * 1024 * 1024;   // 2 Mio/clé, très au-dessus du réel
+                    const clesEcartees = [];
+                    PROFILE_EXPORT_KEYS.forEach(key => {
+                        if (data[key] === undefined) return;
+                        if (typeof data[key] !== 'string' || data[key].length > TAILLE_MAX_VALEUR) {
+                            clesEcartees.push(key);
+                            delete data[key];
+                        }
+                    });
+                    if (clesEcartees.length) {
+                        logAppError('import/clesEcartees', new Error(clesEcartees.join(', ')));
                     }
 
                     // Confirmation avant écrasement
                     const exportDate = new Date(data._exportedAt).toLocaleDateString('fr-FR', {
                         day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                     });
-                    const profiles = JSON.parse(data['gps_profiles'] || '[]');
-                    const profileNames = profiles.map(p => p.name).join(', ') || 'aucun';
+                    /* Le nom des profils ne sert qu'à l'aperçu de la fenêtre de
+                       confirmation. Un `gps_profiles` illisible ne doit donc PAS emporter
+                       l'import : on affiche « aucun » et la suite se déroule normalement.
+                       `String((p && p.name) || '?')` parce qu'un profil bricolé peut porter
+                       un nom numérique, nul, ou pas de nom du tout. Ce texte part dans
+                       `confirm()`, qui n'interprète aucun balisage : rien à échapper ici. */
+                    let profileNames = 'aucun';
+                    try {
+                        const profilsLus = JSON.parse(data['gps_profiles'] || '[]');
+                        if (Array.isArray(profilsLus)) {
+                            profileNames = profilsLus
+                                .map(p => String((p && p.name) || '?').slice(0, 40))
+                                .join(', ') || 'aucun';
+                        }
+                    } catch (e) { logAppError('import/profilsIllisibles', e); }
 
                     /* La ligne « 🏅 Badges : N » a été retirée le 27/08/2026 avec le
                        système qu'elle comptait. Rien ne la remplace : le nombre d'animaux
@@ -264,7 +318,10 @@
                     statusEl.style.background = 'rgba(231,76,60,0.12)';
                     statusEl.style.border = '1px solid rgba(231,76,60,0.3)';
                     statusEl.style.color = '#f87171';
-                    statusEl.innerHTML = `❌ Erreur : ${err.message}`;
+                    /* ⚠ `err.message` n'est PAS du texte de confiance : un message de
+                       `JSON.parse` recopie un extrait du fichier lu (« Unexpected token < »).
+                       Interpolé brut, il exécutait le balisage d'un fichier taillé pour. */
+                    statusEl.innerHTML = `❌ Erreur : ${echapperHtml(err.message)}`;
                 }
                 input.value = ''; // reset pour permettre de réimporter le même fichier
             };

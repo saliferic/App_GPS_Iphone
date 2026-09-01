@@ -1684,6 +1684,7 @@
             DOM.nextTurnPanel        = document.getElementById('next-turn-panel');
             DOM.nextTurnDistance     = document.getElementById('next-turn-distance');
             DOM.nextTurnStreet       = document.getElementById('next-turn-street');
+            DOM.nextTurnSignage      = document.getElementById('next-turn-signage');
             DOM.nextTurnIconContainer= document.getElementById('next-turn-icon-container');
             DOM.nextTurnSecondary    = document.getElementById('next-turn-secondary');
             DOM.nextTurnSecondaryIcon  = document.getElementById('next-turn-secondary-icon');

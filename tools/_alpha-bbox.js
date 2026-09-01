@@ -1,5 +1,11 @@
 /* Boîte alpha réelle d'une image, mesurée DANS LE NAVIGATEUR — donc sur le fichier tel
-   qu'il sera rendu (webp animé compris : c'est la frame affichée qui est lue).
+   qu'il sera rendu.
+
+   ⚠ IMAGES FIXES SEULEMENT (01/09/2026). Sur un webp animé, `drawImage()` ne rend JAMAIS
+   que la PREMIÈRE frame : la boîte obtenue est celle d'une pose, pas celle de l'animation.
+   Les trois compagnons animés y ont perdu trompe, oreille ou tête dès qu'ils bougeaient,
+   le `viewBox` du marqueur découpant tout ce qui sortait de cette boîte-là. Pour un
+   fichier animé, utiliser `tools/_bbox-anim.js`, qui décode chaque frame.
    Sert à caler les compagnons dans js/22 : `boite`, puis x/y/taille par la formule
    SOL_Y / CENTRE_X.
 

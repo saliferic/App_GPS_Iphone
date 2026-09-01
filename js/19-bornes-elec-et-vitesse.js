@@ -623,8 +623,8 @@
                     <div class="gas-selected-dot"></div>
                     <div class="gas-card-icon">⚡</div>
                     <div class="gas-card-info">
-                        <div class="gas-card-name">${s.name === "Borne de recharge" && s.addr ? s.addr : s.name}</div>
-                        <div class="gas-card-addr">${s.name === "Borne de recharge" ? "" : (s.addr || "—")}</div>
+                        <div class="gas-card-name">${echapperHtml(s.name === "Borne de recharge" && s.addr ? s.addr : s.name)}</div>
+                        <div class="gas-card-addr">${echapperHtml(s.name === "Borne de recharge" ? "" : (s.addr || "—"))}</div>
                         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">${connIcons}</div>
                     </div>
                     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
@@ -2487,11 +2487,31 @@
                         d.timeHours += dtHours;
                         const prevDist = d.dist; 
 
-                        // Limite de vitesse de la portion actuelle, déduite des données Mapbox Directions
-                        // (vitesse moyenne de chaque step, arrondie au palier réaliste le plus proche).
-                        // Pas d'appel Overpass ici : la simulation avance ~50x plus vite que la réalité,
-                        // les appels API n'auraient pas le temps de répondre.
-                        let limitKmh = getStepSpeedLimitAtDist(d.dist * 1000);
+                        /* ═══ LA SIMULATION LIT LES MÊMES LIMITES QUE LA ROUTE  (01/09/2026) ═══
+                           Avant : la simulation déduisait la limite de la vitesse moyenne des
+                           steps Mapbox — un chemin que la conduite réelle n'emprunte qu'en
+                           TROISIÈME repli (après l'annotation d'itinéraire et Overpass). La
+                           cascade où se logent les vrais défauts n'était donc jamais exercée
+                           en simulation : le panneau anormalement gris du 31/08 ne pouvait pas
+                           s'y reproduire, il a fallu prendre la voiture pour le voir.
+                           Désormais on interroge d'abord `_routeMaxspeedAnnotations`, la table
+                           construite au démarrage du trajet depuis la réponse Directions. Elle
+                           ne coûte aucun réseau — c'est ce qui la rend utilisable ici, là où
+                           Overpass reste exclu (la simulation avance ~50× plus vite que le
+                           temps réel, aucune réponse n'arriverait à temps).
+
+                           ⚠ CONSÉQUENCE ASSUMÉE : `limitKmh` pilote AUSSI la vitesse du véhicule
+                           simulé. Les trajets de test ne durent plus tout à fait ce qu'ils
+                           duraient — ils durent ce que dureraient les vrais, ce qui est le but.
+
+                           ⚠ `_speedLimitSource` N'EST ÉCRITE QUE POUR LE CONDUCTEUR PRINCIPAL.
+                           Elle est globale et la pastille n'affiche que lui ; la renseigner pour
+                           chaque conducteur de la boucle ferait gagner le dernier itéré, et la
+                           provenance affichée décrirait la route d'un autre véhicule. */
+                        let limitKmh = getMapboxSpeedLimitAtDist(d.dist);
+                        const _limitSource = limitKmh ? (_mapboxLimitWasBorrowed ? 'mapbox-neighbour' : 'mapbox') : 'steps';
+                        if (!limitKmh) limitKmh = getStepSpeedLimitAtDist(d.dist * 1000);
+                        if (d.id === drivers[0].id) _speedLimitSource = _limitSource;
 
                         const checkpoint = Math.floor(d.dist / 0.5);
                         if (checkpoint > d.lastCheckpoint) {

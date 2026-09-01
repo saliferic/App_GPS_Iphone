@@ -243,6 +243,92 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.
 
+## 🔒 Sécurité — audit du 01/09/2026
+
+*Cinq points corrigés en une passe, tous vérifiés (22/22 au harnais e2e, écrans ⛽ 🅿️ et import réel contrôlés à la main). Aucun ne change le comportement de l'app.*
+
+### ⚠⚠ TOUT TEXTE VENU DU RÉSEAU S'ÉCHAPPE — `echapperHtml()`, `js/00-helpers-partages.js`
+
+**Le défaut.** Les cartes de liste des scans (⛽ `js/11` et `js/18`, ⚡ `js/19`, 🅿️ `js/27`) interpolaient `s.name` et `s.addr` **bruts** dans des gabarits `innerHTML`. Or ces champs viennent d'OpenStreetMap via Overpass et des jeux data.gouv, **que n'importe qui peut éditer** : un `name` contenant `<img src=x onerror=…>` s'exécutait dans la page, avec accès à la géolocalisation, au localStorage (profils, trajets, domicile/travail) et à la session Supabase du classement.
+
+**Ce qui rend le cas instructif : la doctrine existait déjà et n'avait été appliquée qu'à moitié.** Les fiches détail (`_scanInfoRow`, js/11 et js/27) se construisent en nœuds DOM avec `textContent`, et js/27 valide même le protocole d'un `href` venu d'OSM contre les liens `javascript:`. La liste des multi-arrêts est bâtie en DOM pour la même raison, explicitement commentée. Seules les cartes de liste étaient passées à travers — exactement le motif consigné plus haut à propos de `_fitMapToGasScan()` : **en corriger un et pas l'autre revient à ne pas avoir corrigé.**
+
+**La règle.** Préférer le DOM + `textContent` pour tout nouvel écran ; `innerHTML` n'est toléré que dans les boucles de rendu tenues à **une seule écriture DOM par carte**, et alors tout champ tiers passe par `echapperHtml()`. Ne PAS retirer ces appels en jugeant qu'un nom de station « ne contient jamais de balise » : c'est vrai de tous les noms légitimes, et c'est ce qui rend l'exception intéressante à exploiter. Un nom sain traverse la fonction sans qu'un caractère change (vérifié sur « Intermarché SUPER », « 12 av. du Général-Leclerc » : identiques ; seul un `&` devient `&amp;`, qui s'affiche « & »).
+
+**Une seule définition dans le projet.** Il en existait **trois copies identiques** — `_clEchappe` (js/21) et `_escHtml` (js/01) sont désormais branchés sur `echapperHtml()`. Version pure chaîne, sans `<div>` intermédiaire : créer deux nœuds jetables par carte dans ces boucles-là serait exactement le coût que le gabarit unique cherche à éviter.
+
+**Ce qui n'a PAS été échappé, et pourquoi** : `st.label` (js/17), les libellés de connecteurs (js/19), `FUEL_DEFS[].label` sont des constantes du code ; `capacity` (js/27) est filtré par une regex de chiffres avant affichage — le modèle à suivre quand un champ tiers a une forme connue.
+
+### Identifiant de session du partage live — `_lsGenId()`, `js/07`
+
+Il n'y a **aucune authentification** devant la base : qui connaît l'identifiant lit la position GPS en direct, la vitesse et la destination. L'URL EST le mot de passe. La version d'origine tenait en **six caractères** de `Math.random()` — ~2 milliards de combinaisons, énumérables, et une graine non cryptographique donc prédictible. Désormais 20 caractères tirés par `crypto.getRandomValues` sur un alphabet de 32 signes sans `0/O/1/I/l` (~100 bits). ⚠ Le `% 32` n'est sans biais que parce que 256 est un multiple exact de 32 : ne pas changer la taille de l'alphabet sans revoir le tirage.
+
+⚠⚠ **ALLONGER L'IDENTIFIANT NE SÉCURISE PAS LA FONCTION.** Il reste à poser des règles côté base (lecture limitée à `liveshare/<id>`, écriture refusée aux tiers, expiration). Ce n'est PAS du code, c'est une configuration console, **à faire le jour où `FIREBASE_DB_URL` cesse de valoir `TON_PROJET`**. Sans elle, la base entière reste lisible quel que soit l'identifiant.
+
+### Import de profil — `js/02`
+
+Le fichier importé finit écrit tel quel dans le localStorage, que tout le reste de l'app relit ensuite en confiance. Validation ajoutée, **volontairement permissive** : une clé douteuse est ignorée (et journalisée), jamais un motif de rejeter le fichier entier — les exports d'anciennes versions doivent continuer de passer. Contrôles : objet non nul et non tableau ; chaque valeur est une **chaîne** de moins de 2 Mio (sans quoi `setItem` écrirait la conversion d'un objet en silence, ou ferait sauter le quota au milieu de la boucle) ; un `gps_profiles` illisible n'emporte plus l'import. La boucle d'écriture n'itère que sur `PROFILE_EXPORT_KEYS`, qui fait déjà liste blanche.
+
+⚠ `err.message` est désormais échappé : un message de `JSON.parse` **recopie un extrait du fichier lu** (« Unexpected token < … »), et il était interpolé brut dans `innerHTML`.
+
+### CDN — versions épinglées et empreintes SRI (`index.html`)
+
+`@turf/turf@6` et `@supabase/supabase-js@2` étaient **flottants** : le CDN servait la dernière version du jour, et n'importe quelle publication au fil de l'eau entrait dans l'app. Épinglés en **6.5.0** et **2.112.4** — les versions que le flottant servait déjà ce jour-là, donc sans changement de comportement — avec `integrity` SHA-384 et `crossorigin="anonymous"` (indispensable pour que la vérification ait lieu ; jsdelivr renvoie bien `Access-Control-Allow-Origin: *`).
+
+⚠ **Les empreintes sont liées à ces versions exactes.** Changer un numéro sans recalculer l'empreinte fait échouer le chargement **en silence** : ni exception, ni ligne au journal, juste un global absent. Les symptômes diffèrent — `_clPret()` (js/21) survit à un Supabase manquant et éteint le classement, turf n'a **aucun garde-fou** et emporterait tous les calculs géographiques. Régénérer : `openssl dgst -sha384 -binary fichier.js | openssl base64 -A`. La section « SDK externes » du harnais e2e est là pour rendre cet échec bruyant.
+
+Mapbox reste **sans empreinte, délibérément** : son URL est déjà versionnée et il sert aussi tuiles et style — s'il fallait s'en méfier, une empreinte sur le seul JS ne protégerait de rien. Effet de bord utile du `crossorigin` : les erreurs de turf et supabase seront désormais lisibles au lieu du « Script error. » aveugle des scripts tiers.
+
+### Content-Security-Policy — `connect-src` SEULEMENT
+
+Défense de **second rang** derrière l'échappement : le jour où un gabarit y échappe, la liste blanche empêche le code injecté d'**expédier** quoi que ce soit. Elle ne l'empêche pas de s'exécuter.
+
+⚠⚠ **AUCUN `default-src`, ET SURTOUT NE PAS EN AJOUTER.** Sans lui, toute directive non déclarée reste libre : images, polices, styles, et surtout les workers que **Mapbox crée en `blob:`**. Poser `default-src` les soumettrait toutes d'un coup à la liste blanche et casserait la carte. ⚠ Pas de `script-src` non plus : `index.html` porte ~158 `onclick` inline, toute directive de script exigerait `'unsafe-inline'` et se viderait de son sens.
+
+**Deux domaines n'auraient jamais été trouvés par relecture du code :**
+
+1. **`events.mapbox.com`** — la télémétrie de Mapbox, absente de tout le code. Révélée par le relevé d'origines (voir ci-dessous).
+2. **`static.data.gouv.fr`** — la source ZFE (`www.data.gouv.fr/api/1/datasets/r/…`, js/16) répond par un **302** vers ce domaine, et **une CSP contrôle chaque saut d'une redirection**, pas seulement l'URL de départ. Sans cette entrée, les alertes ZFE tombaient en panne sans message, avec pour seul symptôme le repli « périmètres approximatifs ». Vérifié le 01/09/2026 : c'est la seule source du projet qui redirige, les six autres répondent en 200 direct.
+
+`file:` **et** `'self'` sont tous deux nécessaires : l'APK charge en `file://`, où `'self'` est une origine opaque qui ne correspond à rien ; le dev-server sert en `http://127.0.0.1`. `*.firebaseio.com` est listé alors que le partage live dort — l'oubli se manifesterait par un partage muet.
+
+### ⚠ Un blocage CSP n'est PAS une exception JavaScript
+
+Il n'atteint jamais `logAppError` et ne vit que dans la console — **inaccessible dans un APK Website2APK**. L'écouteur `securitypolicyviolation` de `js/01` est le seul chemin par lequel un blocage arrive jusqu'au journal 🩺 que l'utilisateur sait consulter : **ne pas le retirer**. Corollaire : ajouter un service réseau = ajouter son origine dans la CSP, redirections comprises.
+
+⚠ `Content-Security-Policy-Report-Only` — le mode observation, fait exactement pour préparer une CSP — **est inutilisable ici** : la spec impose aux navigateurs de l'ignorer quand elle vient d'une balise `<meta>`, et l'APK charge sans en-tête HTTP. D'où le relevé d'origines qui suit, qui n'en dépend pas.
+
+### Relevé des origines réseau — `releverOriginesReseau()`, `js/01` (TEMPORAIRE)
+
+Établit la liste **réelle** des domaines contactés, pour écrire la CSP sur des mesures et non sur un grep. Lit `performance.getEntriesByType('resource')` toutes les 20 s et accumule dans `gps_origines_contactees` ; **📋 Copier du journal 🩺 les emporte**, après un dernier relevé.
+
+⚠ **AUCUNE INTERCEPTION** : ni `fetch` ni `XMLHttpRequest` ne sont enveloppés — un wrapper sur le chemin réseau de toute l'app, pour un diagnostic, serait un risque hors de proportion. En prime le relevé voit aussi images, polices et scripts.
+
+⚠ **CE QU'IL NE VOIT PAS** : `blob:` n'y apparaît jamais, alors que les erreurs `blob:null/…` du journal prouvent que Mapbox y exécute du code — les workers ne laissent pas d'entrée Resource Timing. **Le relevé ne peut donc pas énumérer tout ce qu'une CSP doit autoriser** ; c'est précisément pourquoi aucune directive autre que `connect-src` n'est déclarée.
+
+Clé à part et non `logDiag`, plafonné à 12 entrées que l'inventaire chasserait. Code retirable une fois la CSP validée sur appareil.
+
+### Ce qui n'est PAS un problème
+
+Le token Mapbox (`js/01`) et la clé `sb_publishable_` (`js/21`) sont **publics par construction** : ils partent dans chaque requête depuis le navigateur. ⚠ Ne jamais y mettre la clé `service_role`, qui contourne toute la RLS. Aucun `eval` dans le code de production (seulement `experiments/` et les tests), aucun mot de passe stocké, tout en HTTPS.
+
+### ✅ Validé sur appareil le 01/09/2026
+
+**Tout l'audit a été confirmé dans l'APK**, c'est-à-dire en `file://`, origine opaque — le seul contexte qui compte vraiment (cf. l'avertissement « Chrome de bureau n'est pas la WebView Android »). Journal 🩺 relevé après un parcours complet : **aucune ligne `CSP bloque`**.
+
+- **SRI de turf** → la carte s'affiche, l'itinéraire Perpignan-Paris se calcule, les péages tombent à 47,24 €.
+- **SRI de supabase-js** → création du profil `salif09` réussie. C'était le point le plus fragile : `_clPret()` est écrit pour survivre à un SDK manquant, une empreinte fausse aurait donc éteint le classement **sans un mot**. Le test qui tranche, sans console : dans Profil → `+`, si « Se connecter » et « Créer un compte » sont **grisés**, le SDK n'est pas chargé.
+- **CSP** → tous les services répondent, y compris ZFE et météo. ⚠ Un `Origin: null` ne pose aucun problème à data.gouv : vérifié, `www.data.gouv.fr` comme `static.data.gouv.fr` renvoient `Access-Control-Allow-Origin: *`.
+- **Échappement** → noms et adresses s'affichent normalement dans les scans ⛽ 🅿️ et sur trajet.
+
+⚠ **PIÈGE DE MÉTHODE — installer un APK par-dessus un précédent CONSERVE le localStorage de la WebView.** L'app ne repart donc PAS de zéro : profils, réglages et caches survivent. Conséquence directe sur un test comme celui-ci — la ZFE garde un cache de 7 jours (`gps_zfe_cache_v1`), donc **elle peut fonctionner sans faire la moindre requête réseau**, et l'absence de `data.gouv` dans un relevé d'origines ne prouve alors rien du tout. Pour tester un chargement réseau pour de vrai, purger la clé de cache concernée d'abord.
+
+**Reste ouvert :**
+
+- **Règles Firebase** (voir plus haut) — le point le plus important de l'audit, et le seul qui ne soit pas dans le code.
+- **Scan ⚡ non vérifié sous CSP** : les cinq miroirs Overpass étaient en panne (502/504/406/timeout) pendant le test, comme la veille en local. Panne externe, sans rapport avec la CSP — les erreurs sont des réponses HTTP réelles, donc les requêtes SORTAIENT bien. À reconfirmer quand les miroirs répondront.
+- **Retirer le relevé d'origines** (`releverOriginesReseau`, js/01) une fois le point précédent confirmé.
+
 ## Persistance des données (localStorage)
 
 Pas d'IndexedDB ; `sessionStorage` utilisé seulement en cache TTL 15 min pour les stations. Clés principales préfixées `gps_` (badges préfixés `salif_gps_`) :
@@ -792,7 +878,8 @@ Règle : styler un marqueur en **taille, couleur, `border-radius`, `pointer-even
 3. **`logDiag()` reste actif en continu** (`gps_diag_log`, 3 entrées par aperçu de trajet — `fit`, `fit/repli`, `fit+1.8s`). L'enquête caméra qui l'a rendu nécessaire est close (voir « Caméra Mapbox — règles centrales »), mais il a une valeur diagnostique prouvée — envisager de le conditionner à un interrupteur dans Profil plutôt que de le retirer.
 4. **`stopCourse()` ne remet pas `modalPendingRoute` à `null`.** Inoffensif tant que la garde `nav-active` tient ; à traiter le jour où l'on touche aux gardes de `maybeScanGasStationsLive()` (détaillé dans la section stations).
 5. **Le scan live de stations n'existe pas en trajet libre ni en électrique.** Conséquences correctes des mécanismes en place (pas de tracé dans un cas, pas de phase 2 EV dans l'autre — cf. « Piège n°3 » des bornes), pas des oublis.
-6. **Non testable en simulation** (branché sur la frame GPS réelle, `isSimulationMode` coupe court) : rafraîchissement ETA/couleurs toutes les 5 min, rognage des tronçons derrière le véhicule, les 4 issues de la proposition d'itinéraire (Suivre / Rester / expiration 60 s / veille 10 min), resynchronisation des stations après changement d'itinéraire, `restoreRouteOverlays()` en conditions réelles. À valider au prochain trajet réel.
+6. **L'export/import de profil perd des données — trois défauts de la même famille (relevés le 01/09/2026, non corrigés).** L'import écrit bien dans le localStorage, mais ne remet pas l'app à jour, et l'export n'emporte pas tout. (a) `loadProfilesFromStorage()` (js/13) n'est **pas** appelé après l'import : le sélecteur affiche « Aucun profil créé » jusqu'au prochain lancement — un F5 suffit à le vérifier, les données sont bien là. (b) `salif_gps_parcours` (LES ANIMAUX SAUVÉS) n'est ni dans `PROFILE_EXPORT_KEYS` ni réimporté, alors qu'un commentaire de js/02 affirme qu'il « est importé comme le reste ». (c) `_buildProfileSnapshot()` exporte les clés par profil (`gps_weekly_goals_<id>`, `salif_gps_badges_<id>`) mais la boucle d'import n'itère que sur `PROFILE_EXPORT_KEYS` : elles ne sont jamais réécrites. ⚠ Le filet de sauvegarde ne rattrape donc pas tout aujourd'hui.
+7. **Non testable en simulation** (branché sur la frame GPS réelle, `isSimulationMode` coupe court) : rafraîchissement ETA/couleurs toutes les 5 min, rognage des tronçons derrière le véhicule, les 4 issues de la proposition d'itinéraire (Suivre / Rester / expiration 60 s / veille 10 min), resynchronisation des stations après changement d'itinéraire, `restoreRouteOverlays()` en conditions réelles. À valider au prochain trajet réel.
 
 ---
 
