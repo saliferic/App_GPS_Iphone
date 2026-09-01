@@ -3966,93 +3966,14 @@
             border-color: rgba(77,163,255,0.55); color: #4da3ff;
         }
 
-        /* === ASSISTANT VÉHICULE — NAVIGATION PAR ÉTAPES (02/09/2026) === */
-        .veh-wiz-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 16px; }
-        .veh-dot {
-            width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18);
-            cursor: pointer; transition: 0.18s;
-        }
-        .veh-dot.on { background: #58a6ff; width: 20px; border-radius: 99px; }
-        .veh-step-lbl {
-            text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
-            text-transform: uppercase; color: #58a6ff; margin-bottom: 6px;
-        }
-        .veh-step-q {
-            text-align: center; font-size: 17px; font-weight: 800; color: #c9d1d9; margin-bottom: 18px;
-        }
-
-        /* Étape 1 — cartes de type de véhicule : mêmes `.vtype-btn` (id, onclick,
-           bascule `.active` par selectVehicleType()), enveloppe visuelle seule changée. */
-        .veh-type-list { display: flex; flex-direction: column; gap: 8px; }
+        /* === VÉHICULE TYPE BTNS === */
         .vtype-btn {
-            display: flex; align-items: center; gap: 11px; width: 100%; box-sizing: border-box;
-            padding: 12px 13px; border-radius: 14px; text-align: left; font-family: inherit;
-            border: 1.5px solid rgba(0,140,255,0.15); background: rgba(10,14,23,0.7);
+            flex: 1; padding: clamp(5px, 1.5vw, 7px) clamp(2px, 0.8vw, 4px); border-radius: 10px; font-size: 10px; font-weight: 700;
+            border: 1px solid rgba(0,140,255,0.15); background: rgba(10,14,23,0.7);
             color: #6e7681; cursor: pointer; transition: 0.18s; letter-spacing: 0.2px;
         }
         .vtype-btn:hover { border-color: rgba(0,140,255,0.35); color: #c9d1d9; }
-        .vtype-btn.active { background: rgba(0,120,255,0.1); border-color: #58a6ff; color: #58a6ff; }
-        .vtype-ico {
-            flex: none; width: 36px; height: 36px; border-radius: 10px; font-size: 16px;
-            background: rgba(0,140,255,0.08); display: flex; align-items: center; justify-content: center;
-        }
-        .vtype-txt { display: flex; flex-direction: column; gap: 2px; }
-        .vtype-txt b { font-size: 13px; font-weight: 800; color: #c9d1d9; }
-        .vtype-txt span { font-size: 11px; font-weight: 500; color: #6b7785; line-height: 1.35; }
-        .vtype-check {
-            margin-left: auto; flex: none; width: 19px; height: 19px; border-radius: 50%;
-            border: 1.5px solid rgba(255,255,255,0.18); position: relative;
-        }
-        .vtype-btn.active .vtype-check { border-color: #58a6ff; background: #58a6ff; }
-        .vtype-btn.active .vtype-check::after {
-            content: '✓'; position: absolute; inset: 0; display: flex;
-            align-items: center; justify-content: center; font-size: 11px; color: #0a0e17;
-        }
-
-        /* Étape 2 — mêmes `.vcell-input`, entourés d'un ± plutôt que livrés au clavier
-           numérique seul (`_vehNudge()`, js/15, ne fait que déclencher un vrai événement
-           `input` : le champ garde son `oninput` d'origine comme seule source de vérité). */
-        .veh-stepper { display: flex; align-items: center; gap: 6px; }
-        .veh-step-btn {
-            flex: none; width: 26px; height: 26px; border-radius: 50%; font-family: inherit;
-            border: 1px solid rgba(0,140,255,0.2); background: rgba(10,14,23,0.7);
-            color: #c9d1d9; font-size: 14px; line-height: 1; cursor: pointer;
-        }
-        .veh-step-btn:hover { border-color: rgba(0,150,255,0.45); }
-        .veh-stepper-input { flex: 1; text-align: center; }
-
-        /* Étape 4 — cadran de points. Le dégradé conique est posé en JS
-           (`_vehSyncPointsDial()`) ; cette valeur de base ne sert qu'avant le tout
-           premier appel. */
-        .veh-dial-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 14px; }
-        .veh-dial {
-            width: 132px; height: 132px; border-radius: 50%; margin-bottom: 12px;
-            display: flex; align-items: center; justify-content: center;
-            background: conic-gradient(#58a6ff 0turn 1turn, rgba(255,255,255,0.08) 1turn 1turn);
-        }
-        .veh-dial i {
-            width: 104px; height: 104px; border-radius: 50%; background: #0a0e17;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
-        .veh-dial i b { font-size: 30px; font-weight: 800; color: #c9d1d9; }
-        .veh-dial i span { font-size: 11px; color: #6b7785; font-weight: 700; }
-        .veh-dial-steppers { display: flex; gap: 16px; }
-        .veh-dial-steppers button {
-            width: 36px; height: 36px; border-radius: 50%; font-size: 17px; cursor: pointer; font-family: inherit;
-            border: 1px solid rgba(0,140,255,0.2); background: rgba(10,14,23,0.7); color: #c9d1d9;
-        }
-        .veh-points-label { display: block; text-align: center; margin: 4px 0 6px; }
-        .veh-points-input { max-width: 90px; margin: 0 auto; display: block; text-align: center; }
-
-        /* Barre Retour/Suivant commune aux quatre étapes. */
-        .veh-wiz-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
-        .veh-nav-back, .veh-nav-next {
-            padding: 10px 20px; border-radius: 99px; font-size: 12px; font-weight: 800;
-            font-family: inherit; cursor: pointer;
-        }
-        .veh-nav-back { background: none; border: 1px solid rgba(255,255,255,0.18); color: #8892b0; }
-        .veh-nav-next { background: #58a6ff; border: none; color: #0a0e17; }
-
+        .vtype-btn.active { background: rgba(0,120,255,0.15); border-color: rgba(0,150,255,0.45); color: #58a6ff; }
         /* Cellules véhicule */
         .vcell { display: flex; flex-direction: column; gap: 4px; }
         .vcell-label { font-size: 10px; color: #6b7785; font-weight: 600; }

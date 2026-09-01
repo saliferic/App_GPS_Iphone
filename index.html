@@ -1301,103 +1301,60 @@
                     <span id="vehicle-panel-chevron" class="profil-row-arrow">›</span>
                 </button>
                 <div id="vehicle-panel-body" style="display:none;padding:14px 12px 16px;background:linear-gradient(170deg,#2B2048,#241C42);border-top:1px solid rgba(255,255,255,0.10);">
-                    <!-- Assistant en 4 étapes (02/09/2026, remplace le formulaire à un seul
-                         écran) : `.veh-step` montrées/masquées une à la fois par _vehShowStep()
-                         (js/15). Les champs gardent leurs id/attributs d'origine, seule la
-                         présentation change. -->
-                    <div class="veh-wiz-dots" id="veh-wiz-dots">
-                        <span class="veh-dot on" data-step="1" onclick="_vehShowStep(1)"></span>
-                        <span class="veh-dot" data-step="2" onclick="_vehShowStep(2)"></span>
-                        <span class="veh-dot" data-step="3" onclick="_vehShowStep(3)"></span>
-                        <span class="veh-dot" data-step="4" onclick="_vehShowStep(4)"></span>
-                    </div>
-
-                    <!-- ÉTAPE 1 — TYPE DE VÉHICULE -->
-                    <div class="veh-step" data-step="1">
-                        <div class="veh-step-lbl">Étape 1 sur 4</div>
-                        <div class="veh-step-q">Quel véhicule roule ?</div>
-                        <div class="veh-type-list" id="vehicle-type-btns">
-                            <button type="button" class="vtype-btn active" data-type="thermique" onclick="selectVehicleType('thermique')">
-                                <span class="vtype-ico">🔥</span>
-                                <span class="vtype-txt"><b>Thermique</b><span>Essence ou diesel classique</span></span>
-                                <span class="vtype-check"></span>
-                            </button>
-                            <button type="button" class="vtype-btn" data-type="hybride" onclick="selectVehicleType('hybride')">
-                                <span class="vtype-ico">⚡🔥</span>
-                                <span class="vtype-txt"><b>Hybride</b><span>Thermique + moteur électrique d'appoint</span></span>
-                                <span class="vtype-check"></span>
-                            </button>
-                            <button type="button" class="vtype-btn" data-type="electrique" onclick="selectVehicleType('electrique')">
-                                <span class="vtype-ico">⚡</span>
-                                <span class="vtype-txt"><b>Électrique</b><span>100 % batterie, aucune station essence</span></span>
-                                <span class="vtype-check"></span>
-                            </button>
+                    <!-- Points du permis -->
+                    <div style="margin-bottom:clamp(12px,3vw,16px);padding-bottom:clamp(12px,3vw,14px);border-bottom:1px solid rgba(255,255,255,0.10);">
+                        <label class="vcell-label"><span class="ui-dot sm"></span>Votre nombre de points sur le permis</label>
+                        <div style="display:flex;align-items:center;gap:clamp(8px,2vw,12px);">
+                            <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig()" value="12" min="0" max="12" class="vcell-input" style="width:clamp(50px,15vw,70px);font-size:clamp(13px,3.8vw,14px);padding:clamp(8px,2vw,10px);border:1px solid rgba(255,255,255,0.10);border-radius:8px;background:rgba(0,0,0,0.28);color:#F4EFFF;text-align:center;">
+                            <span style="font-size:clamp(12px,3vw,13px);color:#6E5F91;min-width:30px;text-align:center;font-weight:700;"id="points-display">/12</span>
                         </div>
                     </div>
-
-                    <!-- ÉTAPE 2 — CONSOMMATION & PRIX -->
-                    <div class="veh-step" data-step="2" hidden>
-                        <div class="veh-step-lbl">Étape 2 sur 4</div>
-                        <div class="veh-step-q">Consommation &amp; prix</div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <div class="vcell" id="vcell-thermo-conso">
-                                <label class="vcell-label">L/100 km</label>
-                                <div class="veh-stepper">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('vehicle-consumption',-0.5)">−</button>
-                                    <input type="number" id="vehicle-consumption" oninput="saveVehicleConfig()" value="7" min="1" max="30" step="0.5" class="vcell-input veh-stepper-input">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('vehicle-consumption',0.5)">+</button>
-                                </div>
-                            </div>
-                            <div class="vcell" id="vcell-thermo-price">
-                                <label class="vcell-label" id="fuel-price-label">Prix (€/L)</label>
-                                <div class="veh-stepper">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('fuel-price',-0.01)">−</button>
-                                    <input type="number" id="fuel-price" oninput="saveVehicleConfig()" value="1.75" min="0.5" max="4" step="0.001" class="vcell-input veh-stepper-input" readonly>
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('fuel-price',0.01)">+</button>
-                                </div>
-                            </div>
-                            <div class="vcell" id="vcell-elec-conso">
-                                <label class="vcell-label">kWh/100 km</label>
-                                <div class="veh-stepper">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('vehicle-consumption-elec',-0.5)">−</button>
-                                    <input type="number" id="vehicle-consumption-elec" oninput="saveVehicleConfig()" value="18" min="5" max="50" step="0.5" class="vcell-input veh-stepper-input">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('vehicle-consumption-elec',0.5)">+</button>
-                                </div>
-                            </div>
-                            <div class="vcell" id="vcell-elec-price">
-                                <label class="vcell-label">€/kWh</label>
-                                <div class="veh-stepper">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('elec-price',-0.01)">−</button>
-                                    <input type="number" id="elec-price" oninput="saveVehicleConfig()" value="0.20" min="0.05" max="1" step="0.01" class="vcell-input veh-stepper-input">
-                                    <button type="button" class="veh-step-btn" onclick="_vehNudge('elec-price',0.01)">+</button>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- === CARBURANT + PRIX MOYEN LOCAL (rayon 3 km) === -->
-                        <div id="vcell-fuel-kind" style="margin-top:12px;">
-                            <label class="vcell-label" style="display:block;margin-bottom:7px;"><span class="ui-dot sm"></span>Carburant utilisé</label>
-                            <div class="critair-row" id="fuel-kind-row" style="margin-bottom:8px;">
-                                <button type="button" class="fuel-kind-pill" data-fuel="gazole" onclick="selectFuelKind('gazole')">Gazole</button>
-                                <button type="button" class="fuel-kind-pill" data-fuel="sp95" onclick="selectFuelKind('sp95')">SP95</button>
-                                <button type="button" class="fuel-kind-pill" data-fuel="e10" onclick="selectFuelKind('e10')">E10</button>
-                                <button type="button" class="fuel-kind-pill" data-fuel="sp98" onclick="selectFuelKind('sp98')">SP98</button>
-                            </div>
-                            <div class="fuel-auto-row">
-                                <label class="fuel-manual-check">
-                                    <input type="checkbox" id="fuel-price-manual" onchange="setFuelPriceManual(this.checked)">
-                                    <span>Saisir le prix moi-même</span>
-                                </label>
-                                <button type="button" id="fuel-price-refresh" class="fuel-refresh-btn" onclick="refreshLocalFuelAverage(true)" title="Recalculer la moyenne locale">↻</button>
-                            </div>
-                            <div class="trip-option-hint" id="fuel-price-source">Moyenne des stations dans un rayon de 3 km autour de toi</div>
-                        </div>
-                        <div class="trip-option-hint" style="margin-top:8px;">Utilisé pour estimer le coût énergie de chaque trajet</div>
+                    <label class="vcell-label" style="display:block;margin-bottom:clamp(8px,2vw,10px);"><span class="ui-dot sm"></span>Votre type de véhicule</label>
+                    <div style="display:flex;gap:8px;margin-bottom:14px;" id="vehicle-type-btns">
+                        <button type="button" class="vtype-btn active" data-type="thermique" onclick="selectVehicleType('thermique')">🔥 Thermique</button>
+                        <button type="button" class="vtype-btn" data-type="hybride" onclick="selectVehicleType('hybride')">⚡🔥 Hybride</button>
+                        <button type="button" class="vtype-btn" data-type="electrique" onclick="selectVehicleType('electrique')">⚡ Électrique</button>
                     </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div class="vcell" id="vcell-thermo-conso">
+                            <label class="vcell-label">L/100 km</label>
+                            <input type="number" id="vehicle-consumption" oninput="saveVehicleConfig()" value="7" min="1" max="30" step="0.5" class="vcell-input">
+                        </div>
+                        <div class="vcell" id="vcell-thermo-price">
+                            <label class="vcell-label" id="fuel-price-label">Prix (€/L)</label>
+                            <input type="number" id="fuel-price" oninput="saveVehicleConfig()" value="1.75" min="0.5" max="4" step="0.001" class="vcell-input" readonly>
+                        </div>
+                        <div class="vcell" id="vcell-elec-conso">
+                            <label class="vcell-label">kWh/100 km</label>
+                            <input type="number" id="vehicle-consumption-elec" oninput="saveVehicleConfig()" value="18" min="5" max="50" step="0.5" class="vcell-input">
+                        </div>
+                        <div class="vcell" id="vcell-elec-price">
+                            <label class="vcell-label">€/kWh</label>
+                            <input type="number" id="elec-price" oninput="saveVehicleConfig()" value="0.20" min="0.05" max="1" step="0.01" class="vcell-input">
+                        </div>
+                    </div>
+                    <!-- === CARBURANT + PRIX MOYEN LOCAL (rayon 3 km) === -->
+                    <div id="vcell-fuel-kind" style="margin-top:12px;">
+                        <label class="vcell-label" style="display:block;margin-bottom:7px;"><span class="ui-dot sm"></span>Carburant utilisé</label>
+                        <div class="critair-row" id="fuel-kind-row" style="margin-bottom:8px;">
+                            <button type="button" class="fuel-kind-pill" data-fuel="gazole" onclick="selectFuelKind('gazole')">Gazole</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="sp95" onclick="selectFuelKind('sp95')">SP95</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="e10" onclick="selectFuelKind('e10')">E10</button>
+                            <button type="button" class="fuel-kind-pill" data-fuel="sp98" onclick="selectFuelKind('sp98')">SP98</button>
+                        </div>
+                        <div class="fuel-auto-row">
+                            <label class="fuel-manual-check">
+                                <input type="checkbox" id="fuel-price-manual" onchange="setFuelPriceManual(this.checked)">
+                                <span>Saisir le prix moi-même</span>
+                            </label>
+                            <button type="button" id="fuel-price-refresh" class="fuel-refresh-btn" onclick="refreshLocalFuelAverage(true)" title="Recalculer la moyenne locale">↻</button>
+                        </div>
+                        <div class="trip-option-hint" id="fuel-price-source">Moyenne des stations dans un rayon de 3 km autour de toi</div>
+                    </div>
+                    <div class="trip-option-hint" style="margin-top:8px;">Utilisé pour estimer le coût énergie de chaque trajet</div>
 
-                    <!-- ÉTAPE 3 — VIGNETTE CRIT'AIR & ZONE -->
-                    <div class="veh-step" data-step="3" hidden>
-                        <div class="veh-step-lbl">Étape 3 sur 4</div>
-                        <div class="veh-step-q">Vignette &amp; zone à faibles émissions</div>
+                    <!-- === VIGNETTE CRIT'AIR (ZFE) === -->
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.10);">
                         <label class="vcell-label" style="display:block;margin-bottom:7px;">Vignette Crit'Air</label>
                         <div class="critair-row" id="critair-row">
                             <button type="button" class="critair-pill" data-level="EL" onclick="selectCritAir('EL')">E</button>
@@ -1417,26 +1374,6 @@
                             <option value="autobus_autocars">Autobus / autocar</option>
                         </select>
                         <div class="trip-option-hint" style="margin-top:8px;">Sert à vérifier si tu peux circuler dans les ZFE traversées par ton trajet</div>
-                    </div>
-
-                    <!-- ÉTAPE 4 — PERMIS -->
-                    <div class="veh-step" data-step="4" hidden>
-                        <div class="veh-step-lbl">Étape 4 sur 4</div>
-                        <div class="veh-step-q">Points sur le permis</div>
-                        <div class="veh-dial-wrap">
-                            <div class="veh-dial" id="veh-dial"><i><b id="veh-dial-num">12</b><span id="points-display">/12</span></i></div>
-                            <div class="veh-dial-steppers">
-                                <button type="button" onclick="_vehNudge('vehicle-license-points',-1)">−</button>
-                                <button type="button" onclick="_vehNudge('vehicle-license-points',1)">+</button>
-                            </div>
-                        </div>
-                        <label class="vcell-label veh-points-label">Régler précisément</label>
-                        <input type="number" id="vehicle-license-points" oninput="saveVehicleConfig(); _vehSyncPointsDial()" value="12" min="0" max="12" class="vcell-input veh-points-input">
-                    </div>
-
-                    <div class="veh-wiz-nav">
-                        <button type="button" class="veh-nav-back" id="veh-nav-back" onclick="_vehWizGo(-1)">Retour</button>
-                        <button type="button" class="veh-nav-next" id="veh-nav-next" onclick="_vehWizGo(1)">Suivant ›</button>
                     </div>
                 </div>
             </div>

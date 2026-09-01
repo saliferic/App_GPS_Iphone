@@ -195,10 +195,6 @@
             inputEl.addEventListener('focus', () => { if (boxEl.innerHTML.trim() !== '') boxEl.style.display = 'block'; });
         }
         function initVehicleConfigUI() {
-            // Repart de l'étape 1 à chaque ouverture — un assistant qui rouvrirait sur la
-            // dernière étape consultée surprendrait plus qu'il n'aiderait, contrairement à
-            // l'historique des trajets où retrouver le mois consulté est justement le but.
-            tenterSansBruit(() => _vehShowStep(1), 'initVehicleConfigUI/vehShowStep');
             const cfg = loadVehicleConfig();
             const consoEl     = document.getElementById('vehicle-consumption');
             const priceEl     = document.getElementById('fuel-price');
@@ -208,9 +204,6 @@
             if (priceEl)     priceEl.value     = cfg.fuelPrice;
             if (consoElecEl) consoElecEl.value = cfg.consumptionElec;
             if (elecPriceEl) elecPriceEl.value = cfg.elecPrice;
-            const pointsEl = document.getElementById('vehicle-license-points');
-            if (pointsEl) pointsEl.value = cfg.licensePoints;
-            tenterSansBruit(_vehSyncPointsDial, 'initVehicleConfigUI/vehSyncPointsDial');
             // Restaurer le type sélectionné
             selectVehicleType(cfg.type);
             /* Carburant + prix moyen local. `applyFuelKindUI()` est synchrone (pastilles,

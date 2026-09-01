@@ -1211,36 +1211,6 @@ body.theme-crepuscule .fuel-refresh-btn {
 }
 body.theme-crepuscule .fuel-refresh-btn:hover { border-color: rgba(255,179,92,0.45); }
 
-/* --- Assistant véhicule (02/09/2026). L'accent de navigation (points, libellé
-   d'étape) reprend le turquoise déjà associé au temps/aux lieux ; la carte de
-   type de véhicule sélectionnée reprend le violet de son icône dans la ligne
-   du Profil (`#vehicle-panel-toggle`, `color:#A88BFF` en inline) plutôt que
-   l'ambre déjà pris par le bouton « Suivant ». --- */
-body.theme-crepuscule .veh-dot { background: var(--cr-line-2); }
-body.theme-crepuscule .veh-dot.on { background: var(--cr-turq); }
-body.theme-crepuscule .veh-step-lbl { color: var(--cr-turq); }
-body.theme-crepuscule .veh-step-q { color: var(--cr-ink); }
-body.theme-crepuscule .vtype-ico { background: var(--cr-surface-2); }
-body.theme-crepuscule .vtype-txt b { color: var(--cr-ink); }
-body.theme-crepuscule .vtype-txt span { color: var(--cr-ink-3); }
-body.theme-crepuscule .vtype-btn.active {
-    background: rgba(168,139,255,0.10); border-color: var(--cr-violet); color: var(--cr-violet);
-}
-body.theme-crepuscule .vtype-check { border-color: var(--cr-line-2); }
-body.theme-crepuscule .vtype-btn.active .vtype-check { border-color: var(--cr-violet); background: var(--cr-violet); }
-body.theme-crepuscule .veh-step-btn {
-    background: var(--cr-sunken); border: 1px solid var(--cr-line-2); color: var(--cr-ink);
-}
-body.theme-crepuscule .veh-step-btn:hover { border-color: rgba(255,179,92,0.45); }
-body.theme-crepuscule .veh-dial i { background: var(--cr-sky-0); }
-body.theme-crepuscule .veh-dial i b { color: var(--cr-ink); }
-body.theme-crepuscule .veh-dial i span { color: var(--cr-ink-3); }
-body.theme-crepuscule .veh-dial-steppers button {
-    background: var(--cr-surface); border: 1px solid var(--cr-line-2); color: var(--cr-ink);
-}
-body.theme-crepuscule .veh-nav-back { border-color: var(--cr-line-2); color: var(--cr-ink-3); }
-body.theme-crepuscule .veh-nav-next { background: var(--cr-amber); color: #1B1633; }
-
 /* --- Aide à la conduite. #aide-conduite-body est stylé par sélecteur, comme
    #trip-history-body ci-dessus : pas d'inline à contourner ici. --- */
 body.theme-crepuscule #aide-conduite-body {
