@@ -1525,18 +1525,21 @@
                 };
             }, 'historique/placesAtStop') || {};
 
-            // Sauvegarder le trajet dans l'historique statistiques
-            saveTripToHistory({
-                distKm: finalDist,
-                score: finalScore,
-                hasSpeeded: drivers.length > 0 ? drivers[0].hasSpeeded : false,
-                durationMin: finalDurationHours * 60,
-                avgSpeedKmh: finalDurationHours > 0 ? finalDist / finalDurationHours : 0,
-                ecoScore:     drivers.length > 0 ? Math.round(drivers[0].ecoScore) : 100,
-                hardBrakings: drivers.length > 0 ? drivers[0].hardBrakings : 0,
-                hardAccels:   drivers.length > 0 ? drivers[0].hardAccels : 0,
-                ..._tripPlaces,
-            });
+            // Sauvegarder le trajet dans l'historique statistiques — jamais pour une simulation :
+            // elle ne roule nulle part, elle n'a rien à archiver comme trajet réel.
+            if (!isSimulationMode) {
+                saveTripToHistory({
+                    distKm: finalDist,
+                    score: finalScore,
+                    hasSpeeded: drivers.length > 0 ? drivers[0].hasSpeeded : false,
+                    durationMin: finalDurationHours * 60,
+                    avgSpeedKmh: finalDurationHours > 0 ? finalDist / finalDurationHours : 0,
+                    ecoScore:     drivers.length > 0 ? Math.round(drivers[0].ecoScore) : 100,
+                    hardBrakings: drivers.length > 0 ? drivers[0].hardBrakings : 0,
+                    hardAccels:   drivers.length > 0 ? drivers[0].hardAccels : 0,
+                    ..._tripPlaces,
+                });
+            }
             _tripPlacesMeta = null;
             stopEcoMotionTracking();
             _routeMaxspeedAnnotations = []; // reset pour éviter données périmées au prochain trajet
@@ -1558,11 +1561,17 @@
                surtout PAS créditer ici sous peine de payer le trajet deux fois. Le coffre
                supprimé, l'inverse est devenu vrai : ne pas créditer ici, c'est ne rien
                créditer du tout, et une conduite parfaite serait le seul cas où rouler ne
-               rapporte rien. La branche a donc disparu avec le bonus. */
+               rapporte rien. La branche a donc disparu avec le bonus.
+               ⚠ EXCLU EN SIMULATION (01/09/2026) : une simulation ne roule pas, elle ne doit
+               donc jamais créditer le profil — sans quoi rejouer « Simulation Salif » en
+               boucle serait une façon gratuite de gonfler son score. */
             const earned = clampTripScore(finalScore);
-            addPointsToActiveProfile(earned);
+            if (!isSimulationMode) addPointsToActiveProfile(earned);
             const statusEl = document.getElementById('status');
-            if (earned > 0) {
+            if (isSimulationMode) {
+                statusEl.innerText = "Simulation terminée 🚗";
+                statusEl.style.color = "#8e44ad";
+            } else if (earned > 0) {
                 statusEl.innerText = "Trajet terminé 🛑";
                 statusEl.style.color = "#ff6b6b";
             } else {
@@ -1636,7 +1645,10 @@
                se poser par-dessus (retirée le 27/08/2026) ; il importe encore : cet appel
                écrit le parcours de l'animal, que la fenêtre d'arrivée vient de lire. */
             const vieMinTrajet = drivers.length > 0 && drivers[0].vieMinTrajet !== undefined ? drivers[0].vieMinTrajet : 100;
-            updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun, vieMinTrajet);
+            /* Exclu en simulation, même raison que le crédit de points plus bas :
+               une simulation ne roule pas, ses km ne doivent ni compter dans les
+               missions hebdo ni fausser la baseline km/semaine. */
+            if (!isSimulationMode) updateWeeklyGoalsAfterTrip(finalDist, finalScore, isPerfectRun, vieMinTrajet);
 
             map.easeTo({ bearing: 0, duration: 500 });
 

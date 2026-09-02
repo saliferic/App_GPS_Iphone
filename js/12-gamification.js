@@ -30,6 +30,20 @@
                à 0 (échec définitif, jusqu'à lundi) dès le premier franchissement. Voir
                surChangementVie() plus bas. */
             { id: 'vie_seuil',     text: `Ne jamais descendre sous ${VIE_SEUIL_SEMAINE}% de vie du compagnon`, unit: 'bool', min: 1, max: 1, step: 1 },
+            /* 'trajet_parfait' et 'trajets_parfaits' (01/09/2026, demande utilisateur) :
+               un trajet compte comme PARFAIT quand la vie n'est JAMAIS descendue pendant
+               toute sa durée (vieMin === 100, pas seulement ≥ VIE_SEUIL_HAUT comme
+               'vie_haute') ET qu'il fait au moins la distance requise. La première est un
+               aller simple (target = km, progress passe de 0 à target en un seul trajet
+               réussi) ; la seconde en exige PLUSIEURS (target = nombre de trajets, et le
+               seuil de km par trajet est un second nombre tiré à part — voir `extra`
+               dans generateWeeklyGoals). Toutes deux sont, comme 'vie_haute', comptées en
+               DISTANCE/NOMBRE DE TRAJETS RÉUSSIS et non en trajets bruts : la garde-fou en
+               tête de fichier reste respecté puisqu'un trajet raté (vie entamée) ne compte
+               jamais, quel que soit le nombre de fois où on le retente. */
+            { id: 'trajet_parfait',   text: 'Terminer un trajet de {v} km avec 100% de vie', unit: 'km', min: 5, max: 20, step: 5 },
+            { id: 'trajets_parfaits', text: 'Terminer {v} fois un trajet de {q} km avec 100% de vie', unit: 'trajets', min: 2, max: 4, step: 1,
+              extra: { placeholder: '{q}', key: 'kmSeuil', min: 15, max: 30, step: 5 } },
         ];
 
         function getWeekId() {
@@ -143,13 +157,24 @@
                 const progress = tpl.id === 'vie_seuil'
                     ? (vieActuelle < VIE_SEUIL_SEMAINE ? 0 : 1)
                     : 0;
+                /* Second nombre tiré à part pour les gabarits à deux variables (ex.
+                   'trajets_parfaits' : {v} trajets de {q} km) — voir `extra` du gabarit. */
+                let text = tpl.text.replace('{v}', target);
+                const extraFields = {};
+                if (tpl.extra) {
+                    const eSteps = Math.floor((tpl.extra.max - tpl.extra.min) / tpl.extra.step);
+                    const extraVal = tpl.extra.min + Math.floor(Math.random() * (eSteps + 1)) * tpl.extra.step;
+                    text = text.replace(tpl.extra.placeholder, extraVal);
+                    extraFields[tpl.extra.key] = extraVal;
+                }
                 return {
                     id: tpl.id,
-                    text: tpl.text.replace('{v}', target),
+                    text,
                     unit: tpl.unit,
                     target,
                     progress,
-                    adaptive: baseline !== null && (tpl.id === 'km_total' || tpl.id === 'km_no_speed')
+                    adaptive: baseline !== null && (tpl.id === 'km_total' || tpl.id === 'km_no_speed'),
+                    ...extraFields
                 };
             });
         }
@@ -187,6 +212,14 @@
                     case 'km_total':      g.progress += distKm; break;
                     case 'score_total':   g.progress += score; break;
                     case 'vie_haute':     if (vieMin >= VIE_SEUIL_HAUT) g.progress += distKm; break;
+                    /* 100% de vie, pas VIE_SEUIL_HAUT : ces deux missions demandent un
+                       trajet où la vie n'a JAMAIS bougé, pas seulement « resté haute ». */
+                    case 'trajet_parfait':
+                        if (vieMin >= 100 && distKm >= g.target) g.progress = g.target;
+                        break;
+                    case 'trajets_parfaits':
+                        if (vieMin >= 100 && distKm >= g.kmSeuil) g.progress += 1;
+                        break;
                 }
                 // Plafonner la progression au target
                 g.progress = Math.min(g.progress, g.target);
@@ -285,7 +318,11 @@
             km_no_speed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M9.5 11.5 11.5 14l3.5-4"/></svg>',
             score_total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12Z"/></svg>',
             vie_haute:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M6 14h4l1.5-3 2 5 1.5-2h3"/></svg>',
-            vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>'
+            vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>',
+            /* Même cœur que vie_haute/vie_seuil : ces deux missions sont, elles
+               aussi, une question de vie du compagnon — pas de km ou de points. */
+            trajet_parfait:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>',
+            trajets_parfaits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>'
         };
 
         function renderWeeklyGoalsPanel() {

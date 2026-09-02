@@ -201,7 +201,10 @@
 <body>
 
 <div id="sim-toolbar">
-    <span>📱 SIMULATEUR PIXEL 9A</span>
+    <span>📱 SIMULATEUR</span>
+    <button class="sim-btn active" onclick="setDevice('pixel9a')" id="btn-dev-pixel9a">Pixel 9A</button>
+    <button class="sim-btn" onclick="setDevice('s22')" id="btn-dev-s22">Galaxy S22</button>
+    <button class="sim-btn" onclick="setDevice('s7')" id="btn-dev-s7">Galaxy S7</button>
     <button class="sim-btn active" onclick="setScale(0.5)" id="btn-50">50%</button>
     <button class="sim-btn" onclick="setScale(0.65)" id="btn-65">65%</button>
     <button class="sim-btn" onclick="setScale(0.8)" id="btn-80">80%</button>
@@ -251,18 +254,30 @@
 </div>
 
 <script>
-    // Dimensions exactes Pixel 9A en pixels CSS (densité logique ~2.625x)
-    // Résolution physique : 1080×2424 → CSS : ~412×923px
-    const DEVICE = {
-        portrait:  { w: 412, h: 923 },
-        landscape: { w: 923, h: 412 }
+    // Dimensions en pixels CSS (résolution physique / densité logique du fabricant).
+    const DEVICES = {
+        pixel9a: { label: 'Pixel 9A',   w: 412, h: 923, info: '1080×2424px · 6.3"', notch: true  },
+        s22:     { label: 'Galaxy S22', w: 360, h: 780, info: '1080×2340px · 6.1"', notch: false },
+        s7:      { label: 'Galaxy S7',  w: 360, h: 640, info: '1440×2560px · 5.1"', notch: false }
     };
 
+    let currentDevice = 'pixel9a';
     let currentScale = 0.5;
     let isLandscape = false;
 
     function getDevice() {
-        return isLandscape ? DEVICE.landscape : DEVICE.portrait;
+        const d = DEVICES[currentDevice];
+        return isLandscape ? { w: d.h, h: d.w } : { w: d.w, h: d.h };
+    }
+
+    function setDevice(key) {
+        currentDevice = key;
+        document.querySelectorAll('.sim-btn[id^="btn-dev-"]').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-dev-' + key).classList.add('active');
+        const d = DEVICES[key];
+        document.getElementById('sim-info').textContent = `${d.label} · ${d.info} · Appuie sur F5 pour recharger l'app`;
+        applyLayout();
+        reloadApp();
     }
 
     function applyLayout() {
@@ -299,7 +314,7 @@
         frame.style.top = '0';
         frame.style.left = '0';
 
-        notch.style.display = isLandscape ? 'none' : 'block';
+        notch.style.display = (!isLandscape && DEVICES[currentDevice].notch) ? 'block' : 'none';
 
         // Ajuster la hauteur du châssis pour le scale
         const scaledH = chassisH * currentScale;

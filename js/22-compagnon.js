@@ -758,9 +758,16 @@
             larme: [128, 212], zzz: [270, 100], etoiles: [[32, 106, 13], [292, 94, 10]]
         },
         zola: {
+            /* Recalé le 02/09/2026 : le PNG avait été réexporté sans que cette boîte
+               le suive (signalé par l'utilisateur — Zola visiblement décalé par
+               rapport à son ombre dans la grille « Animaux sauvés »). Mesurée au
+               seuil 64 sur le fichier actuel avec `node tools/_alpha-bbox.js
+               Images/Animals/Normal/Lion.png` ; x/y recalculés avec la même formule
+               que `variante()` (x = CENTRE_X - (b.x+b.w/2)*s, y = SOL_Y - (b.y+b.h)*s,
+               s = taille/512) pour rester cohérents avec le reste de la table. */
             fichier: 'Images/Animals/Normal/Lion.png',
-            boite: { x: 85, y: 49, w: 369, h: 417 },
-            x: -17.1, y: 51.7, taille: 336.5,  // contenu 369×417 à 85,49
+            boite: { x: 88, y: 37, w: 352, h: 434 },
+            x: -13.5, y: 48.4, taille: 336.5,  // contenu 352×434 à 88,37
             sol: { cx: 160, rx: 64 },
             larme: [120, 211], zzz: [252, 100], etoiles: [[44, 104, 13], [274, 92, 10]]
         },
@@ -784,6 +791,36 @@
             x: -7.9, y: 53.0, taille: 336.5,   // contenu 357×418 à 77,46
             sol: { cx: 160, rx: 62 },
             larme: [120, 212], zzz: [250, 98], etoiles: [[46, 102, 13], [274, 90, 10]]
+        },
+        nima: {
+            /* Cinquième animal à avoir ses trois états physiques (01/09/2026, après
+               Pilou) — boîte alpha mesurée au seuil 64 sur le fichier RÉEL de chaque
+               dossier (tools/_alpha-bbox.js pour Normal/Blesse/Dead, tools/_bbox-anim.js
+               pour le webp — canvas natif 256×256 ramené à l'échelle 512 comme les
+               autres animés). `taille` du hero calée pour garder la même hauteur
+               apparente que `statique` (336.5, la valeur par défaut de la troupe) :
+               Nima n'a pas de calage vidéo hérité à préserver.
+               ⚠ larme/zzz/etoiles sont une ESTIMATION géométrique (position relative
+               du visage reportée depuis Normal.png, faute de pouvoir lire une frame du
+               webp autrement qu'à l'œil) — à vérifier visuellement dans l'app, pas
+               garanti au pixel comme le reste de la table. */
+            fichier: 'Images/Animals/Gif/chat.webp',
+            // Union des 120 frames — même correction que Babi/Pilou, voir leur `boite`.
+            boite: { x: 48, y: 44, w: 446, h: 402 },
+            x: -38.0, y: 10.5, taille: 400.7,   // calage du hero, réglé sur la frame 1 (278×356 à 114,88)
+            sol: { cx: 160, rx: 57 },
+            larme: [141, 201], zzz: [231, 91], etoiles: [[50, 100, 13], [278, 95, 10]],
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesse/Chat_Blesse.png',
+                          boite: { x: 83, y: 44, w: 331, h: 424 } },
+                mort:   { fichier: 'Images/Animals/Dead/Chat.png',
+                          boite: { x: 76, y: 44, w: 416, h: 427 } }
+            },
+            statique: {
+                fichier: 'Images/Animals/Normal/Chat.png',
+                boite: { x: 82, y: 43, w: 331, h: 424 },
+                x: -2.7, y: 51.1, taille: 336.5
+            }
         }
     };
 
@@ -989,6 +1026,7 @@
                 trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
                 defi_valide:    (v) => `Un de fait ! Il t'en reste ${v.reste}.`
             },
+            decor: 'chien',
             dessin:    (e, p, s) => dessinerImage('pilou', e, p, s),
             interieur: (e, p, s) => dessinImageInterieur('pilou', e, p, s)
         },
@@ -1121,6 +1159,37 @@
             },
             dessin:    (e, p, s) => dessinerImage('sam', e, p, s),
             interieur: (e, p, s) => dessinImageInterieur('sam', e, p, s)
+        },
+        /* Sortie d'A_VENIR le 01/09/2026 avec ses quatre états d'image complets —
+           même geste que Pilou le 30/08/2026 (voir sa note). Rang 9, à la suite de
+           Sam : aucun autre compagnon ne recule. */
+        nima: {
+            nom: 'Nima',
+            espece: 'chatte',
+            genre: 'f',
+            accent: '#7EC8C0',
+            /* « Elle vient si elle veut, et c'est déjà beaucoup » — la seule de la
+               troupe qui ne s'engage jamais complètement. Même règle que les
+               autres, jamais de reproche, mais sa réserve est sa marque : elle
+               constate en une phrase courte, et n'en dit jamais plus qu'il ne
+               faut. */
+            decor: 'nima',
+            phrases: {
+                accueil:        () => 'Tiens.',
+                accueil_soir:   () => 'Bonsoir.',
+                destination_ok: () => 'Si tu veux.',
+                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Pas mal.`,
+                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
+                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
+                clairiere:      (v) => v.pousses === 0
+                                        ? "Rien n'a bougé cette semaine. Ça ne me dérange pas."
+                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
+                trajet_doux:    () => 'Trajet correct. Je ne dirai pas mieux.',
+                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
+                defi_valide:    (v) => `Un de fait. Il t'en reste ${v.reste}.`
+            },
+            dessin:    (e, p, s) => dessinerImage('nima', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('nima', e, p, s)
         }
     };
 
@@ -1132,7 +1201,7 @@
        ne porte que les femelles, ça évite six lignes qui répètent 'm'.
        Seul usage à ce jour : la fenêtre de fin de trajet (js/12), « Sam est
        secouéE ». Elle disait « secoué » pour Kiri et Raya avant cette table. */
-    const FEMELLES = { kiri: true, raya: true, sam: true };
+    const FEMELLES = { kiri: true, raya: true, sam: true, nima: true };
     function genreDe(cle) {
         return (COMPAGNONS[cle] && COMPAGNONS[cle].genre) || (FEMELLES[cle] ? 'f' : 'm');
     }
@@ -1145,9 +1214,7 @@
        usé ne se répare pas en changeant d'espèce. Cette jauge vivra dans le
        module de calcul, indexée par ces clés, jamais ici — ce module reste des
        dessins et des phrases. */
-    const A_VENIR = {
-        nima:  { nom: 'Nima',  espece: 'chatte', silhouette: 'pointue' }
-    };
+    const A_VENIR = {};
 
     /* Une tête grise par espèce. Les oreilles portent tout : ce sont elles, et
        pas le museau, qui font reconnaître un chat d'un chien en vignette. */
@@ -1813,6 +1880,43 @@
         }
     };
 
+    /* --------------------------------------------------------- PILOU */
+    /* ⚡ Fond photo dédié (demande utilisateur, 01/09/2026) : le jardin et sa
+       niche de Pilou, à la place du point d'eau de Babi qu'il empruntait faute
+       de décor propre. Roseaux/lucioles restent ceux du point d'eau — même
+       principe provisoire que Babi et Bulle en attendant une pousse dédiée
+       au jardin (un chien ne fait pas pousser des roseaux, mais rien d'autre
+       n'existe encore pour lui). `fiche()` s'en sert encore pour la clairière
+       SVG, seule `parcours()` lit `photo`. */
+    DECORS.chien = {
+        titre: 'Ton jardin',
+        photo: 'Images/Enviro/Paysage_Liberation_Chien.PNG',
+        ciel: DECORS.point_eau.ciel,
+        lune: DECORS.point_eau.lune,
+        places: CL_SOL_PLACES,
+        fond: DECORS.point_eau.fond,
+        pousse: DECORS.point_eau.pousse,
+        graine: DECORS.point_eau.graine
+    };
+
+    /* --------------------------------------------------------- NIMA */
+    /* Aucune photo dédiée fournie pour l'instant (contrairement à Babi/Bulle/
+       Pilou) : plutôt que d'emprunter celle d'un autre animal — ce qui
+       afficherait un éléphant ou un jardin de chien derrière une chatte
+       libérée, l'erreur déjà corrigée sur Pilou —, ce décor reste sans
+       `photo`. `parcLibre()` retombe alors sur le rendu SVG générique (même
+       principe que Titi/Zola/Kiri/Raya/Sam), roseaux et pousses du point
+       d'eau empruntés en attendant un décor propre. */
+    DECORS.nima = {
+        titre: 'Ton coin tranquille',
+        ciel: DECORS.point_eau.ciel,
+        lune: DECORS.point_eau.lune,
+        places: CL_SOL_PLACES,
+        fond: DECORS.point_eau.fond,
+        pousse: DECORS.point_eau.pousse,
+        graine: DECORS.point_eau.graine
+    };
+
     /* Le rocher éclaire son décor par le CIEL : ses emplacements sont donc en
        haut, et écartés de la bande où le compagnon est posé (x 146 à 220) — une
        étoile derrière Zola serait invisible. */
@@ -2429,7 +2533,10 @@
             + "et reparaît toujours au même endroit, au bord de l'eau, à l'heure fraîche.",
         sam: "Elle a creusé son terrier à la lisière, du côté d'où l'on voit venir. "
            + "Elle sort à la tombée du jour, prend chaque fois un chemin différent pour aller, "
-           + "et rentre toujours par le même — celui qu'elle s'est gardé."
+           + "et rentre toujours par le même — celui qu'elle s'est gardé.",
+        nima: "Elle a choisi sa place en une soirée et n'en a plus changé depuis. "
+            + "Elle passe le plus clair de son temps à ne rien faire de visible, "
+            + "et revient toujours au moment où on ne l'attend plus."
     };
 
     function texteSauve(cle) {
