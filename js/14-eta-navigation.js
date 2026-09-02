@@ -1561,15 +1561,6 @@
             if (_panelForTab) {
                 _panelForTab.classList.toggle('tab-secondary', tab === 'objectifs' || tab === 'profil');
             }
-            /* Même bascule que ci-dessus, posée sur la barre d'onglets : la variante
-               claire de l'onglet Itinéraire (theme-crepuscule.css) recolore aussi cette
-               barre, et #main-bottom-nav n'est pas un enfant de #ui-panel — sa propre
-               classe est nécessaire, `:has(#nav-tab-trajet.active)` n'étant pas garanti
-               sur les WebView Android anciennes (voir la note de theme-crepuscule.css). */
-            const _navForTab = document.getElementById('main-bottom-nav');
-            if (_navForTab) {
-                _navForTab.classList.toggle('nav-tab-secondary', tab === 'objectifs' || tab === 'profil');
-            }
 
             const tripOverlay = document.getElementById('trip-modal-overlay');
 

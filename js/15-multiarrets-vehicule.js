@@ -740,23 +740,6 @@
             return localStorage.getItem('gps_fuel_price_manual') === '1';
         }
 
-        /* Les deux légendes du prix carburant (#fuel-price-source, écrite au runtime,
-           et #fuel-usage-hint, fixe) sont repliées derrière le bouton ⓘ de la ligne —
-           demande utilisateur du 02/09/2026 : elles occupaient quatre lignes en bas
-           d'un écran déjà long. ⚠ Elles restent RENSEIGNÉES quand elles sont cachées :
-           `#fuel-price-source` est le seul endroit qui explique un prix absent
-           (« aucun prix E10 relevé dans 3 km », « active la localisation »), d'où un
-           repli et non une suppression. L'état repart fermé à chaque ouverture du
-           panneau : `initVehicleConfigUI()` ne le restaure pas, une aide n'a pas à
-           être persistante. */
-        function toggleFuelInfo() {
-            const cibles = [document.getElementById('fuel-price-source'),
-                            document.getElementById('fuel-usage-hint')];
-            const ouvrir = cibles.some(el => el && el.hidden);
-            cibles.forEach(el => { if (el) el.hidden = !ouvrir; });
-            document.getElementById('fuel-info-btn')?.classList.toggle('vfuel-info-btn-active', ouvrir);
-        }
-
         function _loadFuelAvgMeta() {
             try {
                 const m = JSON.parse(localStorage.getItem('gps_fuel_price_auto') || 'null');
