@@ -178,6 +178,18 @@
             _gasScanZoneUpdate(_scanAnchor, _scanRadiusKm);
             _gasScanZoneStart();
 
+            /* Le GESTE est journalisé, pas seulement son résultat : sans cette ligne, une
+               ouverture qui ne cadre pas ne laisse RIEN dans le journal, et on ne peut
+               même pas dire si l'utilisateur a bien cliqué au moment qu'il croit. Elle
+               s'apparie avec `fitScan` (cadrage fait) ou `scanSaute` (sorti avant). */
+            tenterSansBruit(() => logDiag('scanOuvre', {
+                busy: _scanBusy, enligne: navigator.onLine,
+                zAvant: +map.getZoom().toFixed(2), padCam: map.getPadding(),
+                cap: Math.round(map.getBearing()), pitch: Math.round(map.getPitch()),
+                panning: isUserPanning, course: isCourseStarted, simu: isSimulationMode,
+                fixGps: !!lastRealCoords,
+            }), 'openGasScan/diag');
+
             runGasScan();
         }
 
@@ -616,10 +628,18 @@
             const live   = !!opts.live;
             const status = document.getElementById('gas-scan-status');
             const list   = document.getElementById('gas-scan-list');
-            if (!status || !list) return;
-            if (_scanBusy) return;
+            /* ⚠ CES TROIS SORTIES ÉTAIENT MUETTES, et ce sont elles qui font qu'une
+               ouverture ne cadre pas du tout : sans `_fitMapToGasScan()`, la feuille
+               s'ouvre sur la carte laissée par la boucle de suivi, ce qui ressemble
+               beaucoup à un cadrage raté alors qu'aucun n'a été tenté. Un cadrage absent
+               et un cadrage faux ne se soignent pas pareil : le journal doit les
+               distinguer. `_scanBusy` en particulier reste vrai tant qu'un relevé de
+               suivi est en vol — un clic pendant ce temps ressort ici. */
+            if (!status || !list) { logDiag('scanSaute', { cause: 'DOM absent', live }); return; }
+            if (_scanBusy)        { logDiag('scanSaute', { cause: 'occupé', live }); return; }
 
             if (!navigator.onLine) {
+                logDiag('scanSaute', { cause: 'hors ligne', live });
                 status.textContent = '📵 Hors ligne — prix des carburants indisponibles';
                 list.innerHTML = '';
                 _clearGasScanMarkers();
@@ -1195,6 +1215,13 @@
         // sans elle, fermer la fiche laisserait la carte zoomée sur la station au
         // lieu de rendre la vue d'ensemble du scan telle qu'avant le clic.
         let _gasInfoPrevCamera = null;
+        /* Vue CIBLE du dernier `_fitMapToGasScan()`, calculée par `cameraForBounds` avant
+           le vol : `fitBounds` ne fait qu'ANIMER vers elle sur 800 ms, or la liste est
+           cliquable dès qu'elle est rendue. Sans cette valeur, un clic pendant l'animation
+           mémorise une position de vol INTERMÉDIAIRE comme « vue d'avant clic », et
+           ressortir de la fiche rend cette vue bâtarde au lieu de la zone de scan.
+           Jumelle de `_pkScanCamera` (js/27), qui avait ce garde-fou depuis le début. */
+        let _gasScanCamera = null;
 
         function openGasStationInfo(s) {
             const overlay = document.getElementById('gas-info-overlay');
@@ -1246,6 +1273,15 @@
             // station (_gasInfoGoClicked) : y revenir une frame avant de relancer un
             // trajet ferait clignoter la caméra pour rien.
             if (!opts.skipCameraRestore && _gasInfoPrevCamera) {
+                /* ⚠ LE PADDING DE `focusGasScanStation()` RESTE SUR LA CAMÉRA — relevé au
+                   journal 🩺 le 02/09/2026 : `padCam {top 60, bottom 483, left 40, right 40}`
+                   juste après le vol vers la station. La vue mémorisée, elle, a été calculée
+                   avec un padding caméra NUL. La rendre sans remise à zéro recentre son
+                   centre dans une boîte amputée de 483 px en bas : échelle juste, contenu
+                   remonté hors champ — la signature décrite dans AGENTS.md. C'est la seconde
+                   moitié de « ressortir de la fiche ne rend pas la zone de scan ». */
+                tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
+                                'closeGasStationInfo/resetPadding');
                 map.flyTo({ center: _gasInfoPrevCamera.center, zoom: _gasInfoPrevCamera.zoom, duration: 500 });
             }
             _gasInfoPrevCamera = null;
@@ -1263,7 +1299,18 @@
         function _openGasScanDetail(i) {
             const s = _scanShown[i];
             if (!s) return;
-            _gasInfoPrevCamera = { center: map.getCenter(), zoom: map.getZoom() };
+            /* ⚠ PENDANT L'ANIMATION D'OUVERTURE, `map.getCenter()` N'EST PAS LA VUE DU
+               SCAN mais une image de son vol. `fitBounds` anime sur 800 ms et la liste
+               comme les pastilles sont cliquables dès le rendu : un clic rapide — le
+               PREMIER, précisément — mémorisait donc un entre-deux, et ressortir de la
+               fiche y ramenait. D'où « la première fois, ça ne recentre pas la zone ».
+               `isMoving()` retombe à faux dès la caméra stable : dans tous les autres
+               cas, y compris après un recentrage manuel, `getCenter()` reste la bonne
+               source. Décalque de `_openParkingScanDetail()` (js/27), qui portait déjà
+               ce garde-fou — encore un correctif appliqué à un seul des deux jumeaux. */
+            _gasInfoPrevCamera = (map.isMoving() && _gasScanCamera)
+                ? _gasScanCamera
+                : { center: map.getCenter(), zoom: map.getZoom() };
             focusGasScanStation(i);
             openGasStationInfo(s);
         }
@@ -1350,6 +1397,14 @@
                remède que `fitMapToModalRoute()` (js/15), relevé sur appareil à
                `padCam: {bottom: 461}` — le scan ⛽ était le dernier cadrage à ne pas l'avoir.
                La boucle de suivi repose le sien dès que `closeGasScan()` rend la main. */
+            /* `resize()` INCONDITIONNEL, comme fitMapToModalRoute() (js/15) — c'est la
+               TAILLE INTERNE de Mapbox qui sert au calcul du cadrage, jamais le rect DOM.
+               Elle se périme sans rien lever : rotation, clavier, barres du navigateur,
+               changement d'appareil dans le simulateur (le châssis est mis à l'échelle en
+               CSS). Le cadrage se fait alors sur une hauteur qui n'existe plus, et le
+               cercle sort par le haut avec un zoom pourtant plausible. */
+            tenterSansBruit(() => map.resize(), '_fitMapToGasScan/resize');
+
             tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
                             '_fitMapToGasScan/resetPadding');
 
@@ -1358,13 +1413,158 @@
             // de 10 km ne renvoyant qu'une station voisine cadrerait sinon serré,
             // en contradiction avec la zone dessinée. Les stations sont de toute
             // façon toutes dans le cercle, elles restent donc visibles.
+            const bounds  = _gasScanCircleBounds(_scanAnchor, _scanRadiusKm);
+            const padding = _gasScanPadding();
+
+            // Vue de fin, connue AVANT l'animation : voir `_gasScanCamera`. Les options
+            // doivent être les MÊMES que celles du fitBounds ci-dessous, sinon la vue
+            // mémorisée n'est pas celle vers laquelle la caméra part réellement.
+            _gasScanCamera = null;
+            tenterSansBruit(() => {
+                const cam = map.cameraForBounds(bounds, { padding, maxZoom: 16, bearing: 0, pitch: 0 });
+                if (cam) _gasScanCamera = { center: cam.center, zoom: cam.zoom };
+            }, '_fitMapToGasScan/cameraForBounds');
+
+            /* ⚠ `bearing: 0, pitch: 0` — MÊME RÈGLE QUE fitMapToModalRoute() (js/15).
+               Sans eux, `fitBounds` conserve l'inclinaison et le cap de la boucle de suivi
+               (cap-en-haut, et 60° de pitch en mode 3D). Le cadrage d'une bbox sur une
+               caméra inclinée n'est pas fiable chez Mapbox : la moitié lointaine de la vue
+               est comprimée en haut de l'écran et le cercle en dépasse. Une vue d'ensemble
+               se lit à plat et au nord ; la boucle de suivi repose cap et pitch dès que
+               closeGasScan() lui rend la main. */
             try {
-                map.fitBounds(_gasScanCircleBounds(_scanAnchor, _scanRadiusKm), {
-                    padding: _gasScanPadding(), maxZoom: 16, duration: 800
+                map.fitBounds(bounds, {
+                    padding, maxZoom: 16, duration: 800, bearing: 0, pitch: 0
                 });
             } catch (e) {
                 logAppError('_fitMapToGasScan', e);
             }
+
+            _diagFitScan(bounds, padding);
+        }
+
+        /* Trace de diagnostic du cadrage ⛽ — décalque de celle de fitMapToModalRoute()
+           (js/15), pour la même raison : la console est inaccessible dans l'APK, seul le
+           journal 🩺 dit ce qui s'est passé. Elle relève DEUX fois :
+             — avant, le zoom VISÉ par `cameraForBounds` (le même calcul que fitBounds,
+               sans toucher la caméra) et tout ce qui l'alimente ;
+             — 1,2 s après, la vue RÉELLE et la position à l'écran du haut et du bas du
+               cercle. Les deux relevés séparent les deux familles de causes : un cadrage
+               visé déjà faux est un problème de géométrie (padding, taille de canevas) ;
+               un cadrage visé juste puis remplacé signifie qu'une autre commande caméra a
+               repris la main entre-temps.
+           Purement observationnelle : aucun de ses échecs ne doit toucher au cadrage. */
+        function _diagFitScan(bounds, padding) {
+            tenterSansBruit(() => {
+                const el = map.getContainer().getBoundingClientRect();
+                const cv = map.getCanvas();
+                const sheet = document.getElementById('gas-scan-sheet');
+                let camZoom = null;
+                tenterSansBruit(() => {
+                    const c = map.cameraForBounds(bounds, { padding, maxZoom: 16, bearing: 0, pitch: 0 });
+                    if (c) camZoom = +c.zoom.toFixed(2);
+                }, '_diagFitScan/cameraForBounds');
+
+                logDiag('fitScan', {
+                    rect: Math.round(el.width) + 'x' + Math.round(el.height),
+                    trans: map.transform ? Math.round(map.transform.width) + 'x' + Math.round(map.transform.height) : '-',
+                    cvBrut: cv ? (cv.clientWidth + 'x' + cv.clientHeight) : '-',
+                    win: window.innerWidth + 'x' + window.innerHeight,
+                    pad: padding, padCam: map.getPadding(),
+                    sheetH: sheet ? sheet.offsetHeight : -1,
+                    replie: !!sheet?.classList.contains('collapsed'),
+                    barres: getBottomBarsH(), rayon: _scanRadiusKm,
+                    pitch: Math.round(map.getPitch()), cap: Math.round(map.getBearing()),
+                    zAvant: +map.getZoom().toFixed(2), zVise: camZoom,
+                    panning: isUserPanning, course: isCourseStarted,
+                });
+
+                // Le verdict : où le cercle a RÉELLEMENT atterri, une fois l'animation
+                // finie. `haut` doit tomber sous `pad.top`, `bas` au-dessus de la feuille.
+                const ouCercle = () => {
+                    const h = map.project(bounds.getNorthEast());
+                    const b = map.project(bounds.getSouthWest());
+                    return { haut: Math.round(h.y), bas: Math.round(b.y),
+                             gauche: Math.round(b.x), droite: Math.round(h.x) };
+                };
+                setTimeout(() => tenterSansBruit(() => {
+                    logDiag('fitScan/apres', {
+                        zoom: +map.getZoom().toFixed(2), cercle: ouCercle(),
+                        hauteurCarte: Math.round(map.getContainer().getBoundingClientRect().height),
+                        padCam: map.getPadding(), panning: isUserPanning,
+                    });
+
+                    /* ⚠ LE RELEVÉ À 1,2 s NE PROUVE PAS QUE LA VUE TIENT. Un cadrage juste
+                       puis repris par une autre commande caméra donne exactement le même
+                       journal qu'un cadrage juste et stable — et c'est la panne la plus
+                       probable ici, la boucle de suivi n'étant retenue que par
+                       `isUserPanning`, lui-même non posé quand ni fix GPS ni course ne
+                       sont là. On écoute donc le PROCHAIN mouvement, une seule fois, et on
+                       consigne où il emmène le cercle. Silence dans le journal = personne
+                       n'a touché à la caméra, et la question est réglée pour de bon. */
+                    let armé = true;
+                    const surMouvement = (ev) => {
+                        if (!armé) return;
+                        armé = false;
+                        /* ⚠ REFERMER LA FEUILLE REND LA CAMÉRA — c'est le comportement voulu
+                           (`closeGasScan()` appelle `recenterMap()`), pas un vol. Le test
+                           porte sur `body.gas-scan-open`, retiré SYNCHRONEMENT à la
+                           fermeture, et non sur la classe `.open` de la feuille, qui survit
+                           280 ms le temps de l'animation : c'est justement la fenêtre où le
+                           recentrage a lieu, et s'y fier remplirait le journal de faux vols. */
+                        if (!document.body.classList.contains('gas-scan-open')) return;
+                        /* Ouvrir une fiche station DÉPLACE la caméra volontairement
+                           (`focusGasScanStation`) : c'est le geste de l'utilisateur, pas
+                           un vol. Sans cette exclusion, le relevé le plus fréquent du
+                           journal est un faux positif — et un détecteur qui crie à chaque
+                           usage normal finit par n'être plus lu du tout, ce qui revient à
+                           ne pas en avoir. C'est par ce chemin que le bug du 02/09/2026 a
+                           été identifié ; une fois nommé, il n'a plus à être signalé. */
+                        if (document.getElementById('gas-info-overlay')?.classList.contains('open')) return;
+
+                        /* ⚠ `movestart` SE DÉCLENCHE AVANT QUE LA CAMÉRA BOUGE : relevée
+                           ici, la vue est encore celle du cadrage, et la trace du
+                           02/09/2026 a ainsi annoncé un vol en montrant un cercle
+                           parfaitement placé — un relevé qui ne dit rien de ce qu'on
+                           cherche. C'est donc `moveend` qui porte le verdict ; `movestart`
+                           ne sert plus qu'à dater le départ et à nommer l'ORIGINE :
+                           `ev.originalEvent` n'existe que si un geste humain est à la
+                           source, son absence désigne une commande caméra du code. */
+                        const origine = (ev && ev.originalEvent) ? ('geste:' + ev.originalEvent.type) : 'code';
+                        /* `movestart` est émis SYNCHRONEMENT depuis `jumpTo`/`easeTo`/`flyTo` :
+                           la pile capturée ici contient donc encore l'appelant, et NOMME le
+                           voleur au lieu de le faire deviner. Deux images suffisent, le
+                           reste étant l'intérieur de Mapbox ; les chemins sont raccourcis
+                           pour tenir dans le journal 🩺, qui est plafonné. */
+                        let pile = null;
+                        try {
+                            /* ⚠ ON GARDE LE BAS DE LA PILE, PAS LE HAUT. Le haut, ce sont
+                               les images de CE relevé (l'écouteur, `tenterSansBruit`) et
+                               l'intérieur de Mapbox — les trois premières tentatives n'ont
+                               journalisé que ça, c'est-à-dire l'observateur au lieu de
+                               l'observé. L'appelant cherché est au CONTRAIRE la dernière
+                               image utile ; sur une commande émise depuis un timer, c'est
+                               le rappel du timer, ce qui suffit à le nommer. */
+                            pile = String((new Error()).stack || '').split('\n').slice(1)
+                                .map(l => l.trim().replace(/^at\s+/, '').replace(/.*\/js\//, 'js/'))
+                                .filter(l => l && l.indexOf('mapbox-gl') === -1
+                                          && l.indexOf('tenterSansBruit') === -1
+                                          && l.indexOf('surMouvement') === -1
+                                          && l.indexOf('_diagFitScan') === -1)
+                                .slice(-3).join(' ← ');
+                        } catch (e) { pile = 'pile indisponible'; }
+                        map.once('moveend', () => tenterSansBruit(() => logDiag('fitScan/vole', {
+                            origine, pile, zoom: +map.getZoom().toFixed(2), cercle: ouCercle(),
+                            padCam: map.getPadding(), panning: isUserPanning,
+                            feuille: document.body.classList.contains('gas-scan-open'),
+                        }), '_diagFitScan/vole'));
+                    };
+                    map.once('movestart', surMouvement);
+                    // Au-delà, un mouvement est un geste de l'utilisateur, pas un vol :
+                    // l'écouteur se retire pour ne pas polluer le journal.
+                    setTimeout(() => { armé = false; tenterSansBruit(() => map.off('movestart', surMouvement), '_diagFitScan/desarme'); }, 6000);
+                }, '_diagFitScan/apres'), 1200);
+            }, '_diagFitScan');
         }
 
         /* ═══════════════════════════════════════════════════════════════════

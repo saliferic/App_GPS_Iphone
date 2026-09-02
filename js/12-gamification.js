@@ -18,7 +18,6 @@
         const WEEKLY_GOAL_TEMPLATES = [
             { id: 'km_no_speed',   text: 'Parcourir {v} km sans excès de vitesse',       unit: 'km',     min: 50,  max: 200, step: 25 },
             { id: 'km_total',      text: 'Parcourir {v} km au total',                     unit: 'km',     min: 80,  max: 300, step: 20 },
-            { id: 'score_total',   text: 'Accumuler {v} points sur la semaine',            unit: 'pts',    min: 20,  max: 80,  step: 5 },
             /* ⚠ 'vie_haute' compte des KM, pas des trajets — même garde-fou que la
                note ci-dessus. Un trajet ne rapporte sa distance que si la vie n'est
                JAMAIS descendue sous VIE_SEUIL_HAUT pendant toute sa durée (voir
@@ -109,7 +108,8 @@
             /* ⚠ Ne plus exclure km_total/km_no_speed pendant la phase d'observation
                (corrigé le 18/08/2026). Ce filtre s'appuyait sur les missions comptées en
                trajets pour remplir les 3 objectifs hebdomadaires avant que la baseline ne
-               soit connue — leur retrait ne laissait plus alors QUE score_total.
+               soit connue — leur retrait ne laissait plus alors QUE des missions de
+               vie du compagnon, invérifiables tant qu'aucun trajet n'a été fait.
                Les deux gabarits km gardent de toute façon leurs plages par défaut
                (min/max déclarés ci-dessus) tant qu'aucune baseline n'existe pour les
                adapter : elles ne sont pas ajustées à l'utilisateur cette semaine-là, mais
@@ -210,7 +210,6 @@
                 switch(g.id) {
                     case 'km_no_speed':   if (isPerfect) g.progress += distKm; break;
                     case 'km_total':      g.progress += distKm; break;
-                    case 'score_total':   g.progress += score; break;
                     case 'vie_haute':     if (vieMin >= VIE_SEUIL_HAUT) g.progress += distKm; break;
                     /* 100% de vie, pas VIE_SEUIL_HAUT : ces deux missions demandent un
                        trajet où la vie n'a JAMAIS bougé, pas seulement « resté haute ». */
@@ -316,13 +315,16 @@
             done:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>',
             km_total:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5 4.7 9a2 2 0 0 1 1.9-1.4h10.8A2 2 0 0 1 19.3 9L21 14.5v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M6.5 14h.01M17.5 14h.01"/></svg>',
             km_no_speed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M9.5 11.5 11.5 14l3.5-4"/></svg>',
-            score_total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12Z"/></svg>',
-            vie_haute:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/><path d="M6 14h4l1.5-3 2 5 1.5-2h3"/></svg>',
-            vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>',
-            /* Même cœur que vie_haute/vie_seuil : ces deux missions sont, elles
-               aussi, une question de vie du compagnon — pas de km ou de points. */
-            trajet_parfait:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>',
-            trajets_parfaits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5 7-10a7 7 0 1 0-14 0c0 5 7 10 7 10Z"/></svg>'
+            /* ⚠ VRAI CŒUR (02/09/2026) : les quatre missions de vie du compagnon
+               partageaient jusqu'ici le pictogramme épingle de km_no_speed (juste
+               au-dessus, sans la coche) — visuellement une goutte/localisation, pas
+               un cœur, malgré ce que disait l'ancien commentaire. Un seul tracé ici,
+               repris tel quel par vie_haute/vie_seuil/trajet_parfait/trajets_parfaits :
+               la mission se lit désormais d'un coup d'œil comme « ça parle de vie ». */
+            vie_haute:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
+            vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
+            trajet_parfait:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
+            trajets_parfaits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>'
         };
 
         function renderWeeklyGoalsPanel() {
@@ -1010,7 +1012,7 @@
            Le badge de la semaine n'est PAS attribué d'office ici (contrairement à
            « Objectifs 95% ») : il partira par le chemin normal, à la fin du
            prochain trajet, si les trois missions sont bien bouclées. */
-        const _DEBUG_CIBLES_LEGERES = { km_total: 20, km_no_speed: 5, score_total: 30 };
+        const _DEBUG_CIBLES_LEGERES = { km_total: 20, km_no_speed: 5 };
 
         function _debugObjectifsLegers() {
             const data = loadWeeklyGoals();

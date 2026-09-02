@@ -762,6 +762,9 @@
             <div id="cpx-actif-libre"></div>
             <div id="compagnon-grille"></div>
             <div id="cpx-note">Trois missions tenues, et l'animal est libre. Chaque animal sauvé en ouvre un nouveau.</div>
+            <!-- Demande de confirmation avant d'activer un animal (remplace la grille,
+                 même parti pris que la fiche de js/25). Rempli par js/23 (montrerConfirmation). -->
+            <div id="cpx-confirm" style="display:none"></div>
         </div>
     </div>
 
@@ -1285,6 +1288,20 @@
                 </button>
                 <div id="trip-history-body">
                     <div id="trip-history-list"></div>
+                </div>
+            </div>
+
+            <!-- === EMPREINTE CO2 === -->
+            <!-- Même mécanique que #trip-history-body : masqué dans le panneau Profil,
+                 révélé une fois déplacé dans la page pleine (voir openProfilSheet). -->
+            <div id="co2-panel-section" class="profil-row">
+                <button type="button" class="profil-row-btn" onclick="openProfilSheet('co2')">
+                    <span class="profil-row-ico" style="color:#6FE3A0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-8 4-14 14-16-1 10-7 14-14 16Z"/><path d="M5 21c2-3 4-6 6-10"/></svg></span>
+                    <span class="profil-row-label">Empreinte CO2</span>
+                    <span class="profil-row-arrow">›</span>
+                </button>
+                <div id="co2-panel-body">
+                    <div id="co2-panel-content"></div>
                 </div>
             </div>
 

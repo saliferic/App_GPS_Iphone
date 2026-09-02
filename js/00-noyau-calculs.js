@@ -81,6 +81,39 @@
 
 
         // ═══════════════════════════════════════════════════════════════════
+        // === EMPREINTE CO2 ===
+        // ═══════════════════════════════════════════════════════════════════
+
+        /* Facteurs Base Carbone ADEME. Le gazole dégage plus de CO2 au litre que les
+           essences (SP95/E10/SP98, regroupées sous un même facteur) : plus dense en
+           carbone à volume égal. Électricité : mix réseau France, très décarboné
+           grâce au nucléaire — loin de la moyenne UE, à rappeler à l'affichage sinon
+           le chiffre paraît trafiqué. */
+        const CO2_FACTOR_KG_PER_L       = { gazole: 2.68, sp95: 2.31, e10: 2.31, sp98: 2.31 };
+        const CO2_FACTOR_ELEC_KG_PER_KWH = 0.06;
+
+        /* Même structure que calcEnergyCost, un facteur CO2 à la place d'un prix.
+           ⚠ APPROXIMATION ASSUMÉE, pas une mesure : applique la config véhicule et le
+           carburant ACTUELS à une distance archivée, qu'elle date d'hier ou d'il y a
+           six mois — aucun des deux n'est capturé par trajet dans
+           `gps_trip_history`. Un changement de véhicule en cours d'historique fausse
+           donc rétroactivement les trajets passés ; c'est le même compromis que le
+           coût carburant déjà affiché par trajet, jamais recalculé après coup. */
+        function calcCO2(distKm, cfg, fuelKind) {
+            const facteurCarburant = CO2_FACTOR_KG_PER_L[fuelKind] || CO2_FACTOR_KG_PER_L.e10;
+            if (cfg.type === 'electrique') {
+                return (distKm / 100) * cfg.consumptionElec * CO2_FACTOR_ELEC_KG_PER_KWH;
+            } else if (cfg.type === 'hybride') {
+                const thermique = (distKm / 100) * cfg.consumption * facteurCarburant * 0.5;
+                const elec      = (distKm / 100) * cfg.consumptionElec * CO2_FACTOR_ELEC_KG_PER_KWH * 0.5;
+                return thermique + elec;
+            } else {
+                return (distKm / 100) * cfg.consumption * facteurCarburant;
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════════
         // === CADRAGE DE LA CARTE ===
         // ═══════════════════════════════════════════════════════════════════
 

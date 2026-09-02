@@ -2425,7 +2425,14 @@
                 if (!isUserPanning) {
                     map.resize();
                     const bounds = getRouteBounds();
-                    if (bounds) map.fitBounds(bounds, { padding: 40, animate: false });
+                    // Règle commune à tout cadrage (CLAUDE.md, interdit n°4) : padding
+                    // caméra à zéro — il s'ADDITIONNE à celui passé ici — et vue à plat.
+                    // Ce cadrage-ci était jusqu'ici la seule exception, au motif qu'il est
+                    // gardé par `!isUserPanning` ; la garde protège de la boucle de suivi,
+                    // pas du padding qu'elle a déjà inscrit sur la caméra.
+                    tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
+                                    'startCourse/resetPadding');
+                    if (bounds) map.fitBounds(bounds, { padding: 40, animate: false, bearing: 0, pitch: 0 });
                 }
                 drivers.forEach(d => { d.marker.setLngLat(startCoords).addTo(map); });
 

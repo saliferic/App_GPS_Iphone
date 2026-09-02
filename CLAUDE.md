@@ -32,8 +32,14 @@ Ces règles ont chacune coûté un bug en production. Aucune n'est négociable.
    sur une VARIABLE, chercher une exception au chargement dans le fichier qui la déclare,
    pas une faute de frappe : une exception au top-level interrompt tout le fichier, en
    laissant ses `function` disponibles. C'est l'asymétrie qui égare le diagnostic.
-4. **Tout `fitBounds` est précédé de `map.setPadding({0,0,0,0})`.** Le padding résiduel de
-   la boucle de suivi n'est jamais celui que veut un cadrage.
+4. **Tout `fitBounds` est précédé de `map.resize()` puis de `map.setPadding({0,0,0,0})`, et
+   reçoit `bearing: 0, pitch: 0`.** Le padding résiduel de la boucle de suivi n'est jamais
+   celui que veut un cadrage ; la taille interne de Mapbox — celle qui sert au calcul — se
+   périme sans rien lever ; et une bbox cadrée sur caméra inclinée déborde par le haut.
+   **Corollaire : ne jamais mémoriser une vue avec `map.getCenter()` sans vérifier
+   `map.isMoving()`** — pendant les 800 ms d'animation, c'est une image de vol qu'on
+   enregistre, et la restituer ramène à un entre-deux. Garder la vue CIBLE calculée par
+   `cameraForBounds`, et remettre le padding à zéro avant de la rendre.
 5. **Tout texte venu du réseau qui entre dans un gabarit `innerHTML` passe par
    `echapperHtml()`** (`js/00-helpers-partages.js`). Les noms et adresses viennent d'OSM et
    de data.gouv, que n'importe qui peut éditer. Préférer le DOM + `textContent` pour tout

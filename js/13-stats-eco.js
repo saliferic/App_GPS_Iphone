@@ -160,6 +160,94 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════
+           === EMPREINTE CO2 (02/09/2026) ===
+           ═══════════════════════════════════════════════════════════════
+
+           Page pleine ouverte depuis « Vos informations » (PROFIL_SHEETS['co2']),
+           même mécanique que « Historique des trajets ». Aucune saisie : le calcul
+           réutilise `loadVehicleConfig()`/`getFuelKind()` (js/15) déjà renseignés
+           dans « Mon véhicule », appliqués à `gps_trip_history` (même source que la
+           page voisine). `calcCO2()` vit dans le noyau testable (js/00), voir son
+           commentaire pour l'approximation qu'il assume : la config véhicule
+           ACTUELLE est appliquée à des trajets parfois anciens, faute de trace du
+           véhicule/carburant par trajet — même compromis que le coût carburant. */
+
+        function _formatCO2(kg) {
+            if (kg >= 1000) return (kg / 1000).toFixed(2).replace('.', ',') + ' t';
+            return Math.round(kg) + ' kg';
+        }
+
+        function renderCO2Panel() {
+            const host = document.getElementById('co2-panel-content');
+            if (!host) return;
+            host.innerHTML = '';
+
+            const history = getTripHistory();
+            if (!history.length) {
+                const vide = document.createElement('div');
+                vide.className = 'stats-empty';
+                vide.textContent = 'Aucun trajet enregistré pour l’instant.';
+                host.appendChild(vide);
+                return;
+            }
+
+            const cfg = loadVehicleConfig();
+            const fuelKind = (typeof getFuelKind === 'function') ? getFuelKind() : 'e10';
+
+            const sommeCO2  = (trips) => trips.reduce((s, t) => s + calcCO2(Number(t.distKm) || 0, cfg, fuelKind), 0);
+            const sommeDist = (trips) => trips.reduce((s, t) => s + (Number(t.distKm) || 0), 0);
+
+            const tiles = document.createElement('div');
+            tiles.className = 'trip-tiles';
+            const tile = (valeur, label) => {
+                const t = document.createElement('div'); t.className = 'trip-tile';
+                const b = document.createElement('b'); b.textContent = valeur;
+                const s = document.createElement('span'); s.textContent = label;
+                t.appendChild(b); t.appendChild(s);
+                tiles.appendChild(t);
+            };
+            tile(_formatCO2(sommeCO2(filterTripsByPeriod(history, 'week'))),  'cette semaine');
+            tile(_formatCO2(sommeCO2(filterTripsByPeriod(history, 'month'))), 'ce mois-ci');
+            tile(_formatCO2(sommeCO2(history)),                              'total');
+            tile(formatTripDistance(sommeDist(history)),                     'distance couverte');
+            host.appendChild(tiles);
+
+            /* Explication repliée derrière un bouton ⓘ (02/09/2026, demande utilisateur :
+               le texte fixe alourdissait visuellement une page qui n'est que 4 chiffres).
+               ⚠ Repart caché à CHAQUE ouverture — `renderCO2Panel()` est rappelé par
+               `onOpen`, donc rouvrir la page ne doit pas garder l'état de la fois
+               précédente en mémoire ici, contrairement à `_thYear`/`_thMonth` qui, eux,
+               décrivent une navigation qu'on veut retrouver. Un texte d'aide n'a pas
+               cette raison d'être persistant. */
+            const infoRow = document.createElement('div');
+            infoRow.className = 'co2-info-row';
+            const infoBtn = document.createElement('button');
+            infoBtn.type = 'button';
+            infoBtn.className = 'co2-info-btn';
+            infoBtn.textContent = 'i';
+            infoBtn.setAttribute('aria-label', 'Comment ce chiffre est calculé');
+            infoRow.appendChild(infoBtn);
+            host.appendChild(infoRow);
+
+            /* Le carburant ne s'affiche que pour un véhicule qui en consomme :
+               l'annoncer pour une électrique n'aurait aucun sens et suggérerait à
+               tort qu'il compte dans le calcul. */
+            const fuelLabel = (typeof FUEL_KIND_LABEL === 'object' && FUEL_KIND_LABEL[fuelKind]) || fuelKind.toUpperCase();
+            const hint = document.createElement('div');
+            hint.className = 'trip-option-hint';
+            hint.hidden = true;
+            hint.textContent = 'Estimation à partir de votre véhicule actuel (' + cfg.type +
+                (cfg.type !== 'electrique' ? ', ' + fuelLabel : '') +
+                ') appliqué à chaque trajet enregistré — pas une mesure directe : les trajets passés ne gardent pas la trace du véhicule ou du carburant utilisés au moment où ils ont eu lieu.';
+            host.appendChild(hint);
+
+            infoBtn.addEventListener('click', () => {
+                hint.hidden = !hint.hidden;
+                infoBtn.classList.toggle('co2-info-btn-active', !hint.hidden);
+            });
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
            === HISTORIQUE DES TRAJETS — LISTE DÉTAILLÉE (21/08/2026) ===
            ═══════════════════════════════════════════════════════════════
 
@@ -738,6 +826,8 @@
                        onOpen: () => { try { initVehicleConfigUI(); } catch (e) { logAppError('profilSheet/initVehicleConfigUI', e); } } },
             trips:   { bodyId: 'trip-history-body',   title: 'Historique des trajets', dot: true,
                        onOpen: () => { try { openTripHistory(); } catch (e) { logAppError('profilSheet/openTripHistory', e); } } },
+            co2:     { bodyId: 'co2-panel-body',      title: 'Empreinte CO2', dot: true,
+                       onOpen: () => { try { renderCO2Panel(); } catch (e) { logAppError('profilSheet/renderCO2Panel', e); } } },
             aide:    { bodyId: 'aide-conduite-body',  title: 'Aide à la conduite', dot: true }
         };
 

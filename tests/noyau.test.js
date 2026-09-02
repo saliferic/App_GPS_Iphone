@@ -27,6 +27,7 @@ function chargerNoyau() {
     const noms = [
         'LICENSE_POINTS_MAX', '_readLicensePoints',
         'calcEnergyCost',
+        'CO2_FACTOR_KG_PER_L', 'CO2_FACTOR_ELEC_KG_PER_KWH', 'calcCO2',
         '_clampMapPadding', '_cameraForBoundsSafe', '_ecartMetres',
         '_metresRestreints', '_choisirEtapeStation',
         'normalizeFrHouseNumber', 'normalizeStationAddr', '_deburr',
@@ -125,6 +126,32 @@ section("Coût de l'énergie");
        retomber sur le calcul thermique, jamais sur NaN : ce coût est affiché dans
        l'aperçu de trajet et conditionne l'activation du bouton « Lancer ». */
     verifieProche('type inconnu → thermique', cout(100, { ...thermique, type: 'vapeur' }), 12.25);
+}
+
+// ── Empreinte CO2 ───────────────────────────────────────────────────────────────
+section('Empreinte CO2');
+{
+    const { calcCO2: co2 } = N;
+    const thermiqueGazole  = { type: 'thermique',  consumption: 7, consumptionElec: 18 };
+    const thermiqueE10     = { type: 'thermique',  consumption: 7, consumptionElec: 18 };
+    const electrique       = { type: 'electrique', consumption: 7, consumptionElec: 18 };
+    const hybride          = { type: 'hybride',    consumption: 7, consumptionElec: 18 };
+
+    // 100 km à 7 L/100 de gazole à 2,68 kg CO2/L = 18,76 kg
+    verifieProche('thermique gazole : 100 km', co2(100, thermiqueGazole, 'gazole'), 18.76);
+    // Même trajet en E10 (2,31 kg CO2/L) = 16,17 kg — le carburant compte, pas juste le litrage
+    verifieProche('thermique E10 : 100 km, moins que le gazole', co2(100, thermiqueE10, 'e10'), 16.17);
+    verifieProche('thermique : distance nulle', co2(0, thermiqueGazole, 'gazole'), 0);
+    // 100 km à 18 kWh/100 à 0,06 kg CO2/kWh = 1,08 kg
+    verifieProche('électrique : 100 km', co2(100, electrique, 'gazole'), 1.08);
+    // Hybride = moyenne du thermique (carburant choisi) et de l'électrique
+    verifieProche('hybride = moyenne des deux', co2(100, hybride, 'e10'), (16.17 + 1.08) / 2);
+
+    /* Carburant absent ou inconnu (profil importé d'une version future, réglage
+       jamais touché) → repli sur E10, jamais NaN : ce nombre est affiché tel quel
+       dans le Profil. */
+    verifieProche('carburant inconnu → repli E10', co2(100, thermiqueGazole, 'diesel-inexistant'), 16.17);
+    verifieProche('carburant absent → repli E10', co2(100, thermiqueGazole, undefined), 16.17);
 }
 
 // ── Padding de fitBounds ────────────────────────────────────────────────────────

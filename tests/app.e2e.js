@@ -362,6 +362,104 @@ function demarrerServeur() {
         // d'œil ce que trois nombres laisseraient discuter.
         await page.screenshot({ path: path.join(__dirname, 'apercu-trajet.png') });
 
+        /* ── 5. NON-RÉGRESSION : ressortir d'une fiche station rend la ZONE DE SCAN ──
+           Le bug du 02/09/2026, tenu plusieurs jours pour « le premier cadrage du scan est
+           décentré » alors que le cadrage, lui, était juste : c'est le RETOUR qui ne
+           l'était pas. `_openGasScanDetail()` mémorisait `map.getCenter()` comme « vue
+           d'avant clic » — or `fitBounds` anime sur 800 ms et la liste comme les pastilles
+           sont cliquables dès le rendu, si bien qu'un clic RAPIDE (le premier, toujours)
+           mémorisait une image de vol intermédiaire. S'y ajoutait le padding laissé sur la
+           caméra par le vol vers la station, qui décalait encore la vue restaurée.
+
+           ⚠ CE TEST DOIT VENIR APRÈS le contrôle « aucune erreur pendant l'aperçu » : le
+           scan interroge data.gouv, et une panne de réseau y journaliserait une erreur qui
+           ferait échouer une vérification sans aucun rapport avec elle.
+
+           ⚠ IL NE DÉPEND PAS DU RÉSEAU. On laisse le scan réel rendre la main (quel que
+           soit son sort), puis on rejoue le cadrage et on injecte une station fictive : ce
+           qui est testé est la mécanique caméra, pas la disponibilité d'un service tiers.
+           Un test dont le verdict dépend d'un miroir Overpass ne dit plus rien du code le
+           jour où il rougit.
+
+           ⚠⚠ L'ÉTAT FAUTIF EST POSÉ À LA MAIN, et il le faut : ce harnais tourne en
+           `reducedMotion: 'reduce'` (c'est ainsi qu'il saute l'intro), or Mapbox y rend
+           tout vol INSTANTANÉ. `map.isMoving()` n'y est donc jamais vrai et aucun padding
+           ne reste sur la caméra — les deux conditions du bug, absentes par construction.
+           La première version de ce test a échoué pour cette raison exacte, en donnant
+           l'illusion d'un correctif inopérant. On reproduit donc l'état : une animation
+           explicite (`essential: true` passe outre le mouvement réduit) pour la caméra en
+           vol, et le padding relevé sur appareil posé directement. Même méthode, et même
+           raison, que la section « Padding résiduel de la caméra » ci-dessus. */
+        section('Sortie de la fiche station');
+        {
+            await page.evaluate(() => { try { closeTripModal(); } catch (e) {} });
+            await page.waitForTimeout(300);
+            const r = await page.evaluate(async () => {
+                const pause = (ms) => new Promise(res => setTimeout(res, ms));
+                const cercle = () => {
+                    const b = _gasScanCircleBounds(_scanAnchor, _scanRadiusKm);
+                    const h = map.project(b.getNorthEast()), l = map.project(b.getSouthWest());
+                    return { haut: Math.round(h.y), bas: Math.round(l.y), zoom: +map.getZoom().toFixed(2) };
+                };
+
+                openGasScan();
+                // Le scan réel part en arrière-plan : on attend qu'il rende la main, pour
+                // qu'il ne vienne pas recadrer au milieu de la mesure.
+                for (let i = 0; i < 40 && _scanBusy; i++) await pause(250);
+                await pause(300);
+
+                _fitMapToGasScan();
+                await pause(1500);
+                const reference = cercle();
+
+                /* Caméra EN VOL au moment du clic — c'est tout le sujet. Le vol part
+                   ailleurs et dure : `map.getCenter()` rend donc une position
+                   intermédiaire, exactement ce que `_openGasScanDetail()` mémorisait à
+                   tort comme « vue d'avant clic ». La vue du scan, elle, reste connue par
+                   `_gasScanCamera`, et c'est elle qui doit être retenue. */
+                const a = _scanAnchor;
+                map.easeTo({ center: [a[0] + 0.08, a[1] + 0.08], zoom: 14, duration: 4000, essential: true });
+                await pause(400);
+                const bougeAuClic = map.isMoving();
+
+                _scanShown = [{ kind: 'gas', lng: a[0] + 0.01, lat: a[1] + 0.01,
+                                name: 'Station de test', addr: '', prices: {}, distM: 500 }];
+                _openGasScanDetail(0);
+                await pause(300);
+
+                // Padding que le vol vers la station laisse sur la caméra en usage réel
+                // (relevé 🩺 du 02/09/2026, canevas 412x923). Posé ici à la main, le
+                // mouvement réduit du harnais empêchant le vol de le poser lui-même.
+                map.setPadding({ top: 60, right: 40, bottom: 483, left: 40 });
+                const padSurFiche = map.getPadding();
+
+                closeGasStationInfo();
+                await pause(1500);
+                const apresSortie = cercle();
+                const padApres = map.getPadding();
+                closeGasScan({ keepCamera: true });
+                return { reference, bougeAuClic, padSurFiche, padApres, apresSortie };
+            });
+
+            /* Le test ne vaut que si le clic tombe pendant un vol : sans cette
+               vérification, le jour où l'animation disparaîtrait, tout passerait au vert
+               sans avoir rien éprouvé. */
+            verifie('le clic tombe bien pendant un vol de caméra', r.bougeAuClic, true);
+            verifie('l’état fautif est bien posé : padding resté sur la caméra',
+                r.padSurFiche.bottom, 483);
+            verifie('ressortir de la fiche remet le padding caméra à zéro',
+                r.padApres, { top: 0, bottom: 0, left: 0, right: 0 });
+            verifieVrai('ressortir de la fiche rend la vue du scan (haut du cercle)',
+                Math.abs(r.apresSortie.haut - r.reference.haut) <= 6,
+                `référence ${r.reference.haut} → après sortie ${r.apresSortie.haut}`);
+            verifieVrai('ressortir de la fiche rend la vue du scan (bas du cercle)',
+                Math.abs(r.apresSortie.bas - r.reference.bas) <= 6,
+                `référence ${r.reference.bas} → après sortie ${r.apresSortie.bas}`);
+            verifieVrai('le zoom rendu est celui du scan, pas celui d’une image de vol',
+                Math.abs(r.apresSortie.zoom - r.reference.zoom) <= 0.05,
+                `référence ${r.reference.zoom} → après sortie ${r.apresSortie.zoom}`);
+        }
+
     } catch (erreur) {
         echecs.push({ section: sectionCourante || 'Exécution', intitule: 'le scénario s’est interrompu', attendu: 'déroulement complet', obtenu: erreur.message });
     } finally {

@@ -1486,6 +1486,23 @@
 
         #cpx-note { margin-top: 14px; font-size: 11.5px; color: #6E668F; text-align: center; }
 
+        /* Confirmation avant d'activer un animal — remplace la grille et le
+           bandeau, même parti pris que la fiche de js/25 : un second écran
+           plutôt qu'une fenêtre empilée. */
+        .cpx-confirm-vignette {
+            width: 84px; aspect-ratio: 78 / 84; margin: 4px auto 14px;
+        }
+        .cpx-confirm-vignette svg, .cpx-confirm-vignette img {
+            width: 100%; height: 100%; display: block;
+        }
+        .cpx-confirm-texte {
+            text-align: center; font-size: 15px; font-weight: 700;
+            color: #EDE6FF; margin: 0 4px;
+        }
+        .cpx-confirm-actions { margin-top: 18px; display: flex; gap: 10px; }
+        .cpx-confirm-actions .cpx-retour  { flex: 1; margin-bottom: 0; text-align: center; }
+        .cpx-confirm-actions .cpx-prendre { flex: 1.4; margin-top: 0; }
+
         /* La fiche d'un animal sauve — son decor et ce qu'il y est devenu.
            ⚠ ELLE N'EST PLUS DANS CETTE FENETRE (26/08/2026) : #cpx-fiche a ete retire
            avec les cartes des animaux sauves. Les deux regles ci-dessous restent
@@ -3710,6 +3727,24 @@
            lui-meme ete remplace par le calendrier-mois le 01/09/2026 (voir plus bas). */
 
         #trip-history-list { display: flex; flex-direction: column; gap: 16px; }
+
+        /* === EMPREINTE CO2 === */
+        /* Meme regle que #trip-history-body : masque dans le panneau Profil, revele
+           une fois deplace dans la page pleine par openProfilSheet. */
+        #co2-panel-body {
+            display: none; padding: 14px 12px 16px;
+            background: linear-gradient(170deg, #0a0e17, #080b12);
+            border-top: 1px solid rgba(0,140,255,0.08);
+        }
+        #co2-panel-content { display: flex; flex-direction: column; gap: 12px; }
+        .co2-info-row { display: flex; justify-content: center; }
+        .co2-info-btn {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: 1px solid rgba(0,140,255,0.25); background: rgba(10,14,23,0.5);
+            color: #8892b0; font-size: 12px; font-weight: 800; font-style: italic;
+            line-height: 1; cursor: pointer; padding: 0;
+        }
+        .co2-info-btn-active { color: #6FE3A0; border-color: rgba(111,227,160,0.4); }
 
         /* === CALENDRIER-MOIS (01/09/2026) === */
         .trip-cal-nav {

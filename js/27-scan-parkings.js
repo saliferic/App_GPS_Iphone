@@ -34,6 +34,16 @@
         // _gasInfoPrevCamera (js/11) : sans elle, désélectionner un parking laisse
         // la carte zoomée dessus au lieu de revenir à la vue d'ensemble du scan.
         let _pkInfoPrevCamera = null;
+        // Caméra CIBLE du dernier auto-zoom de scan (_fitMapToParkingScan), calculée
+        // AVANT que l'animation ne démarre. Sert de repli à `_openParkingScanDetail`
+        // quand le scan vient de tourner : `fitBounds` anime sur 800 ms, et la liste
+        // s'affiche avant la fin de cette animation. Un clic rapide sur la première
+        // carte lisait alors `map.getCenter()/getZoom()` EN PLEIN VOL — une position
+        // intermédiaire, pas la vue du cercle — et la fermeture de la fiche
+        // restaurait cette position bancale au lieu du scan. D'où le bug observé
+        // seulement juste après un scan, jamais après un recentrage manuel (la
+        // caméra y est déjà stable quand on clique).
+        let _pkScanCamera = null;
         /* Filtre tarif : 'gratuit', 'payant', ou null pour « tous ». Volontairement
            NON persisté en localStorage, à la différence du rayon : un filtre qui
            survit à la fermeture ferait rouvrir la feuille sur une liste amputée sans
@@ -644,13 +654,30 @@
                 logAppError('_fitMapToParkingScan/détachement caméra', e);
             }
 
+            // Voir _fitMapToGasScan() (js/11) : la taille interne de Mapbox se périme
+            // sans rien lever, et c'est elle qui sert au calcul du cadrage.
+            tenterSansBruit(() => map.resize(), '_fitMapToParkingScan/resize');
+
             tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
                             '_fitMapToParkingScan/resetPadding');
 
+            const bounds = _gasScanCircleBounds(_pkAnchor, _pkRadiusKm);
+            const padding = _pkScanPadding();
+
+            // Calculé AVANT `fitBounds`, qui ne fait qu'ANIMER vers ce même résultat :
+            // c'est la vue de fin, utilisable tout de suite par `_openParkingScanDetail`
+            // même si l'animation tourne encore (voir _pkScanCamera plus haut).
+            _pkScanCamera = null;
+            tenterSansBruit(() => {
+                const cam = map.cameraForBounds(bounds, { padding, maxZoom: 16, bearing: 0, pitch: 0 });
+                if (cam) _pkScanCamera = { center: cam.center, zoom: cam.zoom };
+            }, '_fitMapToParkingScan/cameraForBounds');
+
+            // `bearing: 0, pitch: 0` : une vue d'ensemble se lit à plat et au nord, et
+            // le cadrage d'une bbox sur caméra inclinée n'est pas fiable (js/11, js/15).
+            // Les MÊMES options que ci-dessus, sinon `_pkScanCamera` décrirait une autre vue.
             try {
-                map.fitBounds(_gasScanCircleBounds(_pkAnchor, _pkRadiusKm), {
-                    padding: _pkScanPadding(), maxZoom: 16, duration: 800
-                });
+                map.fitBounds(bounds, { padding, maxZoom: 16, duration: 800, bearing: 0, pitch: 0 });
             } catch (e) {
                 logAppError('_fitMapToParkingScan', e);
             }
@@ -675,7 +702,16 @@
         function _openParkingScanDetail(i) {
             const s = _pkShown[i];
             if (!s) return;
-            _pkInfoPrevCamera = { center: map.getCenter(), zoom: map.getZoom() };
+            // `map.getCenter()/getZoom()` peuvent encore refléter l'animation du
+            // dernier `_fitMapToParkingScan()` en train de tourner (fitBounds anime
+            // sur 800 ms, la liste est cliquable dès qu'elle est rendue) : dans ce
+            // cas, on prend la vue CIBLE déjà calculée plutôt qu'une position de
+            // vol intermédiaire. `isMoving()` redevient faux dès que la caméra est
+            // stable — recentrage manuel compris — donc `map.getCenter()` reste la
+            // bonne source dans tous les autres cas.
+            _pkInfoPrevCamera = (map.isMoving() && _pkScanCamera)
+                ? _pkScanCamera
+                : { center: map.getCenter(), zoom: map.getZoom() };
             focusParkingScanStation(i);
             openParkingInfo(s);
         }
@@ -755,6 +791,11 @@
             // parking (_pkInfoGoClicked) : y revenir une frame avant de relancer un
             // trajet ferait clignoter la caméra pour rien.
             if (!opts.skipCameraRestore && _pkInfoPrevCamera) {
+                // Le padding posé par `focusParkingScanStation()` reste sur la caméra et
+                // décalerait la vue restaurée, calculée avec un padding nul — voir le
+                // relevé du 02/09/2026 dans closeGasStationInfo() (js/11).
+                tenterSansBruit(() => map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 }),
+                                'closeParkingInfo/resetPadding');
                 map.flyTo({ center: _pkInfoPrevCamera.center, zoom: _pkInfoPrevCamera.zoom, duration: 500 });
             }
             _pkInfoPrevCamera = null;

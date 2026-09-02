@@ -205,9 +205,59 @@
             && window.compagnonEstSauve(cle);
     }
 
+    /* ─── CONFIRMATION AVANT DE SAUVER  (02/09/2026) ────────────────────────
+       Un clic sur une carte ouverte n'active plus l'animal directement : il
+       ouvre une question, « Voulez-vous sauver {nom} ? », posée à la place de
+       la grille. Le choix d'un compagnon engage plusieurs missions ensuite —
+       autant éviter l'activation par un doigt qui glisse. */
+    function montrerConfirmation(cle) {
+        const zoneConfirm = document.getElementById('cpx-confirm');
+        const zoneGrille  = document.getElementById('compagnon-grille');
+        const zoneLibre   = document.getElementById('cpx-actif-libre');
+        const zoneNote    = document.getElementById('cpx-note');
+        const zoneTitre   = document.getElementById('cpx-titre');
+        if (!zoneConfirm || !window.Compagnon) return;
+
+        const c = Compagnon.catalogue().find(x => x.cle === cle);
+        if (!c) return;
+
+        zoneConfirm.innerHTML = `
+            <div class="cpx-confirm-vignette" style="--cpx-accent:${c.accent}">${c.vignette}</div>
+            <div class="cpx-confirm-texte">Voulez-vous sauver ${c.nom}&nbsp;?</div>
+            <div class="cpx-confirm-actions">
+                <button type="button" class="cpx-retour" id="cpx-confirm-non">Annuler</button>
+                <button type="button" class="cpx-prendre" id="cpx-confirm-oui">Sauver ${c.nom}</button>
+            </div>`;
+
+        document.getElementById('cpx-confirm-non').addEventListener('click', cacherConfirmation);
+        document.getElementById('cpx-confirm-oui').addEventListener('click', function () {
+            activer(cle);
+            cacherConfirmation();
+        });
+
+        if (zoneGrille) zoneGrille.style.display = 'none';
+        if (zoneLibre)  zoneLibre.style.display  = 'none';
+        if (zoneNote)   zoneNote.style.display   = 'none';
+        if (zoneTitre)  zoneTitre.style.display  = 'none';
+        zoneConfirm.style.display = '';
+    }
+
+    function cacherConfirmation() {
+        const zoneConfirm = document.getElementById('cpx-confirm');
+        const zoneGrille  = document.getElementById('compagnon-grille');
+        const zoneNote    = document.getElementById('cpx-note');
+        const zoneTitre   = document.getElementById('cpx-titre');
+        if (zoneConfirm) { zoneConfirm.style.display = 'none'; zoneConfirm.innerHTML = ''; }
+        if (zoneGrille)  zoneGrille.style.display = '';
+        if (zoneNote)    zoneNote.style.display   = '';
+        if (zoneTitre)   zoneTitre.style.display  = '';
+        bandeauActifLibre();   // ré-affiche la bande si elle avait sa place
+    }
+
     function ouvrir() {
         const ov = document.getElementById('compagnon-modal-overlay');
         if (!ov) return;
+        cacherConfirmation();   // au cas où la fenêtre a été fermée en pleine confirmation
         bandeauActifLibre();
         grille();
         ov.classList.add('open');
@@ -248,14 +298,14 @@
         ov.addEventListener('click', function (ev) {
             if (ev.target === ov || ev.target.closest('.cpx-fermer')) { fermer(); return; }
             const carte = ev.target.closest('.cpx-carte[data-cle]');
-            if (carte) activer(carte.dataset.cle);
+            if (carte) montrerConfirmation(carte.dataset.cle);
         });
         ov.addEventListener('keydown', function (ev) {
             if (ev.key !== 'Enter' && ev.key !== ' ') return;
             const carte = ev.target.closest && ev.target.closest('.cpx-carte[data-cle]');
             if (!carte) return;
             ev.preventDefault();
-            activer(carte.dataset.cle);
+            montrerConfirmation(carte.dataset.cle);
         });
 
         document.addEventListener('keydown', function (ev) {
