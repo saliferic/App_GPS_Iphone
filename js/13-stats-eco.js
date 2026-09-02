@@ -822,7 +822,13 @@
                        onOpen: () => { try { renderIdentiteCompagnon(); } catch (e) { logAppError('profilSheet/renderIdentiteCompagnon', e); } } },
             animaux: { bodyId: 'animaux-sauves-body', title: 'Animaux sauvés', dot: true,
                        onOpen: () => { try { renderAnimauxSauves(); } catch (e) { logAppError('profilSheet/renderAnimauxSauves', e); } } },
-            vehicle: { bodyId: 'vehicle-panel-body',  title: 'Mon véhicule', dot: true,
+            /* `theme: 'console'` (02/09/2026, demande utilisateur) pose la classe
+               `.profil-sheet-console` sur #profil-sheet le temps que cette page est
+               ouverte — voir openProfilSheet/closeProfilSheet. Seule cette page passe
+               au fond clair façon « console » ; le reste de l'app (barre d'onglets,
+               autres pages du Profil) reste dans le thème sombre tant que la direction
+               n'est pas généralisée. */
+            vehicle: { bodyId: 'vehicle-panel-body',  title: 'Mon véhicule', dot: true, theme: 'console',
                        onOpen: () => { try { initVehicleConfigUI(); } catch (e) { logAppError('profilSheet/initVehicleConfigUI', e); } } },
             trips:   { bodyId: 'trip-history-body',   title: 'Historique des trajets', dot: true,
                        onOpen: () => { try { openTripHistory(); } catch (e) { logAppError('profilSheet/openTripHistory', e); } } },
@@ -837,6 +843,7 @@
             const def = PROFIL_SHEETS[key];
             if (!def) return;
             const overlay = document.getElementById('profil-sheet-overlay');
+            const sheetEl = document.getElementById('profil-sheet');
             const host    = document.getElementById('profil-sheet-body');
             const bodyEl  = document.getElementById(def.bodyId);
             if (!overlay || !host || !bodyEl) return;
@@ -845,6 +852,17 @@
             // sinon son contenu resterait orphelin dans l'hôte et ne retrouverait
             // jamais sa place dans le panneau.
             if (_profilSheetOpen) closeProfilSheet();
+
+            /* Variante visuelle par page (voir PROFIL_SHEETS.vehicle) : classe posée
+               sur la carte elle-même, jamais sur <body> — ne doit affecter QUE ce qui
+               est rendu à l'intérieur de #profil-sheet, pas le reste de l'app.
+               ⚠ Posée AUSSI sur l'overlay : c'est lui qui porte le fond (bleu ici,
+               noir translucide partout ailleurs), et un sélecteur parent n'existe
+               pas en CSS — `:has()` le permettrait mais n'est pas garanti sur les
+               WebView Android anciennes, d'où les deux classes explicites. */
+            const consoleTheme = def.theme === 'console';
+            if (sheetEl) sheetEl.classList.toggle('profil-sheet-console', consoleTheme);
+            overlay.classList.toggle('profil-sheet-console', consoleTheme);
 
             _profilSheetOpen = { bodyEl, parent: bodyEl.parentNode, next: bodyEl.nextSibling };
             host.appendChild(bodyEl);
@@ -881,7 +899,8 @@
 
         function closeProfilSheet() {
             const overlay = document.getElementById('profil-sheet-overlay');
-            if (overlay) overlay.classList.remove('open');
+            if (overlay) { overlay.classList.remove('open'); overlay.classList.remove('profil-sheet-console'); }
+            document.getElementById('profil-sheet')?.classList.remove('profil-sheet-console');
             if (!_profilSheetOpen) return;
             const { bodyEl, parent, next } = _profilSheetOpen;
             _profilSheetOpen = null;

@@ -4010,6 +4010,13 @@
         }
         .vtype-btn:hover { border-color: rgba(0,140,255,0.35); color: #c9d1d9; }
         .vtype-btn.active { background: rgba(0,120,255,0.15); border-color: rgba(0,150,255,0.45); color: #58a6ff; }
+        /* Icône SVG ajoutée le 02/09/2026 pour la variante claire de theme-crepuscule.css
+           (§ 9) — masquée ici, l'emoji d'origine reste affiché via ::before pour ne rien
+           changer au rendu par défaut. Voir index.html pour le marquage. */
+        .vtype-icon { display: none; }
+        .vtype-btn[data-type="thermique"] .vtype-label::before { content: "🔥 "; }
+        .vtype-btn[data-type="hybride"] .vtype-label::before { content: "⚡🔥 "; }
+        .vtype-btn[data-type="electrique"] .vtype-label::before { content: "⚡ "; }
         /* Cellules véhicule */
         .vcell { display: flex; flex-direction: column; gap: 4px; }
         .vcell-label { font-size: 10px; color: #6b7785; font-weight: 600; }
@@ -4048,18 +4055,39 @@
         .fuel-kind-pill:hover { color: #c9d1d9; }
         .fuel-kind-pill.active { background: rgba(0,120,255,0.15); border-color: rgba(0,150,255,0.45); color: #58a6ff; }
         .fuel-auto-row { display: flex; align-items: center; gap: clamp(6px, 2vw, 10px); }
+        /* ⚠ `flex: 1` RETIRÉ le 02/09/2026 : la case s'étirait sur toute la largeur
+           restante, ce qui repoussait le bouton ⓘ ajouté à côté d'elle à l'autre
+           bout de la ligne, loin du texte qu'il explique. Le ↻ garde sa place à
+           droite par `margin-left: auto` (voir plus bas) — c'est une action, pas
+           une glose de la case. */
         .fuel-manual-check {
-            display: flex; align-items: center; gap: 6px; flex: 1;
+            display: flex; align-items: center; gap: 6px; flex: 0 1 auto;
             font-size: clamp(10px, 2.9vw, 11px); color: #8892b0; font-weight: 600; cursor: pointer;
         }
         .fuel-manual-check input { accent-color: #58a6ff; width: 14px; height: 14px; cursor: pointer; }
         .fuel-refresh-btn {
             width: clamp(26px, 7vw, 30px); height: clamp(26px, 7vw, 30px); flex: none;
+            margin-left: auto;
             border-radius: 8px; border: 1px solid rgba(0,140,255,0.15);
             background: rgba(10,14,23,0.7); color: #58a6ff; font-size: clamp(13px, 3.5vw, 15px);
             cursor: pointer; transition: 0.18s; line-height: 1;
         }
         .fuel-refresh-btn:hover { border-color: rgba(0,150,255,0.45); }
+        /* Bouton ⓘ des légendes du prix carburant (02/09/2026) — même gabarit que
+           le bouton ↻ qui le suit, pour que la paire se lise comme une paire.
+           `[hidden]` explicite sur .trip-option-hint : l'attribut suffit tant que
+           rien ne pose `display` sur la classe, mais une règle future le ferait
+           réapparaître sans prévenir. */
+        .trip-option-hint[hidden] { display: none !important; }
+        .vfuel-info-btn {
+            width: clamp(26px, 7vw, 30px); height: clamp(26px, 7vw, 30px); flex: none;
+            border-radius: 50%; border: 1px solid rgba(0,140,255,0.15);
+            background: rgba(10,14,23,0.7); color: #58a6ff;
+            font-size: clamp(12px, 3.2vw, 14px); font-weight: 800; font-style: italic;
+            cursor: pointer; transition: 0.18s; line-height: 1; padding: 0;
+        }
+        .vfuel-info-btn:hover { border-color: rgba(0,150,255,0.45); }
+        .vfuel-info-btn-active { color: #6FE3A0; border-color: rgba(111,227,160,0.4); }
         .fuel-refresh-btn.spinning { animation: fuelSpin 0.9s linear infinite; }
         #vcell-fuel-kind.disabled { opacity: 0.3; pointer-events: none; }
         @keyframes fuelSpin { to { transform: rotate(360deg); } }
