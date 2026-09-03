@@ -376,6 +376,10 @@
             const dLng = radiusKm / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
             const probeLine = [[lng - dLng, lat - dLat], [lng, lat], [lng + dLng, lat + dLat]];
             const countries = detectCountriesOnRoute(probeLine);
+            /* Meme mouchard que le routeur trajet (js/17). Sans lui, un scan qui ne
+               rend rien pres de la frontiere est indechiffrable : on ne sait pas si la
+               branche BE a tourne et rendu zero, ou si elle n'a jamais ete appelee. */
+            if (countries.length > 1 || countries[0] !== 'fr') tenterSansBruit(() => logDiag('gasPays', { ou: 'scan', pays: countries.join('+'), rayon: radiusKm }));
 
             const batches = await Promise.all(countries.map(cc => {
                 if (cc === 'fr') return fetchGasPointFR(lng, lat, radiusKm).catch(() => []);
@@ -831,14 +835,21 @@
             // le filtre carburant ne doit donc jamais s'appliquer sur elles.
             const pool = _scanPoolForKind().filter(s => s.kind === 'ev'
                 ? (!_scanConn || s.connectors?.[_scanConn])
-                : getEffectivePrice(s, _scanFuel) != null);
+                : gasStationAffichable(s, _scanFuel));
 
             const isClosed = s => s.kind === 'gas' && getStationOpeningStatus(s).status === 'closed';
             const sorted = [...pool].sort((a, b) => {
                 const ca = isClosed(a), cb = isClosed(b);
                 if (ca !== cb) return ca ? 1 : -1;   // rideau baissé = fin de liste
                 if (_scanSort === 'pascher' && a.kind === 'gas' && b.kind === 'gas') {
-                    const pa = getEffectivePrice(a, _scanFuel), pb = getEffectivePrice(b, _scanFuel);
+                    /* ⚠ `Infinity` ET NON `null` POUR UN PRIX ABSENT (03/09/2026). Depuis
+                       que les stations étrangères sans prix entrent dans la liste
+                       (`gasStationAffichable`), `pa - pb` valait `NaN` : un comparateur
+                       qui rend NaN laisse l'ordre à l'implémentation, donc une liste
+                       « moins cher » mélangée au hasard. Prix inconnu = fin de liste,
+                       comme la puissance inconnue des bornes juste en dessous. */
+                    const pa = getEffectivePrice(a, _scanFuel) ?? Infinity;
+                    const pb = getEffectivePrice(b, _scanFuel) ?? Infinity;
                     if (pa !== pb) return pa - pb;
                 } else if (_scanSort === 'puissance' && a.kind === 'ev' && b.kind === 'ev') {
                     // Puissance inconnue = fin de liste : annoncer une borne comme la
@@ -913,7 +924,11 @@
                     </div>
                     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
                         <div class="gas-card-prices">
-                            <span class="gas-price-pill" style="${pillStyle}">${fuelDef?.label} ${price.toFixed(3)}€</span>
+                            ${price == null
+                              /* Pas de prix : on le DIT, on ne laisse pas une pastille vide.
+                                 `price.toFixed(3)` levait ici sur toute station belge. */
+                              ? `<span style="font-size:10px;color:#4a5568;font-style:italic;">Prix non disponible</span>`
+                              : `<span class="gas-price-pill" style="${pillStyle}">${fuelDef?.label} ${price.toFixed(3)}€</span>`}
                         </div>
                         ${e10Fallback ? '<span style="font-size:9px;color:#4a5568;">(sans SP95 pur)</span>' : ''}
                         <div class="gas-card-dist" id="gas-scan-eta-${i}">${_gasScanEtaText(s)}</div>

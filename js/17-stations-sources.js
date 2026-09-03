@@ -512,72 +512,109 @@
                 );
             }
             await Promise.all(mapboxSearchPromises);
+            const _beMapbox = Object.keys(allStations).length;
 
-            // === Source 2 : Overpass via POST (plus de chances de passer le CORS) ===
-            // + carbu.com avec tous les headers navigateur
+            // === Source 2 : Overpass — le hedging commun, pas une boucle à soi ===
+            /* ⚠ CE FETCHER AVAIT SA PROPRE BOUCLE DE MIROIRS  (corrigé le 03/09/2026).
+               Il était le SEUL consommateur Overpass du projet à ne pas passer par
+               `_fetchOverpassHedged` (js/19) — js/09, js/10, js/19 et js/27 y passent
+               tous — et il rejouait donc, seul dans son coin, trois défauts corrigés
+               ailleurs depuis :
+                 — `break` DÈS LE PREMIER MIROIR RÉPONDANT 200, MÊME VIDE. Un miroir qui
+                   rend `elements: []` remportait la course et la Belgique restait
+                   vide sans que rien n'échoue. C'est exactement ce que
+                   `{ exigerResultat: true }` empêche : la réponse vide est mise de côté,
+                   les autres miroirs continuent.
+                 — AUCUN `AbortController`, aucun timeout : un miroir pendu tenait la
+                   ligne sans limite. Mesuré sur l'appareil entre `scanOuvre` et
+                   `fitScan`, même requête au même rayon de 5 km : 38 s, puis 55 s,
+                   puis 14 s, plus un scan sans cadrage du tout.
+                 — LISTE DE MIROIRS FIGÉE aux quatre d'origine, sans `overpass-api.de`
+                   ajouté après la panne groupée du 30/08/2026, et menée par
+                   `private.coffee` — celui-là même que js/19 mesure « CORS : bloqué
+                   (Origin: null) » en `file://`, donc un échec garanti en tête de file
+                   dans l'APK.
+               ⚠ `nwr` + `out center tags` remplacent `node` + `out body` : les stations
+               cartographiées en polygone étaient perdues. Relevé à Bruxelles le
+               03/09/2026 (bbox 50.82,4.32,50.88,4.40) : 31 avec `node`, 37 avec `nwr`.
+               `out center` pose alors `center` au lieu de `lat`/`lon` sur les `way` —
+               d'où la lecture des deux, comme le fait déjà fetchEVFromOverpass. */
             const segments = buildRouteSegments(routeCoords);
+            const _beOverpass = { ok: 0, vides: 0, echecs: 0, causes: [] };
             const overpassPromises = segments.map(async seg => {
                 const bbox  = `${seg.minLat.toFixed(4)},${seg.minLng.toFixed(4)},${seg.maxLat.toFixed(4)},${seg.maxLng.toFixed(4)}`;
-                const query = `[out:json][timeout:12];node["amenity"="fuel"](${bbox});out body;`;
-                const overpassMirrors = [
-                    'https://overpass.private.coffee/api/interpreter',
-                    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-                    'https://overpass.kumi.systems/api/interpreter',
-                    'https://overpass.openstreetmap.ru/cgi/interpreter',
-                ];
-                for (const mirror of overpassMirrors) {
-                    try {
-                        const res = await fetch(mirror, {
-                            method: 'POST',
-                            body: 'data=' + encodeURIComponent(query),
-                        });
-                        if (!res.ok) continue;
-                        const data = await res.json();
-                        (data?.elements || []).forEach(node => {
-                            const id = `osm_${node.id}`;
-                            const tags = node.tags || {};
-                            // Merges avec station Mapbox existante si même position ~
-                            const existingKey = Object.keys(allStations).find(k => {
-                                const s = allStations[k];
-                                return Math.abs(parseFloat(s.latitude) - node.lat) < 0.001 &&
-                                       Math.abs(parseFloat(s.longitude) - node.lon) < 0.001;
-                            });
-                            const target = existingKey ? allStations[existingKey] : null;
-                            // Prix OSM si disponibles
-                            const parsePrice = v => { const n = parseFloat(String(v||'').replace(',','.')); return n > 0.3 ? n : null; };
-                            const prices = {
-                                _sp95:   parsePrice(tags['fuel:octane_95:price'] ?? tags['price:octane_95']),
-                                _gazole: parsePrice(tags['fuel:diesel:price']    ?? tags['price:diesel']),
-                                _sp98:   parsePrice(tags['fuel:octane_98:price'] ?? tags['price:octane_98']),
-                                _e10:    parsePrice(tags['fuel:e10:price']),
-                            };
-                            if (target) {
-                                // Enrichir la station Mapbox avec les prix OSM
-                                Object.assign(target, prices);
-                                if (!target.nom || target.nom === 'Station') target.nom = tags.name ?? tags.brand ?? target.nom;
-                            } else {
-                                allStations[id] = {
-                                    _country: 'be',
-                                    latitude:  String(node.lat),
-                                    longitude: String(node.lon),
-                                    nom:     tags.name ?? tags.brand ?? tags.operator ?? 'Station',
-                                    adresse: tags['addr:street'] ? `${tags['addr:housenumber']??''} ${tags['addr:street']}`.trim() : '',
-                                    ville:   tags['addr:city'] ?? tags['addr:town'] ?? '',
-                                    cp:      tags['addr:postcode'] ?? '',
-                                    prix:    [],
-                                    ...prices,
-                                };
-                            }
-                        });
-                        break; // premier miroir qui répond → arrêt
-                    } catch (e) { if (DEBUG) console.warn("[fetchStationsBE] exception ignorée :", e); }
+                const query = `[out:json][timeout:20];nwr["amenity"="fuel"](${bbox});out center tags;`;
+                let data;
+                try {
+                    data = await _fetchOverpassHedged(query, { exigerResultat: true });
+                } catch (e) {
+                    _beOverpass.echecs++;
+                    _beOverpass.causes.push(String(e && e.message || e).slice(0, 120));
+                    if (DEBUG) console.warn('[fetchStationsBE] Overpass :', e.message);
+                    return;
                 }
+                const elements = data?.elements || [];
+                if (elements.length) _beOverpass.ok++; else _beOverpass.vides++;
+                elements.forEach(node => {
+                    /* `way` et `relation` n'ont pas de lat/lon propres : `out center` leur
+                       pose un `center`. Sans cette lecture, toute station en polygone
+                       sortait avec des coordonnées `undefined`. */
+                    const nLat = node.lat ?? node.center?.lat;
+                    const nLon = node.lon ?? node.center?.lon;
+                    if (typeof nLat !== 'number' || typeof nLon !== 'number') return;
+                    const id = `osm_${node.type || 'node'}_${node.id}`;
+                    const tags = node.tags || {};
+                    // Merges avec station Mapbox existante si même position ~
+                    const existingKey = Object.keys(allStations).find(k => {
+                        const s = allStations[k];
+                        return Math.abs(parseFloat(s.latitude) - nLat) < 0.001 &&
+                               Math.abs(parseFloat(s.longitude) - nLon) < 0.001;
+                    });
+                    const target = existingKey ? allStations[existingKey] : null;
+                    // Prix OSM si disponibles
+                    const parsePrice = v => { const n = parseFloat(String(v||'').replace(',','.')); return n > 0.3 ? n : null; };
+                    const prices = {
+                        _sp95:   parsePrice(tags['fuel:octane_95:price'] ?? tags['price:octane_95']),
+                        _gazole: parsePrice(tags['fuel:diesel:price']    ?? tags['price:diesel']),
+                        _sp98:   parsePrice(tags['fuel:octane_98:price'] ?? tags['price:octane_98']),
+                        _e10:    parsePrice(tags['fuel:e10:price']),
+                    };
+                    if (target) {
+                        // Enrichir la station Mapbox avec les prix OSM
+                        Object.assign(target, prices);
+                        if (!target.nom || target.nom === 'Station') target.nom = tags.name ?? tags.brand ?? target.nom;
+                    } else {
+                        allStations[id] = {
+                            _country: 'be',
+                            latitude:  String(nLat),
+                            longitude: String(nLon),
+                            nom:     tags.name ?? tags.brand ?? tags.operator ?? 'Station',
+                            adresse: tags['addr:street'] ? `${tags['addr:housenumber']??''} ${tags['addr:street']}`.trim() : '',
+                            ville:   tags['addr:city'] ?? tags['addr:town'] ?? '',
+                            cp:      tags['addr:postcode'] ?? '',
+                            prix:    [],
+                            ...prices,
+                        };
+                    }
+                });
             });
             await Promise.all(overpassPromises);
 
             const stations = Object.values(allStations);
             const withPrices = stations.filter(s => s._sp95 || s._gazole || s._sp98 || s._e10);
             console.log(`[GasAPI/BE] ${stations.length} stations (${withPrices.length} avec prix)`);
+            /* ⚠ AU JOURNAL 🩺, PAS SEULEMENT EN CONSOLE  (03/09/2026). La console est
+               inaccessible dans l'APK : pendant toute une soiree de releves, la seule
+               question qui comptait — la branche BE a-t-elle seulement tourne, et
+               qu'a-t-elle rendu — n'avait aucun chemin vers l'ecran. Le journal ne
+               montrait que `scanOuvre` puis `fitScan`, muets sur les sources. */
+            tenterSansBruit(() => logDiag('gasBE', {
+                total: stations.length, avecPrix: withPrices.length,
+                mapbox: _beMapbox, overpass: stations.length - _beMapbox,
+                segments: segments.length, ok: _beOverpass.ok,
+                vides: _beOverpass.vides, echecs: _beOverpass.echecs,
+                causes: _beOverpass.causes.join(' | ') || null,
+            }));
             return stations; // on retourne TOUTES les stations même sans prix pour la carte
         }
 
@@ -628,6 +665,7 @@
         async function fetchGasStationsAlongRoute(routeCoords) {
             const countries = detectCountriesOnRoute(routeCoords);
             console.log(`[GasAPI] Pays détectés: ${countries.join(', ')}`);
+            if (countries.length > 1 || countries[0] !== 'fr') tenterSansBruit(() => logDiag('gasPays', { ou: 'trajet', pays: countries.join('+') }));
             const seen = new Set(); const merged = [];
             const batches = await Promise.all(countries.map(cc => {
                 if (cc === 'fr') return fetchStationsFR(routeCoords).catch(() => []);

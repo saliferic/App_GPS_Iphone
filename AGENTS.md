@@ -251,6 +251,46 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
 - **Découper le trajet en bbox courtes, et exploiter chaque tronçon À SON ARRIVÉE.** Un `await Promise.all` qui ne traite qu'à la fin fait du temps total celui du **pire** tronçon — et le pire est celui qui échoue, puisqu'il épuise l'échelle de hedging complète. Mesuré sur le relevé des aires : bbox unique 16 s → découpage avec traitement groupé **31,3 s** → découpage avec traitement progressif **11,6 s**.
 - **⚠ Un échec Overpass doit passer par `logAppError`, jamais par `console.error`.** C'est ce qui a permis au relevé des aires de rester cassé indéfiniment : `gps_error_log` restait vierge, et un journal vide se lit « il n'y a rien à trouver ici » et non « la requête échoue ».
 
+### ⚠ Le fetcher belge avait sa propre boucle de miroirs — 03/09/2026
+
+**Le symptôme.** Aucune station en Belgique, sans la moindre erreur : journal 🩺 vide côté `erreurs`, aucun blocage CSP. Seule trace exploitable, l'écart entre `scanOuvre` et `fitScan` sur la MÊME requête au même rayon de 5 km : **38 s, puis 55 s, puis 14 s**, plus un `scanOuvre` sans cadrage du tout.
+
+**La cause.** `fetchStationsBE()` (js/17) était **le seul consommateur Overpass du projet à ne pas passer par `_fetchOverpassHedged()`** — js/09, js/10, js/19 et js/27 y passent tous. Il réimplémentait une boucle à lui, qui rejouait trois défauts corrigés ailleurs depuis :
+
+- **`break` dès le premier miroir répondant 200, même vide.** Un miroir rendant `elements: []` remportait la course et la Belgique restait vide sans que rien n'échoue. C'est précisément ce que `{ exigerResultat: true }` empêche.
+- **Aucun `AbortController`, aucun timeout.** Un miroir pendu tenait la ligne sans limite — d'où les 38 s / 55 s / 14 s.
+- **Liste de miroirs figée** aux quatre d'origine, sans `overpass-api.de` ajouté après la panne groupée du 30/08, et **menée par `private.coffee`** — celui que js/19 mesure « CORS : bloqué (Origin: null) » en `file://`, donc un échec garanti en tête de file dans l'APK.
+
+**La leçon, qui est la même que pour `_fitMapToGasScan()` :** un helper dont on documente qu'il est le point d'entrée unique ne l'est que si l'on vérifie qu'aucun appelant ne s'en est dispensé. `grep -rn '_fetchOverpassHedged(' js/` face à `grep -rn 'interpreter' js/` aurait suffi à voir l'écart, à n'importe quel moment depuis la création du fetcher.
+
+**Corrigé aussi au passage :** `nwr` + `out center tags` remplacent `node` + `out body` — les stations cartographiées en polygone étaient perdues. Relevé à Bruxelles, bbox `50.82,4.32,50.88,4.40` : **31 avec `node`, 37 avec `nwr`**.
+
+**Vérifié dans le vrai code, pas en curl.** L'app chargée dans Chrome, `fetchStationsBE()` appelée sur une bulle bruxelloise : **309 stations en 12,3 s**, servies par `maps.mail.ru` (DATS 24, Q8, Shell, Lukoil, Esso Express…). ⚠ Un curl depuis Windows ne prouve **rien** ici : pas d'origine `file://`, donc pas de CORS, un miroir choisi à la main et une patience illimitée — trois luxes que l'app n'a pas. C'est l'erreur de méthode commise en début de session.
+
+### ⚠⚠ Le filtre « pas de prix → dehors » jetait toute la Belgique — 03/09/2026
+
+**Le second bug, découvert PAR le témoin ajouté pour le premier.** Une fois `fetchStationsBE` réparé, le journal 🩺 disait `gasBE {total: 346, overpass: 346, echecs: 0}` — et le panneau affichait toujours « Aucun résultat dans 5 km ». La collecte était donc parfaite et la perte entièrement en aval.
+
+**La cause.** `_renderGasScan()` (js/11) et `getStationsInWindow()` (js/18) filtraient sur `getEffectivePrice(s, fuelType) != null`, **sans condition de pays**. Juste en France, où le flux data.gouv porte toujours des prix ; faux partout ailleurs.
+
+**Ce qui rend le cas instructif : le cas était DÉJÀ traité en amont.** `_gasScanParse` (js/11) et `parseGasStations` (js/17) tolèrent explicitement une fiche BE sans prix, **commentaire à l'appui**. Seul l'étage d'affichage l'ignorait — et des deux côtés à la fois. C'est le motif de `_fitMapToGasScan()` et celui de l'échappement HTML, pour la troisième fois : **une règle appliquée à la moitié du pipeline n'est pas appliquée.**
+
+**Le remède.** Un prédicat unique, `gasStationAffichable(s, fuelType)` (js/00-noyau-calculs), branché sur les deux étages. Une station étrangère qui PORTE des prix reste filtrée normalement : seule l'absence **totale** de prix ouvre l'exception.
+
+**Deux effets de bord qu'il fallait traiter avec :**
+- `_scanGasCardHtml` (js/11) faisait `price.toFixed(3)` sans garde — il aurait **levé** sur la première station belge affichée. La carte du panneau trajet (js/18, ~L1065), elle, prévoyait déjà « Prix non disponible » : même libellé et même style repris dans js/11, deux formulations voisines pour le même fait se lisant comme deux états différents.
+- Le tri « moins cher » comparait `pa - pb` avec des `null` → `NaN`. Un comparateur qui rend NaN laisse l'ordre à l'implémentation : liste mélangée au hasard. Prix absent = `Infinity`, donc fin de liste, comme la puissance inconnue des bornes.
+
+**Mesuré dans la page, ancre Bruxelles, rayon 5 km :** 342 brutes → 76 dans la bulle → **0 affichables avant, 76 après**. Aucune exception de page.
+
+**La leçon de méthode.** Le premier relevé 🩺 utile de la soirée a coûté une ligne de `logDiag` et a désigné le coupable en un coup. Les quatre relevés précédents, sans elle, ne montraient que `scanOuvre` puis `fitScan` — muets sur les sources, donc indistinguables entre « la branche n'a pas tourné » et « elle a tourné et rendu 346 ». **Devant un écran vide sans erreur, instrumenter AVANT de corriger.**
+
+### ⚠ La Belgique n'aura pas de prix, et les boîtes pays se chevauchent
+
+- **Aucun prix belge, et ce n'est pas un bug.** Il n'existe pas d'équivalent du flux data.gouv temps réel : la Belgique publie des **prix maximum nationaux** (contrat-programme SPF Économie), pas un relevé par station. Les tags OSM `fuel:*:price` sont l'unique source possible, et ils sont vides — mesuré sur les 37 stations du centre de Bruxelles : **zéro tag `*price*`**. `parseGasStations` tolère donc explicitement une fiche BE sans prix, là où une fiche FR sans prix est rejetée.
+- **La source Mapbox de `fetchStationsBE` ne rend rien.** Elle interroge `geocoding/v5/mapbox.places/gas_station.json`, c'est-à-dire une recherche **textuelle** sur la chaîne « gas_station ». Mesuré dans la page : **HTTP 200, `features: []`**. Un zéro silencieux, le pire cas — elle ne lève rien, elle n'apporte rien. Les 309 stations viennent toutes d'Overpass.
+- **`COUNTRY_BOXES` (js/00-noyau-calculs) sont des rectangles qui se chevauchent largement.** La boîte `be` (49,5–51,6 / 2,5–6,4) **contient Lille, Dunkerque, Valenciennes et Charleville** ; la boîte `fr` (jusqu'à 51,1 / 9,6) **contient Bruxelles**. Tout scan dans le Nord ou en Belgique déclenche donc les DEUX sources et paie les deux. Vérifié dans la page : sur une bulle bruxelloise, `detectCountriesOnRoute` rend `['fr','be']`. Ce n'est pas faux — juste coûteux, et cela rend le journal ambigu si l'on n'y consigne pas les pays détectés.
+
 ### ⚠ Diagnostiquer une chaîne asynchrone : poser un témoin AVANT le premier `await`
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.

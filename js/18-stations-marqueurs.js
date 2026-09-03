@@ -1252,11 +1252,13 @@
         }
 
         function getStationsInWindow(stations, fuelType) {
-            // Base commune aux deux modes : une station sans prix pour le carburant
-            // demandé, ou dont le calcul routier a montré qu'elle dépasse le budget
-            // de détour du mode courant, n'a rien à faire dans la liste.
+            // Base commune aux deux modes : une station dont le calcul routier a montré
+            // qu'elle dépasse le budget de détour du mode courant n'a rien à faire dans
+            // la liste, ni une station muette sur le carburant demandé — SAUF si elle ne
+            // porte AUCUN prix et n'est pas française, cas de la Belgique, où il n'existe
+            // pas de prix par station. Voir gasStationAffichable() (js/00-noyau-calculs).
             const pool = stations.filter(s =>
-                !gasOverBudget(s) && getEffectivePrice(s, fuelType) != null
+                !gasOverBudget(s) && gasStationAffichable(s, fuelType)
             );
 
             if (gasSortMode === 'proche') {

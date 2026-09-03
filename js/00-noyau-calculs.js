@@ -542,6 +542,30 @@
             return null;
         }
 
+        /* ⚠ UNE STATION SANS AUCUN PRIX N'EST PAS FORCÉMENT INUTILE  (03/09/2026).
+           Le filtre « pas de prix pour le carburant demandé → dehors » est JUSTE en
+           France, où le flux data.gouv porte toujours des prix : une fiche muette y est
+           une fiche morte. Il est FAUX partout ailleurs. La Belgique ne publie aucun prix
+           par station — le SPF Économie ne diffuse que des maximums nationaux — et les
+           tags OSM `fuel:*:price` y sont vides : mesuré le 03/09/2026, ZÉRO sur les 37
+           stations du centre de Bruxelles.
+           Le scan ramenait donc 346 stations belges (journal 🩺 `gasBE`, 19:28) que cet
+           étage jetait TOUTES, et le panneau annonçait « Aucun résultat dans 5 km » sans
+           qu'aucune erreur ne soit levée nulle part.
+           ⚠ LE CAS ÉTAIT DÉJÀ TRAITÉ EN AMONT, ET C'EST CE QUI REND LE BUG INSTRUCTIF :
+           `_gasScanParse` (js/11) et `parseGasStations` (js/17) tolèrent explicitement
+           une fiche BE sans prix, commentaire à l'appui. Seul l'étage d'AFFICHAGE
+           l'ignorait — des deux côtés, scan (js/11) et trajet (js/18). Encore une fois :
+           en corriger un et pas l'autre revient à ne pas avoir corrigé.
+           Une station étrangère qui PORTE des prix reste filtrée normalement : seule
+           l'absence TOTALE de prix ouvre l'exception. */
+        function gasStationAffichable(s, fuelType) {
+            if (getEffectivePrice(s, fuelType) != null) return true;
+            const sansAucunPrix = s.sp95 == null && s.e10 == null
+                               && s.gazole == null && s.sp98 == null;
+            return sansAucunPrix && (s.country || 'fr') !== 'fr';
+        }
+
         function extractGasPrice(s, fuelType) {
             // Prix pré-parsés par les normaliseurs BE/ES
             const preKey = '_' + fuelType;
