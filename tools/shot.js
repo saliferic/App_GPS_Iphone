@@ -11,7 +11,7 @@ const path = require('path');
         console.error('Usage : node tools/shot.js <fichier.html> <sortie.png> [l] [h] [échelle]');
         process.exit(1);
     }
-    const navigateur = await chromium.launch();
+    const navigateur = await chromium.launch({ channel: 'chrome' });
     const page = await navigateur.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: +echelle });
     await page.goto(new URL('file://' + path.resolve(src)).href);
     await page.waitForTimeout(400);

@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 (async () => {
-    const nav = await chromium.launch();
+    const nav = await chromium.launch({ channel: 'chrome' });
     const page = await nav.newPage();
     await page.goto('file://' + path.resolve('index.html'));
     await page.waitForTimeout(2000);

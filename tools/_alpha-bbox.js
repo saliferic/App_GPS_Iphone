@@ -30,7 +30,7 @@ const MIN_PIXELS = 4;
         console.error('Usage : node tools/_alpha-bbox.js <fichier.png|webp> [...]');
         process.exit(1);
     }
-    const nav = await chromium.launch({ args: ['--allow-file-access-from-files'] });
+    const nav = await chromium.launch({ channel: 'chrome', args: ['--allow-file-access-from-files'] });
     const page = await nav.newPage();
     await page.goto('file://' + path.resolve('index.html'));
     for (const f of fichiers) {

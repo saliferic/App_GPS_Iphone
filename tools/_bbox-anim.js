@@ -12,7 +12,7 @@ const MIN_PIXELS = 4;
 (async () => {
     const fichiers = process.argv.slice(2);
     if (!fichiers.length) { console.error('Usage : node tools/_bbox-anim.js <fichier.webp> [...]'); process.exit(1); }
-    const nav = await chromium.launch();
+    const nav = await chromium.launch({ channel: 'chrome' });
     const page = await nav.newPage();
     await page.goto(require('url').pathToFileURL(path.resolve('index.html')).href);
     for (const f of fichiers) {

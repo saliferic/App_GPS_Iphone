@@ -25,7 +25,7 @@ const path = require('path');
 const VB = { x: 6, y: 42, x2: 314, y2: 372 };
 
 (async () => {
-    const navigateur = await chromium.launch();
+    const navigateur = await chromium.launch({ channel: 'chrome' });
     const page = await navigateur.newPage({ viewport: { width: 500, height: 500 } });
     await page.goto(new URL('file://' + path.resolve(__dirname, '../experiments/apercu-babi.html')).href);
     await page.waitForTimeout(500);

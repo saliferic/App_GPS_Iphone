@@ -13,7 +13,7 @@ const path = require('path');
 
 (async () => {
     const budget = +(process.argv[2] || 60000);
-    const nav = await chromium.launch();
+    const nav = await chromium.launch({ channel: 'chrome' });
     const page = await nav.newPage();
     await page.goto('file://' + path.resolve('index.html'));
     await page.waitForTimeout(2000);
