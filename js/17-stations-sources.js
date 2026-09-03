@@ -523,7 +523,8 @@
                         const id = `mb_${lng.toFixed(5)}_${lat.toFixed(5)}`;
                         if (allStations[id]) return;
                         allStations[id] = {
-                            _country: 'be',
+                            // Même règle que la source Overpass : le pays vient de la POSITION.
+                            _country: paysDuPoint(lng, lat) || 'be',
                             latitude:  String(lat),
                             longitude: String(lng),
                             // `brand` est un TABLEAU quand il est là (["Esso", "Esso - Stazione…"]).
@@ -614,7 +615,13 @@
                         if (!target.nom || target.nom === 'Station') target.nom = tags.name ?? tags.brand ?? target.nom;
                     } else {
                         allStations[id] = {
-                            _country: 'be',
+                            /* ⚠ LE PAYS VIENT DE LA POSITION, PAS DU FETCHER (03/09/2026).
+                               Overpass ignore les frontières : interrogé sur une bbox à cheval,
+                               il rend des stations FRANÇAISES. Elles héritaient du label 'be',
+                               donc de l'exception « étrangère sans prix, on l'affiche » de
+                               gasStationAffichable(). Mesuré à Lille le 03/09/2026 : 29 doublons
+                               français sans prix intercalés dans la liste (27 fiches → 56). */
+                            _country: paysDuPoint(nLon, nLat) || 'be',
                             latitude:  String(nLat),
                             longitude: String(nLon),
                             nom:     tags.name ?? tags.brand ?? tags.operator ?? 'Station',

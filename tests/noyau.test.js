@@ -38,7 +38,7 @@ function chargerNoyau() {
         'TOLL_ENTRY_FEE', 'TOLL_KM_RATE', 'TOLL_NETWORK_FACTOR', 'TOLL_MIN_KM',
         'TOLL_LEGACY_ENTRY_FEE', 'TOLL_LEGACY_KM_RATE', 'TOLL_SECTION_GAP_KM', '_sectionsPayantes',
         'extractGasCoords', 'extractGasPrice', 'getBestPrice',
-        'COUNTRY_BOXES', 'detectCountriesOnRoute',
+        'COUNTRY_BOXES', 'detectCountriesOnRoute', 'paysDuPoint',
         'getTimeUntilEndOfWeek',
         'formatTripDayLabel', 'formatTripTime', 'groupTripsByDate',
         'formatTripDuration', 'formatTripDistance', 'tripPlacesLabel',
@@ -942,6 +942,54 @@ section('Pays traversés');
     verifie('Luxembourg entraîne la Belgique', pays([[6.13, 49.61]]).includes('be'), true);
     verifie('trajet hors zone → repli France', pays([[-70, 40]]), ['fr']);
     verifie('Espagne détectée', pays([[2.17, 41.39]]).includes('es'), true);
+
+    /* ⚠ CES QUATRE-LÀ SONT LA RAISON D'ÊTRE DU CONTOUR (03/09/2026). Avec les seuls
+       rectangles, Lille et Valenciennes rendaient « fr+be » — un aller-retour Overpass
+       de 2,1 s pour rien, ET des stations françaises étiquetées belges, donc affichées
+       sans prix à côté des mêmes fiches data.gouv qui, elles, portaient leur prix
+       (27 fiches → 56 à Lille). Aucun réglage de bornes ne peut les corriger : la boîte
+       « fr » contient Bruxelles, la boîte « be » contient Lille. */
+    verifie('Lille : plus jamais détectée belge',        pays([[3.0573, 50.6292]]), ['fr']);
+    verifie('Valenciennes non plus',                    pays([[3.5234, 50.3580]]), ['fr']);
+    verifie('Bruxelles : plus jamais détectée française', pays([[4.3517, 50.8503]]), ['be']);
+    /* Une bulle à cheval DOIT rendre les deux : l'union n'était pas le défaut, la
+       géométrie qui la nourrissait l'était. */
+    verifie('Mouscron ↔ Halluin : les deux pays',
+        pays([[3.2064, 50.7378], [3.1264, 50.7856]]).sort().join('+'), 'be+fr');
+}
+
+// ── Pays d'un point : le contour, pas le rectangle ───────────────────────────────
+section('Pays du point');
+{
+    const { paysDuPoint: ou } = N;
+
+    /* Villes de contrôle du balayage de tolérance. Halluin (FR) et Menin (BE) sont
+       séparées d'un kilomètre : c'est la paire qui a fait rejeter la simplification à
+       0,02°, laquelle basculait Halluin en Belgique. */
+    verifie('Lille est française',       ou(3.0573, 50.6292), 'fr');
+    verifie('Halluin est française',     ou(3.1264, 50.7856), 'fr');
+    verifie('Maubeuge est française',    ou(3.9724, 50.2795), 'fr');
+    verifie('Longwy est française',      ou(5.7614, 49.5197), 'fr');
+    verifie('Menin est belge',           ou(3.1214, 50.7975), 'be');
+    verifie('Mouscron est belge',        ou(3.2064, 50.7378), 'be');
+    verifie('Tournai est belge',         ou(3.3874, 50.6071), 'be');
+    verifie('Arlon est belge',           ou(5.8114, 49.6833), 'be');
+    verifie('Ostende est belge',         ou(2.9187, 51.2247), 'be');
+    /* Le Luxembourg est testé AVANT la Belgique : il est inclus dans l'emprise de la
+       boîte belge, l'ordre inverse le rendrait invisible. */
+    verifie('Luxembourg-ville',          ou(6.1319, 49.6117), 'lu');
+    verifie('Esch-sur-Alzette',          ou(5.9806, 49.4958), 'lu');
+    verifie('Paris est française',       ou(2.3522, 48.8566), 'fr');
+    verifie('Barcelone est espagnole',   ou(2.1700, 41.3900), 'es');
+    /* La frontière pyrénéenne, dans les deux sens : la boîte « fr » descend à 41,3° et
+       contient Barcelone, la boîte « es » monte à 43,8° et contient Perpignan. Seul le
+       contour peut les départager. Hendaye et Irún ne sont séparées que par la Bidassoa. */
+    verifie('Perpignan reste française', ou(2.8954, 42.6976), 'fr');
+    verifie('Figueres est espagnole',    ou(2.9614, 42.2662), 'es');
+    verifie('Hendaye est française',     ou(-1.7742, 43.3589), 'fr');
+    verifie('Irun est espagnole',        ou(-1.7889, 43.3378), 'es');
+    verifie('hors des quatre pays → null', ou(-70, 40), null);
+    verifie('coordonnées absentes → null', ou(undefined, 50), null);
 }
 
 // ── Compte à rebours hebdomadaire ───────────────────────────────────────────────

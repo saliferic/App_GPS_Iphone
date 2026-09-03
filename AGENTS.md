@@ -298,6 +298,29 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
 - **Plafond dur de 25 par appel** (`limit=50` → **400**, « Limit must be in range [1,25] »). C'est un filet, pas une source : Overpass rend 342 stations là où celle-ci en rend 25 par tronçon. **Ne pas la promouvoir en source principale.**
 - `brand` est un **tableau** quand il est présent (`["Esso", "Esso - Stazione di Servizio"]`). Les horaires ne sont pas repris : Mapbox les donne en `open_hours.periods`, là où `getStationOpeningStatus()` attend le XML du flux français.
 
+### ⚠⚠ Les rectangles de pays ne peuvent pas trancher — contours embarqués, 03/09/2026
+
+**La régression qui l'a rendu urgent.** Le commit `5137969` (exception « station étrangère sans prix, on l'affiche ») a fait passer un scan à **Lille de 27 à 56 fiches**. Les 29 ajoutées étaient des stations **françaises** sans prix, doublons de fiches data.gouv qui, elles, portaient leur prix. Cause : `_country` enregistrait **quel fetcher avait trouvé la station**, pas où elle est. La boîte `be` couvrant Lille, le fetcher belge tournait en France, Overpass — qui ignore les frontières et interroge une bbox — rendait 180 stations françaises, et elles héritaient du label `be`.
+
+**Aucun réglage de bornes ne peut corriger ça, et c'est structurel.** La boîte `fr` monte à 51,1° : elle **contient Bruxelles**. La boîte `be` **contient Lille**, Dunkerque, Valenciennes, Charleville. La boîte `fr` descend à 41,3° : elle **contient Barcelone**. La boîte `es` monte à 43,8° : elle **contient Perpignan**. Resserrer l'une casse l'autre. Vérifié dans les deux sens avant d'écrire la moindre ligne.
+
+**Le remède : trois contours embarqués** (Belgique 288 points, Luxembourg 84, Espagne continentale 429), relevés **une fois** chez Nominatim puis simplifiés en Douglas-Peucker à 0,01°, ~15 Ko en dur dans `js/00-noyau-calculs.js`. `paysDuPoint(lng, lat)` rend le pays **réel** d'un point ; les rectangles restent en **pré-filtre** — trois comparaisons rejettent 99 % des cas, le contour ne se réveille que dans la zone de recouvrement.
+
+- **La tolérance a été choisie par balayage, pas au jugé.** 0,02° fait basculer **Halluin en Belgique** ; 0,01° garde 26/26 villes de contrôle justes, dont Halluin (FR) et Menin (BE) séparées d'un kilomètre, Mouscron et Tournai (BE, à 2 km de la France), Hendaye (FR) et Irún (ES) de part et d'autre de la Bidassoa.
+- **⚠ Un contour simplifié se trompe à quelques centaines de mètres de la frontière.** Assumé : l'enjeu est de savoir quelle source interroger et quelle règle de prix appliquer, pas de faire du cadastre. **Ne pas s'en servir pour autre chose.**
+- **⚠ L'ordre des tests compte.** Le Luxembourg est inclus dans l'emprise de la boîte belge ; l'Espagne doit passer **avant** le repli sur la boîte française. Une première version testait `fr` avant `es` : la suite du noyau l'a attrapée aussitôt (« Barcelone est espagnole → obtenu "fr" »), défaut qu'aucun essai à l'écran n'aurait révélé depuis la France.
+- **L'union le long d'un tracé reste voulue** : une bulle posée à Mouscron chevauche vraiment la frontière et doit interroger les deux sources. Ce n'était pas le principe de l'union qui était faux, c'était la géométrie qui la nourrissait.
+
+**Mesuré dans la page, après correction :**
+
+| | Pays | Affichées | Overpass | data.gouv | Temps |
+|---|---|---|---|---|---|
+| Lille | `fr` | **27** (au lieu de 56) | **0** | 1 | **261 ms** (au lieu de 2,3 s) |
+| Bruxelles | `be` | 76 | 2 | **0** | 6,6 s |
+| Mouscron | `fr+be` | 24 (6 fr + 18 be) | 1 | 1 | 3,5 s |
+
+19 assertions ajoutées à `tests/noyau.test.js` — c'est un calcul pur, sa place est là. Ce sont elles qui interdisent le retour du défaut.
+
 ### ⚠ La Belgique n'aura pas de prix, et les boîtes pays se chevauchent
 
 - **Aucun prix belge, et ce n'est pas un bug.** Il n'existe pas d'équivalent du flux data.gouv temps réel : la Belgique publie des **prix maximum nationaux** (contrat-programme SPF Économie), pas un relevé par station. Les tags OSM `fuel:*:price` sont l'unique source possible, et ils sont vides — mesuré sur les 37 stations du centre de Bruxelles : **zéro tag `*price*`**. `parseGasStations` tolère donc explicitement une fiche BE sans prix, là où une fiche FR sans prix est rejetée.
