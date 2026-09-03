@@ -321,6 +321,35 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
 
 19 assertions ajoutées à `tests/noyau.test.js` — c'est un calcul pur, sa place est là. Ce sont elles qui interdisent le retour du défaut.
 
+### ⚠⚠ L'Espagne n'a jamais rendu une seule station — 04/09/2026
+
+**Troisième source morte trouvée en deux jours, et le même motif que la branche Mapbox : une URL qui n'existe pas, une erreur avalée par un `catch`, zéro trace.** `fetchStationsES` appelait `…/EstacionesTerrestresHist/Consulta/0/0/{lat}/{lng}/{rayon}/km`, qui rend **404** : ce point d'entrée « rayon en km » n'existe pas dans l'API du MINETUR. Découvert parce qu'un scan à La Jonquera n'affichait rien alors que Le Boulou, à 10 km de là côté français, en affichait deux.
+
+**Ce qui existe vraiment, mesuré :**
+
+| Point d'entrée | Réponse |
+|---|---|
+| `/EstacionesTerrestres/` | 200 — **12,2 Mo en 9,4 s** (inutilisable en vol) |
+| `/EstacionesTerrestres/FiltroProvincia/17` | 200 — 288 Ko en 0,58 s ← **celui-ci** |
+| `/EstacionesTerrestres/FiltroMunicipio/…` | 400 |
+| `/EstacionesTerrestresHist/Consulta/0/0/…/km` | **404** (ce qu'appelait le code) |
+
+**Le filtrage se fait donc par PROVINCE**, avec la table `ES_PROVINCES` (52 entrées, ~3 Ko) calculée hors ligne à partir du jeu officiel lui-même, plus un cache de 10 min par province.
+
+- **⚠ Bornes aux centiles 1/99, pas au min/max.** Au moins une fiche officielle porte des coordonnées fausses : avec des bornes brutes, **PONTEVEDRA ressortait candidate à Madrid comme à Barcelone** — l'app serait allée chercher la Galice depuis la Catalogne. La marge de 0,15° à la sélection compense le rognage, et `FiltroProvincia` rend de toute façon la province entière : la boîte ne sert qu'à choisir laquelle.
+- **⚠ Le champ gazole s'appelle `Precio Gasoleo A`** — sans accent et sans « i ». L'ancien code lisait `Precio Gasoil A`, qui n'existe pas : **même si l'URL avait répondu, le gazole serait resté vide.** Les autres noms étaient justes.
+- Témoin `gasES` ajouté au journal 🩺. C'est son absence qui a laissé une source entièrement morte passer inaperçue pendant toute la vie du projet — exactement comme pour `gasBE` la veille.
+
+**Vérifié dans la page :** La Jonquera → `es`, 23 stations dans 5 km, prix compris (GALP gazole 1,769 €), 713 ms, une seule province interrogée. Le Boulou → `fr`, 2 stations, ce que montrait l'écran. Barcelone → 52 stations, 811 ms.
+
+### ⚠ POURQUOI IL N'Y A PAS DE CONTOUR FRANÇAIS — décision du 04/09/2026
+
+Un contour français fermerait le dernier repli imprécis de `paysDuPoint()` : un point en MER est hors des contours belge et espagnol mais dans la boîte `fr`, donc déclaré français, d'où un `es+fr` cosmétique et une requête data.gouv vide sur un scan côtier. **Ç'a été mesuré, puis refusé.**
+
+Le test de résistance sur 19 communes exposées a montré que **la Corse n'est pas dans l'anneau principal du contour français** : il en faut **huit** pour la couvrir (17 Ko à 0,015°). Avec l'anneau simple, Ajaccio et Bastia rendaient `null` — donc **aucune station en Corse, silencieusement**.
+
+**L'asymétrie décide.** Le défaut actuel coûte un appel data.gouv de 80 ms qui ne rend rien. Le remède risque de rendre `null` pour un lieu français réel qu'aucun test n'aurait couvert — île, presqu'île, enclave — et un `null` ne montre AUCUNE station. **On ne remplace pas un gaspillage inoffensif par une panne silencieuse.** Le repli `return 'fr'` de la boîte française est donc VOULU : il ne rend jamais `null` sur le territoire, et c'est sa raison d'être.
+
 ### ⚠ La Belgique n'aura pas de prix, et les boîtes pays se chevauchent
 
 - **Aucun prix belge, et ce n'est pas un bug.** Il n'existe pas d'équivalent du flux data.gouv temps réel : la Belgique publie des **prix maximum nationaux** (contrat-programme SPF Économie), pas un relevé par station. Les tags OSM `fuel:*:price` sont l'unique source possible, et ils sont vides — mesuré sur les 37 stations du centre de Bruxelles : **zéro tag `*price*`**. `parseGasStations` tolère donc explicitement une fiche BE sans prix, là où une fiche FR sans prix est rejetée.

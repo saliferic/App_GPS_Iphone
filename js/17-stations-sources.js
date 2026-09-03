@@ -663,46 +663,174 @@
             return stations; // on retourne TOUTES les stations même sans prix pour la carte
         }
 
-        // ── ESPAGNE ──
-        // API officielle MINETUR — stations dans un rayon autour d'un point
+        /* ═══ ESPAGNE — PAR PROVINCE, ET NON PAR RAYON  (04/09/2026) ═══
+           LA VERSION PRÉCÉDENTE N'A JAMAIS PU FONCTIONNER, comme la branche Mapbox du
+           fetcher belge. Elle appelait
+             …/EstacionesTerrestresHist/Consulta/0/0/{lat}/{lng}/{rayon}/km
+           qui rend **404** : ce point d'entrée « rayon en km » n'existe pas dans l'API
+           du MINETUR. L'échec était avalé par un `catch` silencieux, donc l'Espagne
+           rendait zéro station depuis toujours, sans une ligne au journal. Découvert le
+           03/09/2026 par un scan à La Jonquera : rien côté espagnol, 2 stations côté
+           français au Boulou, alors que l'API en connaît 11 478.
+
+           CE QUI EXISTE VRAIMENT, mesuré ce jour :
+             /EstacionesTerrestres/                    200 — 12,2 Mo en 9,4 s  (inutilisable en vol)
+             /EstacionesTerrestres/FiltroProvincia/17  200 —  288 Ko en 0,58 s ← celui-ci
+             /EstacionesTerrestres/FiltroMunicipio/…   400
+           D'où le filtrage par PROVINCE. La table ES_PROVINCES ci-dessous donne les
+           limites de chacune, calculées hors ligne à partir du jeu officiel lui-même.
+
+           ⚠ CENTILES 1/99 ET NON MIN/MAX. Au moins une fiche officielle porte des
+           coordonnées fausses : avec des bornes brutes, PONTEVEDRA ressortait candidate
+           à Madrid COMME à Barcelone, et l'app serait allée chercher la Galice depuis la
+           Catalogne. La marge de 0,15° au moment de la sélection compense largement le
+           rognage — et de toute façon `FiltroProvincia` rend la province ENTIÈRE, la
+           boîte ne sert qu'à choisir laquelle.
+
+           ⚠ LE CHAMP GAZOLE S'APPELLE `Precio Gasoleo A`, SANS ACCENT ET SANS « I ».
+           L'ancien code lisait `Precio Gasoil A`, qui n'existe pas : même si l'URL avait
+           répondu, le gazole serait resté vide. Les autres noms étaient justes. */
+        const ES_PROVINCES = [
+            ['01',-3.05,42.55,-2.31,43.14], // ARABA/ÁLAVA (75)
+            ['02',-2.71,38.36,-0.97,39.35], // ALBACETE (155)
+            ['03',-0.96,37.89,0.17,38.85], // ALICANTE (483)
+            ['04',-3.00,36.72,-1.75,37.65], // ALMERÍA (229)
+            ['05',-5.34,40.15,-4.41,41.10], // ÁVILA (72)
+            ['06',-7.15,38.08,-5.09,39.25], // BADAJOZ (278)
+            ['07',1.31,38.89,4.26,40.01], // BALEARS (ILLES) (223)
+            ['08',1.54,41.22,2.72,42.10], // BARCELONA (800)
+            ['09',-4.24,41.59,-2.75,43.16], // BURGOS (139)
+            ['10',-7.23,39.14,-5.33,40.32], // CÁCERES (162)
+            ['11',-6.42,36.03,-5.25,36.89], // CÁDIZ (291)
+            ['12',-0.59,39.78,0.47,40.61], // CASTELLÓN / CASTELLÓ (196)
+            ['13',-4.86,38.51,-2.78,39.40], // CIUDAD REAL (219)
+            ['14',-5.40,37.27,-4.16,38.48], // CÓRDOBA (207)
+            ['15',-9.19,42.59,-7.87,43.66], // CORUÑA (A) (289)
+            ['16',-3.04,39.33,-1.36,40.36], // CUENCA (116)
+            ['17',1.94,41.68,3.18,42.43], // GIRONA (273)
+            ['18',-4.16,36.73,-2.48,37.81], // GRANADA (282)
+            ['19',-3.43,40.33,-1.88,41.19], // GUADALAJARA (92)
+            ['20',-2.53,43.01,-1.75,43.35], // GIPUZKOA (147)
+            ['21',-7.41,37.14,-6.22,37.97], // HUELVA (142)
+            ['22',-0.75,41.49,0.56,42.74], // HUESCA (124)
+            ['23',-4.22,37.45,-2.67,38.36], // JAÉN (214)
+            ['24',-6.88,42.14,-5.02,42.95], // LEÓN (167)
+            ['25',0.42,41.37,1.83,42.75], // LLEIDA (186)
+            ['26',-2.97,42.02,-1.74,42.57], // RIOJA (LA) (82)
+            ['27',-7.93,42.49,-7.02,43.68], // LUGO (127)
+            ['28',-4.24,40.10,-3.29,40.90], // MADRID (894)
+            ['29',-5.30,36.34,-3.89,37.14], // MÁLAGA (310)
+            ['30',-1.90,37.41,-0.78,38.61], // MURCIA (465)
+            ['31',-2.21,41.98,-1.27,43.29], // NAVARRA (248)
+            ['32',-8.20,41.84,-6.99,42.47], // OURENSE (87)
+            ['33',-6.98,43.15,-4.58,43.58], // ASTURIAS (240)
+            ['34',-4.90,41.84,-4.08,42.87], // PALENCIA (74)
+            ['35',-15.71,27.76,-13.50,29.06], // PALMAS (LAS) (254)
+            ['36',-8.86,41.92,-7.95,42.77], // PONTEVEDRA (227)
+            ['37',-6.82,40.38,-5.20,41.20], // SALAMANCA (112)
+            ['38',-17.98,27.77,-16.23,28.81], // SANTA CRUZ DE TENERIFE (241)
+            ['39',-4.50,42.94,-3.16,43.47], // CANTABRIA (168)
+            ['40',-4.65,40.72,-3.47,41.43], // SEGOVIA (76)
+            ['41',-6.30,36.90,-4.80,37.93], // SEVILLA (441)
+            ['42',-3.19,41.17,-1.93,42.03], // SORIA (42)
+            ['43',0.37,40.54,1.62,41.46], // TARRAGONA (235)
+            ['44',-1.44,40.11,0.19,41.17], // TERUEL (69)
+            ['45',-5.19,39.42,-3.04,40.24], // TOLEDO (244)
+            ['46',-1.29,38.82,-0.15,39.75], // VALENCIA / VALÈNCIA (649)
+            ['47',-5.31,41.21,-4.12,42.10], // VALLADOLID (153)
+            ['48',-3.15,43.06,-2.50,43.41], // BIZKAIA (130)
+            ['49',-6.64,41.23,-5.37,42.09], // ZAMORA (89)
+            ['50',-2.00,41.13,0.14,42.28], // ZARAGOZA (238)
+            ['51',-5.34,35.88,-5.30,35.89], // CEUTA (10)
+            ['52',-2.95,35.27,-2.93,35.30], // MELILLA (12)
+        ];
+
+        const ES_PROV_MARGE = 0.15;   // ~16 km : couvre une bulle à cheval sur deux provinces
+        const ES_CACHE_TTL_MS = 10 * 60 * 1000;   // le flux officiel bouge toutes les 30 min
+        const _esCache = new Map();   // idProvince -> { ts, stations }
+
+        function _esProvincesPour(routeCoords) {
+            const ids = new Set();
+            for (const [lng, lat] of routeCoords) {
+                for (const [id, minLo, minLa, maxLo, maxLa] of ES_PROVINCES) {
+                    if (lng >= minLo - ES_PROV_MARGE && lng <= maxLo + ES_PROV_MARGE &&
+                        lat >= minLa - ES_PROV_MARGE && lat <= maxLa + ES_PROV_MARGE) ids.add(id);
+                }
+            }
+            return [...ids];
+        }
+
         async function fetchStationsES(routeCoords) {
-            const segments = buildRouteSegments(routeCoords);
+            const provinces = _esProvincesPour(routeCoords);
+            if (!provinces.length) {
+                console.log('[GasAPI/ES] aucune province candidate');
+                return [];
+            }
+            const parPrix = v => {
+                if (v == null) return null;
+                const n = parseFloat(String(v).replace(',', '.'));
+                return n > 0.1 ? n : null;
+            };
             const allStations = {};
-            await Promise.all(segments.map(async seg => {
-                const cLat = ((seg.minLat + seg.maxLat) / 2).toFixed(6).replace('.', ',');
-                const cLng = ((seg.minLng + seg.maxLng) / 2).toFixed(6).replace('.', ',');
-                const rad  = Math.min(30, Math.ceil(turf.distance(
-                    turf.point([seg.minLng, seg.minLat]),
-                    turf.point([seg.maxLng, seg.maxLat]),
-                    { units: 'kilometers' }
-                ) / 2) + 5);
-                const url = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestresHist/Consulta/0/0/${cLat}/${cLng}/${rad}/km`;
+            let ok = 0, echecs = 0, depuisCache = 0;
+            const causes = [];
+
+            await Promise.all(provinces.map(async id => {
+                const cache = _esCache.get(id);
+                if (cache && Date.now() - cache.ts < ES_CACHE_TTL_MS) {
+                    depuisCache++;
+                    cache.stations.forEach(s => { allStations[s._id] = s; });
+                    return;
+                }
+                const url = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes'
+                          + '/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/' + id;
+                let data;
                 try {
                     const res = await fetchResilient(url, {}, { timeoutMs: 14000, retries: 1 });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    const parseES = v => { if (!v) return null; const n = parseFloat(String(v).replace(',','.')); return n > 0.1 ? n : null; };
-                    (data?.ListaEESSPrecio || []).forEach(s => {
-                        const id = String(s.IDEESS ?? `${s.Latitud},${s['Longitud (WGS84)']}`);
-                        if (!allStations[id]) allStations[id] = {
-                            _country: 'es',
-                            latitude:  String(s.Latitud ?? '').replace(',', '.'),
-                            longitude: String(s['Longitud (WGS84)'] ?? '').replace(',', '.'),
-                            nom:     s['Rótulo'] ?? s.Rotulo ?? 'Station',
-                            adresse: s.Dirección ?? s.Direccion ?? '',
-                            ville:   s.Municipio ?? '',
-                            cp:      s['C.P.'] ?? '',
-                            prix: [],
-                            _sp95:   parseES(s['Precio Gasolina 95 E5']),
-                            _gazole: parseES(s['Precio Gasoil A']),
-                            _sp98:   parseES(s['Precio Gasolina 98 E5']),
-                            _e10:    parseES(s['Precio Gasolina 95 E10']),
-                        };
-                    });
-                } catch(e) { console.warn('[GasAPI/ES]', e.message); }
+                    if (!res.ok) { echecs++; causes.push(`prov ${id} → ${res.status}`); return; }
+                    data = await res.json();
+                } catch (e) {
+                    echecs++; causes.push(`prov ${id} → ${String(e.message || e).slice(0, 60)}`);
+                    return;
+                }
+                ok++;
+                const lot = [];
+                (data?.ListaEESSPrecio || []).forEach(s => {
+                    const lat = parseFloat(String(s.Latitud ?? '').replace(',', '.'));
+                    const lng = parseFloat(String(s['Longitud (WGS84)'] ?? '').replace(',', '.'));
+                    if (isNaN(lat) || isNaN(lng)) return;
+                    const fiche = {
+                        _id: 'es_' + (s.IDEESS ?? `${lat},${lng}`),
+                        // Comme la Belgique : le pays vient de la POSITION, pas du fetcher.
+                        _country: paysDuPoint(lng, lat) || 'es',
+                        latitude:  String(lat),
+                        longitude: String(lng),
+                        nom:     s['Rótulo'] ?? s.Rotulo ?? 'Station',
+                        adresse: s['Dirección'] ?? s.Direccion ?? '',
+                        ville:   s.Municipio ?? '',
+                        cp:      s['C.P.'] ?? '',
+                        prix: [],
+                        _sp95:   parPrix(s['Precio Gasolina 95 E5']),
+                        _gazole: parPrix(s['Precio Gasoleo A']),   // ⚠ « Gasoleo », pas « Gasoil »
+                        _sp98:   parPrix(s['Precio Gasolina 98 E5']),
+                        _e10:    parPrix(s['Precio Gasolina 95 E10']),
+                    };
+                    lot.push(fiche);
+                    allStations[fiche._id] = fiche;
+                });
+                _esCache.set(id, { ts: Date.now(), stations: lot });
             }));
+
             const stations = Object.values(allStations);
-            console.log(`[GasAPI/ES] ${stations.length} stations`);
+            const avecPrix = stations.filter(s => s._sp95 || s._gazole || s._sp98 || s._e10).length;
+            console.log(`[GasAPI/ES] ${stations.length} stations (${avecPrix} avec prix), provinces ${provinces.join(',')}`);
+            /* ⚠ AU JOURNAL, comme gasBE. C'est l'absence de ce témoin qui a laissé une
+               source entièrement morte passer inaperçue pendant toute la vie du projet. */
+            tenterSansBruit(() => logDiag('gasES', {
+                total: stations.length, avecPrix,
+                provinces: provinces.join(','), ok, cache: depuisCache, echecs,
+                causes: causes.join(' | ') || null,
+            }));
             return stations;
         }
 
