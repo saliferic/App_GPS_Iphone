@@ -1315,8 +1315,16 @@ section('Vie du compagnon');
     verifie('un choc entame la vie', vieApresChoc(100, 1, 'babi') < 100, true);
     verifie('choc plafonné à facteur 2',
         vieApresChoc(100, 50, 'babi'), vieApresChoc(100, 2, 'babi'));
-    verifie('le fragile encaisse plus le choc',
-        vieApresChoc(100, 1, 'raya') < vieApresChoc(100, 1, 'bulle'), true);
+    /* ⚠ SUITE DE LA NEUTRALISATION DE LA ROBUSTESSE (voir plus haut, « toute la troupe
+       à 1 »). L'assertion qui vivait ici — « le fragile encaisse plus le choc »,
+       `raya` < `bulle` — était le dernier vestige de l'échelle d'origine : elle
+       échouait depuis le 27/08/2026 (commit 5a3d1e6, qui le signalait sans la
+       reprendre). Confirmé le 03/09/2026 : le choix d'un animal est esthétique, pas un
+       choix de difficulté.
+       On vérifie donc l'ÉGALITÉ, et elle tombera le jour où l'échelle reviendra —
+       même intention que le test de la table plate, qu'elle prolonge côté choc. */
+    verifie('tous les compagnons encaissent le choc pareil',
+        vieApresChoc(100, 1, 'raya') === vieApresChoc(100, 1, 'bulle'), true);
     verifie('choc sans amplitude ne fait rien', vieApresChoc(60, 0, 'babi'), 60);
     verifie('un choc ne passe pas sous zéro', vieApresChoc(0.5, 2, 'nima'), 0);
 

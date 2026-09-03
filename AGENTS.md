@@ -959,7 +959,7 @@ Sept animaux dessinés (Babi, Bulle, Titi, Zola, Kiri, Raya, **Sam** la renarde,
 | `js/22` — `VIDEOS` | sa vidéo de cage, jouée au moment où on le choisit. Absente : rien ne se joue et la suite s'enchaîne, aucune erreur |
 | `js/22` — `HISTOIRES` | d'où il vient et pourquoi il est en cage, montré AVANT le sauvetage (fiche du compagnon, js/26). Absent : repli honnête « histoire pas encore écrite », jamais celle du voisin |
 | `js/22` — `SAUVE_TEXTES` | ce qu'il est devenu une fois libéré, montré APRÈS (fiche d'un animal sauvé, js/25). ⚠ À ne pas confondre avec `HISTOIRES` : les deux ne sont jamais à l'écran en même temps |
-| `js/00` — `VIE_ROBUSTESSE` | combien il encaisse. Absent, il retombe sur 1 — jouable, mais hors de l'échelle voulue |
+| `js/00` — `VIE_ROBUSTESSE` | combien il encaisse. **Aplatie à 1 pour toute la troupe depuis le 27/08/2026** (commit `5a3d1e6`) : choisir un animal est un choix esthétique, pas un choix de difficulté — confirmé le 03/09/2026. Une entrée manquante retombe donc sur la même valeur que les autres, et n'a plus d'effet visible. Les valeurs différenciées d'origine (1.60 … 0.50) restent en commentaire dans `js/00` ; les rétablir demande de repasser en `<` l'assertion « tous les compagnons encaissent pareil » de `tests/noyau.test.js` |
 | `experiments/apercu-babi.html` | rien à faire : la planche de contrôle lit `Compagnon.catalogue()` et l'affiche d'office |
 
 ### Les compagnons sont EN IMAGE (26/08/2026)
