@@ -11,9 +11,14 @@
            un objectif que l'appli ne peut pas se permettre de tolérer. Seules des mesures
            qui ne se contournent pas en enchaînant les trajets restent : km parcourus,
            points accumulés. */
-        // Seuils des deux missions de vie ci-dessous — un seul endroit à changer.
+        // Seuils des missions de vie ci-dessous — un seul endroit à changer.
         const VIE_SEUIL_HAUT = 90;
         const VIE_SEUIL_SEMAINE = 50;
+        /* Sous ce seuil, et seulement sous ce seuil, la mission de SOIN devient
+           tirable. 80 et pas 90 : à 88 % la mission se boucle en 2,4 km, elle ne
+           vaudrait pas une semaine (le soin vaut 1 % par 200 m — voir
+           VIE_SOIN_PAR_METRE dans le noyau). */
+        const VIE_SEUIL_SOIN = 80;
 
         const WEEKLY_GOAL_TEMPLATES = [
             { id: 'km_no_speed',   text: 'Parcourir {v} km sans excès de vitesse',       unit: 'km',     min: 50,  max: 200, step: 25 },
@@ -43,6 +48,33 @@
             { id: 'trajet_parfait',   text: 'Terminer un trajet de {v} km avec 100% de vie', unit: 'km', min: 5, max: 20, step: 5 },
             { id: 'trajets_parfaits', text: 'Terminer {v} fois un trajet de {q} km avec 100% de vie', unit: 'trajets', min: 2, max: 4, step: 1,
               extra: { placeholder: '{q}', key: 'kmSeuil', min: 15, max: 30, step: 5 } },
+            /* ═══ 'vie_soin' — LA SEULE MISSION DE RÉPARATION (03/09/2026) ═══
+               Les six gabarits ci-dessus demandent tous de PRÉSERVER une vie
+               (« ne pas descendre sous X », « terminer à 100 % »). Celui-ci demande
+               de la REMONTER : il ne se tire que si le compagnon est déjà amoché.
+
+               ⚠ PREMIER GABARIT CONDITIONNEL — `eligible()` est interrogé au tirage
+               du lundi (voir generateWeeklyGoals). Sans cette porte, la mission
+               serait proposée à 100 % de vie, donc déjà gagnée d'avance.
+
+               ⚠ SA CIBLE N'EST PAS TIRÉE AU HASARD : min = max = 100, parce que la
+               cible EST la barre pleine. C'est le point de DÉPART qui varie, et il
+               n'est pas choisi non plus — c'est l'état réel de l'animal ce lundi-là.
+
+               Sa difficulté ne vient pas de la distance (25 points = 5 km propres)
+               mais du rapport 20:1 entre dégât et soin : 250 m d'excès effacent
+               5 km de conduite sage. Inutile d'ajouter une clause d'échec
+               par-dessus, la mécanique s'en charge — et une mission qui se perd
+               définitivement sur un dépassement d'une seconde ne se retenterait
+               jamais de la semaine. */
+            { id: 'vie_soin', text: 'Ramener {nom} à 100 % de vie', unit: 'vie', min: 100, max: 100, step: 1,
+              eligible: () => {
+                  if (!window.VieCompagnon || typeof VieCompagnon.valeur !== 'function') return false;
+                  const cle = (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : null;
+                  // Un animal mort ne se soigne pas : la mission serait impossible.
+                  if (cle && VieCompagnon.estMort && VieCompagnon.estMort(cle)) return false;
+                  return VieCompagnon.valeur() < VIE_SEUIL_SOIN;
+              } },
         ];
 
         function getWeekId() {
@@ -143,7 +175,17 @@
 
         function generateWeeklyGoals() {
             const baseline = getKmBaseline();
-            const templates = getAdaptedTemplates(baseline);
+            /* ⚠ FILTRE D'ÉLIGIBILITÉ, posé AVANT le tirage (03/09/2026). Un gabarit
+               peut déclarer `eligible()` et n'être proposé que si sa condition tient
+               ce lundi-là — voir 'vie_soin'. Un gabarit sans `eligible` passe
+               toujours, ce qui garde les six historiques inchangés.
+               ⚠ Ne jamais faire descendre le nombre de gabarits INCONDITIONNELS sous
+               3 : c'est ce qui garantit qu'on puisse toujours en tirer trois. Ils
+               sont six aujourd'hui, la marge est confortable — mais rendre l'un
+               d'eux conditionnel, ou en retirer, se paie ici en silence par une
+               semaine à deux missions. */
+            const templates = getAdaptedTemplates(baseline)
+                .filter(tpl => typeof tpl.eligible !== 'function' || tenterSansBruit(() => tpl.eligible(), 'objectifs/eligible') === true);
             const shuffled = [...templates].sort(() => Math.random() - 0.5);
             const picked = shuffled.slice(0, 3);
             return picked.map(tpl => {
@@ -154,8 +196,14 @@
                    animal amoché depuis la semaine précédente validerait une mission
                    qu'il a en réalité déjà ratée. */
                 const vieActuelle = (window.VieCompagnon && VieCompagnon.valeur) ? VieCompagnon.valeur() : 100;
+                /* 'vie_soin' démarre à la vie RÉELLE de l'animal : la jauge que le
+                   conducteur regarde déjà EST la barre de progression de la mission.
+                   Rien à expliquer de plus, et aucun compteur parallèle à tenir
+                   synchronisé — `syncVieSoin()` la recopie depuis VieCompagnon. */
                 const progress = tpl.id === 'vie_seuil'
                     ? (vieActuelle < VIE_SEUIL_SEMAINE ? 0 : 1)
+                    : tpl.id === 'vie_soin'
+                    ? vieActuelle
                     : 0;
                 /* Second nombre tiré à part pour les gabarits à deux variables (ex.
                    'trajets_parfaits' : {v} trajets de {q} km) — voir `extra` du gabarit. */
@@ -166,6 +214,19 @@
                     const extraVal = tpl.extra.min + Math.floor(Math.random() * (eSteps + 1)) * tpl.extra.step;
                     text = text.replace(tpl.extra.placeholder, extraVal);
                     extraFields[tpl.extra.key] = extraVal;
+                }
+                /* 'vie_soin' nomme l'animal au lieu d'afficher un nombre, et RETIENT sa
+                   clé : la mission parle de CET animal-là. Changer de compagnon en cours
+                   de semaine ne la transfère pas au suivant, elle se fige — voir
+                   syncVieSoin(). Le nom est figé dans le texte au tirage, ce qui est
+                   voulu : renommer la mission parce qu'on a changé d'animal ferait mentir
+                   une mission qui, elle, n'a pas changé de cible. */
+                if (tpl.id === 'vie_soin') {
+                    const cleSoin = (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : null;
+                    const nomSoin = (window.Compagnon && Compagnon.nomDe && cleSoin)
+                        ? Compagnon.nomDe(cleSoin) : 'ton compagnon';
+                    text = text.replace('{nom}', nomSoin);
+                    extraFields.cle = cleSoin;
                 }
                 return {
                     id: tpl.id,
@@ -200,12 +261,48 @@
             localStorage.setItem(key, JSON.stringify(data));
         }
 
+        /* ═══ 'vie_soin' : sa progression est LUE, jamais accumulée ═══════════
+           La vie du compagnon est déjà tenue et persistée par VieCompagnon. En
+           garder une copie incrémentée de son côté aurait fait deux vérités à
+           maintenir d'accord, et la seconde aurait dérivé dès le premier trajet
+           interrompu. On recopie donc, aux deux seuls moments où quelqu'un lit
+           la progression : au rendu du panneau et en fin de trajet.
+
+           ⚠ ON NE S'ABONNE PAS À `VieCompagnon.onChangement` POUR ÇA. Cette
+           notification part à chaque rafraîchissement de position — plusieurs
+           fois par seconde en navigation — et sauvegarder l'objectif écrit dans
+           localStorage. C'est exactement ce que le DELAI_ECRITURE_MS de js/24
+           existe pour éviter ; le recopier ici serait le défaire.
+
+           ⚠ LA MISSION SE FIGE SI L'ON CHANGE DE COMPAGNON. Elle nomme un animal
+           précis, tiré le lundi : soigner le suivant ne la remplit pas. Elle
+           reprend si l'on revient à celui qu'elle désigne.
+
+           Rend `true` si la valeur a bougé, pour que l'appelant sache s'il doit
+           écrire. */
+        function syncVieSoin(data) {
+            const g = data && data.goals && data.goals.find(x => x.id === 'vie_soin');
+            if (!g) return false;
+            if (!window.VieCompagnon || typeof VieCompagnon.valeur !== 'function') return false;
+            const actif = (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : null;
+            if (g.cle && actif && g.cle !== actif) return false;
+            const v = VieCompagnon.valeur();
+            if (!isFinite(v) || v === g.progress) return false;
+            g.progress = v;
+            return true;
+        }
+
         function updateWeeklyGoalsAfterTrip(distKm, score, isPerfect, vieMinTrajet) {
             recordWeeklyKm(distKm); // enregistrer dans l'historique baseline
             const data = loadWeeklyGoals();
             /* Vie jamais fournie par les anciens appelants (aucun avant ce jour) :
                100 par défaut, comme si le trajet avait préservé le compagnon. */
             const vieMin = (typeof vieMinTrajet === 'number') ? vieMinTrajet : 100;
+            /* AVANT la boucle : `vie_soin` ne se déduit pas des paramètres du trajet
+               (`vieMin` est le CREUX du trajet, pas l'état final) mais se relit sur
+               VieCompagnon. Le `saveWeeklyGoals` de fin de fonction l'emporte avec
+               le reste. */
+            syncVieSoin(data);
             data.goals.forEach(g => {
                 switch(g.id) {
                     case 'km_no_speed':   if (isPerfect) g.progress += distKm; break;
@@ -324,11 +421,21 @@
             vie_haute:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
             vie_seuil:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
             trajet_parfait:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
-            trajets_parfaits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>'
+            trajets_parfaits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/></svg>',
+            /* Le MÊME cœur, plus une croix : `vie_soin` est la seule mission qui
+               demande de REMONTER une vie au lieu de la préserver, et c'est la seule
+               différence qu'il faut voir. Un pictogramme entièrement différent aurait
+               rompu la famille que les quatre du dessus viennent de gagner. */
+            vie_soin:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"/><path d="M12 8.6v5.6M9.2 11.4h5.6"/></svg>'
         };
 
         function renderWeeklyGoalsPanel() {
             const data = loadWeeklyGoals();
+            /* La vie a pu bouger depuis la dernière écriture (trajet en cours, ou
+               interrompu sans passer par updateWeeklyGoalsAfterTrip). On resynchronise
+               avant d'afficher, et on n'écrit QUE si ça a bougé — ouvrir le panneau
+               dix fois de suite ne doit pas produire dix écritures. */
+            if (syncVieSoin(data)) saveWeeklyGoals(data);
 
             /* Le compte à rebours : pastille encadrée, en haut à droite du titre.
                C'est la seule information périssable de l'écran ; sa légende « Temps
@@ -384,10 +491,15 @@
                    la phrase entière. */
                 const valeur = g.unit === 'bool'    ? (done ? 'Oui' : 'Non')
                              : g.unit === 'trajets'  ? String(Math.floor(g.progress))
+                             /* La vie s'affiche à l'entier, comme la jauge du bandeau
+                                de navigation (js/24) : deux écrans qui montrent le même
+                                nombre ne peuvent pas l'arrondir différemment. */
+                             : g.unit === 'vie'      ? String(Math.round(g.progress))
                              : g.progress.toFixed(1);
                 const total  = g.unit === 'km'   ? `/ ${g.target} km`
                              : g.unit === 'pts'  ? `/ ${g.target} pts`
                              : g.unit === 'bool' ? 'cette semaine'
+                             : g.unit === 'vie'  ? `/ ${g.target} % de vie`
                              : `/ ${g.target} trajets`;
                 const adaptatif = g.adaptive ? '<span class="wg-tag">sur mesure</span>' : '';
                 /* L'emblème n'est JAMAIS vide : icône de la famille d'objectif tant que
