@@ -53,6 +53,20 @@
                (« ne pas descendre sous X », « terminer à 100 % »). Celui-ci demande
                de la REMONTER : il ne se tire que si le compagnon est déjà amoché.
 
+               ⚠ RÉSERVÉE AUX COMPAGNONS SAUVÉS (demande utilisateur, 03/09/2026) —
+               « un animal qu'on a sauvé et qu'on décide de garder parce qu'on s'y
+               est attaché ». Ce n'est pas un filtre de confort, c'est ce qui rend la
+               mécanique cohérente, et `declarerMort()` (js/24) le dit déjà : un
+               animal sauvé perd de la vie comme les autres MAIS NE PEUT PLUS MOURIR.
+               L'enjeu d'un soin sur un sauvé est donc « il est amoché et tu lui dois
+               mieux », jamais « il risque d'y passer ».
+               Sur un animal NON sauvé, la même mission entrerait en concurrence avec
+               son propre parcours d'évasion — l'histoire en cours est « le libérer »,
+               pas « le soigner » — et elle deviendrait cruelle, puisque lui peut
+               vraiment mourir en chemin.
+               Conséquence assumée : la mission est TARDIVE et rare. C'est la
+               récompense de l'attachement, pas une mission de début de partie.
+
                ⚠ PREMIER GABARIT CONDITIONNEL — `eligible()` est interrogé au tirage
                du lundi (voir generateWeeklyGoals). Sans cette porte, la mission
                serait proposée à 100 % de vie, donc déjà gagnée d'avance.
@@ -67,12 +81,18 @@
                par-dessus, la mécanique s'en charge — et une mission qui se perd
                définitivement sur un dépassement d'une seconde ne se retenterait
                jamais de la semaine. */
-            { id: 'vie_soin', text: 'Ramener {nom} à 100 % de vie', unit: 'vie', min: 100, max: 100, step: 1,
+            { id: 'vie_soin', text: 'Remettre {nom} sur pattes', unit: 'vie', min: 100, max: 100, step: 1,
               eligible: () => {
                   if (!window.VieCompagnon || typeof VieCompagnon.valeur !== 'function') return false;
                   const cle = (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : null;
-                  // Un animal mort ne se soigne pas : la mission serait impossible.
-                  if (cle && VieCompagnon.estMort && VieCompagnon.estMort(cle)) return false;
+                  if (!cle) return false;
+                  // La condition qui porte tout le sens de la mission — voir la note.
+                  if (!compagnonEstSauve(cle)) return false;
+                  /* Redondant en principe : un sauvé ne peut plus entrer au registre
+                     des morts, et un mort ne peut pas être choisi, donc pas mené au
+                     bout de son parcours. Gardé pour les états enregistrés AVANT que
+                     cette garde n'existe, où les deux pouvaient coexister. */
+                  if (VieCompagnon.estMort && VieCompagnon.estMort(cle)) return false;
                   return VieCompagnon.valeur() < VIE_SEUIL_SOIN;
               } },
         ];
