@@ -18,8 +18,13 @@
         /* Plafond volontairement plus haut que les 12 du scan stations : en ville un
            rayon de 2 km recense couramment plus de 150 parkings, tous équivalents à
            quelques centaines de mètres près — couper à 12 masquait des candidats
-           pertinents, là où 12 stations-service couvrent déjà tout le voisinage. */
-        const PK_SCAN_MAX_CARDS = 30;
+           pertinents, là où 12 stations-service couvrent déjà tout le voisinage.
+           Porté de 30 à 50 le 03/09/2026 : 30 restait court sur un centre-ville dense.
+           ⚠ Ce plafond vaut pour les DEUX rendus — il découpe `_pkShown`, dont se
+           servent la liste (_renderParkingScanCards) ET les pastilles de la carte
+           (_renderParkingScanMarkers, un élément DOM Mapbox chacune). Le monter, c'est
+           donc aussi ajouter des marqueurs ; c'est là qu'un excès se paierait. */
+        const PK_SCAN_MAX_CARDS = 50;
 
         let _pkStations = [], _pkShown = [], _pkMarkers = [];
         let _pkAnchor  = null;

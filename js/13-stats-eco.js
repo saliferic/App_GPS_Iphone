@@ -1700,6 +1700,18 @@
                 const el = document.getElementById(id);
                 if (el) el.style.display = '';
             });
+            /* RETOUR À ITINÉRAIRE quand c'est le lancement qui avait imposé l'onglet Profil
+               (voir _profilOuvertParLeLancement, js/00). Annuler la création de compte
+               laissait sinon l'utilisateur sur une page qu'il n'avait pas demandée.
+               ⚠ EN DERNIER, et après que le formulaire est passé en `display:none` :
+               switchMainTab() referme le formulaire ouvert quand il change d'onglet, et
+               nous rappellerait donc ici. Le formulaire étant déjà masqué à ce stade, sa
+               garde `=== 'block'` est fausse et la chaîne s'arrête. Le drapeau est
+               consommé avant l'appel, ce qui ferme la boucle une seconde fois. */
+            if (_profilOuvertParLeLancement) {
+                _profilOuvertParLeLancement = false;
+                if (typeof switchMainTab === 'function') switchMainTab('trajet');
+            }
         }
         /* `nomFourni` (23/08/2026) : le champ « Prénom » n'existe plus dans la page — le
            nom vient maintenant du pseudo du compte, ou de la saisie du formulaire de
@@ -1830,6 +1842,11 @@
             try {
                 if (profiles.length > 0) return;
                 if (typeof switchMainTab === 'function') switchMainTab('profil');
+                /* Armé APRÈS le basculement : c'est bien CE détour-là que l'on marque, et
+                   switchMainTab() désarme le drapeau quand il referme le formulaire en
+                   quittant un onglet. Ici le formulaire n'est pas encore ouvert, donc il ne
+                   passe pas par cette branche — mais l'ordre reste le bon par principe. */
+                _profilOuvertParLeLancement = true;
                 showCreateProfileInline();
             } catch (e) { logAppError('profil/premierLancement', e); }
         }, 2900);
@@ -1837,9 +1854,19 @@
         updateWeeklyGoalsButton();
         renderCarteCompagnon();
 
-        async function requestWakeLock() {
-            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
-            catch (err) { console.warn(`Anti-veille inactif: ${err.message}`); }
+        async function requestWakeLock(dejaRetente) {
+            try {
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            } catch (err) {
+                /* Juste après un déverrouillage manuel de l'écran, la WebView redevient
+                   "visible" avant d'avoir regagné le FOCUS système — la spec Wake Lock exige
+                   les deux, sinon `request()` rejette en NotAllowedError. Sans retente, ce
+                   refus est définitif jusqu'au prochain visibilitychange (verrouillage
+                   suivant), donc l'écran peut s'éteindre pendant tout le reste du trajet.
+                   Une seule retente après un court délai suffit à laisser le focus revenir. */
+                logAppError('anti-veille/wakeLock', err);
+                if (!dejaRetente) setTimeout(() => { if (isCourseStarted && wakeLock === null) requestWakeLock(true); }, 1000);
+            }
         }
         function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release(); wakeLock = null; } }
 

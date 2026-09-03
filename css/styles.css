@@ -1897,6 +1897,7 @@
            comprimait le sélecteur jusqu'à le rendre illisible sur panneau étroit. */
         .driver-controls { display: flex; flex-direction: column; align-items: flex-end; gap: clamp(4px, 1vw, 6px); flex-shrink: 0; }
         .driver-card select { padding: clamp(4px, 1vw, 6px); border-radius: 8px; border: 1px solid rgba(0,140,255,0.15); font-size: 12px; width: 140px; max-width: 100%; background: rgba(10,14,23,0.7); color: #c9d1d9; outline: none;}
+        .driver-card select option { background: #0d1420; color: #c9d1d9; }
         .driver-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 1.5vw, 8px); font-size: 12px; margin-top: clamp(2px, 1vw, 4px); color: #7b8794; }
         .stat-item { background: rgba(10,14,23,0.6); border: 1px solid rgba(0,140,255,0.08); border-radius: 10px; padding: clamp(6px, 1.5vw, 8px); display: flex; justify-content: space-between; align-items: center; }
         .stat-item .val { font-weight: 700; color: #e2e8f0; font-size: 13px; }
@@ -2768,6 +2769,25 @@
             cursor: pointer; align-items: center; justify-content: center; padding: 0; transition: 0.2s;
         }
         #recenter-btn:hover { color: #e2e8f0; border-color: rgba(88,166,255,0.4); }
+        /* ⚠ LE MILIEU DU VIEWPORT EST EXACTEMENT LE BORD DE LA FEUILLE (03/09/2026).
+           `top: 50%` + `translateY(-34px)` posait le bouton à cheval sur « Confirmer le
+           trajet » : la feuille occupe `--sheet-h` (= moitié du viewport moins les barres)
+           au-dessus des 64 px laissés par #trip-modal-overlay, donc son bord haut tombe
+           pile sur les 50 %. Un bouton de 44 px centré 34 px plus haut mordait dessus
+           d'une dizaine de pixels — visible dès que la feuille est ouverte.
+           On l'ancre donc au bord de la FEUILLE et non au milieu de l'écran : `--sheet-h`
+           (posée par syncSheetHeightVar(), js/08) est la source de vérité partagée par le
+           modal et la feuille du scan, le bouton suit désormais leurs réglages de hauteur
+           au lieu de les supposer. Le 64 px reprend celui de #trip-modal-overlay.
+           ⚠ PORTRAIT SEULEMENT : en paysage la feuille devient un tiroir LATÉRAL (bloc
+           `orientation: landscape` plus bas), où `--sheet-h` ne décrit plus rien d'occupé
+           en bas — l'y appliquer chasserait le bouton hors de l'écran. */
+        @media (max-width: 600px) and (orientation: portrait) {
+            #recenter-btn {
+                top: auto; transform: none;
+                bottom: calc(64px + var(--sheet-h, calc(50dvh - var(--panel-bottom-offset, 64px))) + 14px);
+            }
+        }
 
         /* === INDICATEUR DE VITESSE ACTUELLE (panneau routier) === */
         /* === COMPTEUR VITESSE STYLE WAZE === */

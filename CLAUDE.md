@@ -96,6 +96,7 @@ tourné en paysage en annonçant du portrait. Vérifier la capture produite, pas
 | Palettes de couleur, jetons `--cr-*` | « Les trois palettes » |
 | localStorage, clés persistées | « Persistance des données » |
 | Écarts navigateurs | « Compatibilité navigateurs » |
+| Anti-veille en trajet (Wake Lock) | « Anti-veille (Wake Lock) » |
 
 ## Tenir cette documentation à jour
 

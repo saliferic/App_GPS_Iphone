@@ -1484,7 +1484,16 @@
                laisserait la classe profile-focus posée, et donc le panneau libéré de sa
                hauteur de référence sur tous les onglets. On referme proprement. */
             const createProfileForm = document.getElementById('create-profile-inline');
-            if (createProfileForm && createProfileForm.style.display === 'block') hideCreateProfileInline();
+            if (createProfileForm && createProfileForm.style.display === 'block') {
+                /* ⚠ DÉSARMER AVANT DE FERMER. L'utilisateur choisit ici un onglet lui-même :
+                   le retour automatique vers Itinéraire du premier lancement n'a plus lieu
+                   d'être, et le laisser armé ferait détourner par hideCreateProfileInline()
+                   la navigation qu'on est justement en train d'exécuter — vers Objectifs,
+                   par exemple. C'est aussi ce qui interdit la récursion croisée entre les
+                   deux fonctions. Voir _profilOuvertParLeLancement (js/00). */
+                _profilOuvertParLeLancement = false;
+                hideCreateProfileInline();
+            }
 
             const panel = document.getElementById('ui-panel');
             // Source de vérité : quel panel-tab-content est actuellement visible ?

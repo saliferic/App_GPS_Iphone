@@ -35,6 +35,24 @@
            à chaque lancement. */
         let _stationsHidden = false;
 
+        /* Le premier lancement bascule d'office sur l'onglet Profil pour proposer la
+           création de compte (js/13, `setTimeout` de fin de démarrage). ⚠ L'utilisateur
+           n'a PAS choisi cet onglet : refermer le formulaire devait donc le ramener sur
+           Itinéraire, et non le laisser sur une page où il n'est jamais allé de lui-même
+           — signalé le 03/09/2026, « j'annule la création de compte et je me retrouve sur
+           Profil ».
+
+           Drapeau à UN SEUL usage, armé par ce basculement automatique et consommé par
+           `hideCreateProfileInline()` (js/13). Il est aussi DÉSARMÉ par `switchMainTab()`
+           (js/14) : dès que l'utilisateur choisit un onglet lui-même, le retour
+           automatique n'a plus lieu d'être — et comme switchMainTab() referme justement
+           le formulaire en quittant l'onglet, le désarmer là est aussi ce qui empêche la
+           récursion croisée switchMainTab → hideCreateProfileInline → switchMainTab.
+
+           Déclaré ICI, et non dans js/13 : il est écrit par 13 ET par 14, donc lu par
+           plus d'un fichier. */
+        let _profilOuvertParLeLancement = false;
+
         /* ÉCHAPPEMENT DU TEXTE VENU DU RÉSEAU — à utiliser dans TOUT gabarit `innerHTML`
            qui interpole un nom, une adresse ou un libellé issu d'un flux tiers.
 

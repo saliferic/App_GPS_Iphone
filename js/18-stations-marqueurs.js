@@ -636,6 +636,14 @@
                 btn.onclick = () => {
                     if (btn.classList.contains('active')) {
                         selectedFuelType = null;
+                        /* ⚠ CE CHEMIN NE PASSE PAS PAR renderGasCards() : il vide la liste
+                           et les marqueurs à la main. Le garde posé dans renderGasCards()
+                           ne le couvre donc pas, et sans cet appel la station choisie
+                           restait sélectionnée en mémoire — carte et marqueur effacés,
+                           mais le détour vers elle toujours tracé sur la carte. C'est le
+                           cas signalé : éteindre la pastille de carburant ne remettait pas
+                           le trajet à jour. */
+                        deselectGasStation();
                         // Même portée limitée que setFuelFilter() : les pastilles de type
                         // de l'hybride ne sont pas des filtres de carburant.
                         document.querySelectorAll('#gas-fuel-selector .gas-fuel-btn').forEach(b => b.classList.remove('active'));
@@ -990,6 +998,16 @@
 
         function renderGasCards(stations) {
             const list = document.getElementById('gas-stations-list');
+            /* Changer de carburant ou de tri (`setFuelFilter`, `setGasSortMode`) rappelle
+               cette fonction avec une liste RECALCULÉE, qui peut ne plus contenir la
+               station déjà choisie (carburant absent, sortie du top-5). Sans ce garde,
+               sa carte et son marqueur disparaissaient silencieusement — plus rien ne la
+               montrait comme sélectionnée — mais `selectedGasStation` restait posé et le
+               détour routier vers elle restait affiché : le trajet ne « se remettait pas
+               à jour ». `deselectGasStation()` restaure le tracé de base avant le rendu. */
+            if (selectedGasStation && !(stations || []).some(s => _sameStation(s, selectedGasStation))) {
+                deselectGasStation();
+            }
             /* Les pastilles de type sont reposées à chaque rendu carburant, pas seulement
                par `_renderMixedPanel()` : le scan live (phase 2) rappelle directement
                cette fonction, et l'hybride perdrait sinon son sélecteur ⛽/⚡ au premier
@@ -1406,6 +1424,7 @@
             _allGasStations = enriched;
 
             if (_allGasStations.length === 0) {
+                deselectGasStation();   // même invariant que la pastille éteinte : rien d'affiché ⇒ rien de sélectionné
                 clearGasStationMarkers();
                 document.getElementById('gas-stations-list').innerHTML =
                     `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Aucune station avec prix disponible sur ce trajet.</div>`;
@@ -1421,6 +1440,7 @@
             // les pastilles sont proposées, mais ni marqueurs ni cartes tant que
             // l'utilisateur n'a pas dit ce qu'il met dans son réservoir.
             if (!selectedFuelType) {
+                deselectGasStation();   // idem : la liste est remplacée par une invite, plus aucune station n'est montrée
                 clearGasStationMarkers();
                 document.getElementById('gas-stations-list').innerHTML =
                     `<div style="font-size:12px;color:#4a5568;text-align:center;padding:8px 0;">Choisissez un carburant ci-dessus pour voir les stations.</div>`;
@@ -1554,6 +1574,13 @@
             list.innerHTML = '';
             clearGasStationMarkers();
             selectedGasStation = null;
+            /* ⚠ L'ITINÉRAIRE DE BASE APPARTIENT AU TRAJET QUI L'A PRODUIT. `_baseRouteForGas`
+               n'était jamais remis à zéro : après un premier trajet avec station, la garde
+               `if (!_baseRouteForGas)` de updateRouteWithGasWaypoint() empêchait toute
+               nouvelle capture, et désélectionner sur le trajet SUIVANT redessinait le
+               tracé du précédent. On le libère ici, seul point par lequel passe le
+               chargement des stations d'un nouveau tracé. */
+            _baseRouteForGas = null;
 
             // Adapter le titre et le comportement selon le type de véhicule
             const vCfg = loadVehicleConfig();
