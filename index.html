@@ -70,7 +70,18 @@
         https://cdn.jsdelivr.net
         https://*.firebaseio.com">
     <title>Simulateur Récompenses GPS - Dark Mode & Néon</title>
-    
+
+    <!-- PWA — installation "Sur l'écran d'accueil" depuis Safari iOS.
+         `manifest.json` fournit nom/icônes/couleurs pour Android et les navigateurs
+         qui le lisent ; Safari iOS l'ignore encore largement et se base sur les
+         balises `apple-*` ci-dessous. Les deux sont donc nécessaires en parallèle. -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GPS Récompenses">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="theme-color" content="#0d0f14">
+
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css" rel="stylesheet" />
    <link rel="stylesheet" href="css/styles.css" />
 
