@@ -451,8 +451,9 @@
         }
 
         function parseEVStations(rawStations, routeCoords) {
-            const routeLine    = turf.lineString(routeCoords);
-            const routeTotalKm = turf.length(routeLine, { units: 'kilometers' });
+            // Même échantillonnage que parseGasStations : voir ligneProximite() (js/00).
+            const routeLine    = turf.lineString(ligneProximite(routeCoords));
+            const routeTotalKm = turf.length(turf.lineString(routeCoords), { units: 'kilometers' });
             // Marge élargie : couvre les bornes près du départ/arrivée (snapping imprécis)
             const MARGIN_KM    = 5;
             const results = [];

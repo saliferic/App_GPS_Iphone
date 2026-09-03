@@ -356,6 +356,42 @@ Le test de résistance sur 19 communes exposées a montré que **la Corse n'est 
 - **La source Mapbox de `fetchStationsBE` ne rend rien.** Elle interroge `geocoding/v5/mapbox.places/gas_station.json`, c'est-à-dire une recherche **textuelle** sur la chaîne « gas_station ». Mesuré dans la page : **HTTP 200, `features: []`**. Un zéro silencieux, le pire cas — elle ne lève rien, elle n'apporte rien. Les 309 stations viennent toutes d'Overpass.
 - **`COUNTRY_BOXES` (js/00-noyau-calculs) sont des rectangles qui se chevauchent largement.** La boîte `be` (49,5–51,6 / 2,5–6,4) **contient Lille, Dunkerque, Valenciennes et Charleville** ; la boîte `fr` (jusqu'à 51,1 / 9,6) **contient Bruxelles**. Tout scan dans le Nord ou en Belgique déclenche donc les DEUX sources et paie les deux. Vérifié dans la page : sur une bulle bruxelloise, `detectCountriesOnRoute` rend `['fr','be']`. Ce n'est pas faux — juste coûteux, et cela rend le journal ambigu si l'on n'y consigne pas les pays détectés.
 
+### ⚠⚠ Six secondes de gel : le tracé Mapbox fait 9 770 points — 04/09/2026
+
+**Le symptôme, remonté par l'utilisateur.** Basculer « électrique » → « thermique » dans « Mon véhicule », trajet Courbevoie→Lyon préparé : plusieurs secondes pendant lesquelles l'app paraît plantée.
+
+**La cause n'est PAS le réseau.** Mesuré dans la page sur ce trajet exact :
+
+| Étape | Durée |
+|---|---|
+| Réseau (récupération des stations) | 641 ms |
+| `parseGasStations` — **synchrone** | **6 189 ms** |
+
+Mapbox rend un tracé de **9 770 points**. `parseGasStations` (js/17) et `parseEVStations` (js/19) projettent CHAQUE station dessus avec `turf.nearestPointOnLine`, dont le coût est proportionnel au nombre de points : 301 × 9 770 ≈ 3 millions de projections, sur le fil principal.
+
+**Le remède : `ligneProximite()` (js/00-noyau-calculs)**, qui échantillonne le tracé à 1 000 points pour le SEUL test de proximité.
+
+| | Durée | Stations retenues |
+|---|---|---|
+| Tracé complet | 6 189 ms | 295 |
+| Échantillonné | **602 ms** | **295** |
+
+Résultat identique à l'unité près, et ce n'est pas une approximation consentie : le filtre tranche à 5 ou 7 km près, une ligne à 9 770 points est une précision sans objet à cette échelle.
+
+- **⚠ La LONGUEUR reste mesurée sur le tracé complet.** Elle borne `distAlongRoute`, elle ne filtre rien. Vérifié après correction : 0 → 484 km sur un trajet de 486.
+- **⚠ Le dernier point est toujours conservé.** Sans lui la ligne s'arrête avant l'arrivée, et une station des derniers kilomètres sort du corridor — un défaut qui ne se verrait qu'en fin de trajet.
+- **⚠ Réservé aux tests de proximité.** Jamais pour afficher un tracé, mesurer une distance parcourue ou placer une étape.
+
+**LA LEÇON, ET ELLE EST GÉNÉRALE : on ne peut pas prévenir l'utilisateur pendant un gel.** Six secondes de JavaScript synchrone empêchent le navigateur de REPEINDRE. Le message « recherche en cours » existait déjà et était bien déclenché (`#gas-stations-loading`, js/18) — il n'apparaissait simplement jamais. **Devant une demande de « mettre un message d'attente », vérifier D'ABORD si l'attente est synchrone : si oui, le message est impossible et c'est le calcul qu'il faut raccourcir.**
+
+Second défaut du même écran, corrigé avec : le message existant vit dans « Stations sur le trajet », **un panneau replié**, alors que le geste se fait dans « Mon véhicule ». `#vehicle-scan-status` le dit désormais là où l'utilisateur regarde, retiré dans un `finally` pour qu'un relevé en échec ne laisse pas un faux « en cours ».
+
+### ⚠ La « phase 1 » du scan stations ne borne rien — non corrigé au 04/09/2026
+
+`_gasScanCoordsForRoute()` (js/18, ~L1539) calcule `Math.max(win.toKm, GAS_PHASE1_RADIUS_KM)`. Or `win.toKm` vaut le trajet MOINS la queue de quelques kilomètres : le `max` retient donc toujours le trajet entier. **Mesuré sur Courbevoie→Lyon : « borné » à 481 km sur 486.** Un `Math.min` était visiblement voulu — l'en-tête de js/17 annonce « Paris→Marseille : 12 points sondés au lieu de 112 », ce qui décrit l'intention, pas le comportement.
+
+**Laissé en l'état volontairement** : le corriger change ce que l'utilisateur VOIT à la préparation (moins de stations, complétées ensuite par la phase 2 en navigation). C'est un arbitrage produit, pas une correction technique — à trancher avec lui, pas à glisser dans un lot de performance.
+
 ### ⚠ Diagnostiquer une chaîne asynchrone : poser un témoin AVANT le premier `await`
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.

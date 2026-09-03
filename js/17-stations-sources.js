@@ -859,9 +859,13 @@
         let _gasDiag = { raw: 0, parsed: 0, priced: 0, near: 0 };
 
         function parseGasStations(rawStations, routeCoords) {
-            const routeLine    = turf.lineString(routeCoords);
+            /* ⚠ LIGNE ÉCHANTILLONNÉE POUR LA PROJECTION, TRACÉ COMPLET POUR LA LONGUEUR.
+               Voir ligneProximite() (js/00-noyau-calculs) : 6 189 ms → 595 ms sur un
+               Courbevoie→Lyon, à résultat identique. La LONGUEUR, elle, se mesure sur le
+               tracé complet — elle sert à borner distAlongRoute, pas à filtrer. */
+            const routeLine    = turf.lineString(ligneProximite(routeCoords));
             const startPoint   = turf.point(routeCoords[0]);
-            const routeTotalKm = turf.length(routeLine, { units: 'kilometers' });
+            const routeTotalKm = turf.length(turf.lineString(routeCoords), { units: 'kilometers' });
             const MARGIN_KM    = 1.5; // tolérance en km avant le départ / après l'arrivée
             const results      = [];
 

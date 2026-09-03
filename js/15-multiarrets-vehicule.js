@@ -989,12 +989,30 @@
                 const coords = route.geometry?.coordinates;
                 if (coords && coords.length > 1) {
                     // Délai court pour laisser le localStorage se mettre à jour
+                    /* ⚠ LE MESSAGE EST POSÉ AVANT LE setTimeout, PAS DEDANS. Il doit être
+                       à l'écran AVANT que le relevé ne commence, sinon il apparaît en même
+                       temps que le résultat — donc jamais.
+                       Le relevé est passé sous la seconde depuis ligneProximite() (js/00),
+                       mais le réseau, lui, reste imprévisible : c'est lui que ce message
+                       couvre désormais. */
+                    const statut = document.getElementById('vehicle-scan-status');
+                    if (statut) {
+                        statut.textContent = isElec
+                            ? '🔍 Recherche des bornes sur le trajet…'
+                            : '🔍 Recherche des stations sur le trajet…';
+                        statut.style.display = 'block';
+                    }
                     setTimeout(() => {
                         // Pendant la navigation : ouvrir le panneau stations s'il est fermé
                         if (isCourseStarted && !_gasStationsPanelOpen) {
                             toggleGasStationsPanel();
                         }
-                        loadGasStationsForRoute(coords);
+                        /* `finally` et non `then` : un relevé qui échoue doit retirer le
+                           message comme un relevé qui réussit, sinon il reste affiché
+                           indéfiniment et devient un faux « en cours ». */
+                        Promise.resolve(loadGasStationsForRoute(coords))
+                            .catch(() => {})
+                            .finally(() => { if (statut) statut.style.display = 'none'; });
                     }, 100);
                 }
             }

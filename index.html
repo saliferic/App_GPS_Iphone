@@ -1359,6 +1359,13 @@
                         <button type="button" class="vtype-btn" data-type="hybride" onclick="selectVehicleType('hybride')">⚡🔥 Hybride</button>
                         <button type="button" class="vtype-btn" data-type="electrique" onclick="selectVehicleType('electrique')">⚡ Électrique</button>
                     </div>
+                    <!-- Changer de type de véhicule relance le relevé des stations ou des
+                         bornes sur tout le trajet. Ça pouvait durer plusieurs secondes SANS
+                         que rien ne bouge à l'écran : le message existant vit dans
+                         « Stations sur le trajet », un panneau replié qu'on ne regarde pas
+                         quand on est ici. Celui-ci est à l'endroit où le geste est fait.
+                         Piloté par selectVehicleType() (js/15). -->
+                    <div id="vehicle-scan-status" class="trip-option-hint" style="display:none;margin-bottom:10px;"></div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         <div class="vcell" id="vcell-thermo-conso">
                             <label class="vcell-label">L/100 km</label>

@@ -38,6 +38,7 @@ function chargerNoyau() {
         'TOLL_ENTRY_FEE', 'TOLL_KM_RATE', 'TOLL_NETWORK_FACTOR', 'TOLL_MIN_KM',
         'TOLL_LEGACY_ENTRY_FEE', 'TOLL_LEGACY_KM_RATE', 'TOLL_SECTION_GAP_KM', '_sectionsPayantes',
         'extractGasCoords', 'extractGasPrice', 'getBestPrice',
+        'ligneProximite', 'PROX_PTS_MAX',
         'COUNTRY_BOXES', 'detectCountriesOnRoute', 'paysDuPoint',
         'getTimeUntilEndOfWeek',
         'formatTripDayLabel', 'formatTripTime', 'groupTripsByDate',
@@ -929,6 +930,35 @@ section('Flux stations-service');
     verifie('aucune coordonnée → null', coords({}), null);
     // Hors de la fenêtre France/Europe proche → on ne fait pas confiance au champ plat.
     verifie('coordonnées hors zone rejetées', coords({ latitude: '0', longitude: '0' }), null);
+}
+
+// ── Ligne de proximité ──────────────────────────────────────────────────────────
+section('Ligne de proximite');
+{
+    const { ligneProximite: prox, PROX_PTS_MAX: MAX } = N;
+    const faire = n => Array.from({ length: n }, (_, i) => [i * 0.001, 45 + i * 0.001]);
+
+    /* Sous le plafond, on rend le tracé TEL QUEL — même référence, pas une copie :
+       les appelants comparent parfois par identité, et copier coûterait pour rien. */
+    const court = faire(500);
+    verifie('sous le plafond : tracé inchangé', prox(court) === court, true);
+    verifie('exactement au plafond : inchangé', prox(faire(MAX)).length, MAX);
+
+    /* Au-dessus, on échantillonne sans jamais dépasser le plafond (+1 pour le dernier
+       point, voir ci-dessous). 9773 points est le cas réel mesuré sur Courbevoie→Lyon. */
+    const long = faire(9773);
+    const reduit = prox(long);
+    verifie('9773 points ramenés sous le plafond', reduit.length <= MAX + 1, true);
+    verifie('premier point conservé', reduit[0] === long[0], true);
+    /* ⚠ LE DERNIER POINT EST LA SEULE GARANTIE QUI COMPTE. Sans lui, la ligne s'arrête
+       avant l'arrivée et une station des derniers kilomètres sort du corridor — un défaut
+       qui ne se verrait qu'en fin de trajet, là où on le cherche le moins. */
+    verifie('dernier point conservé', reduit[reduit.length - 1] === long[long.length - 1], true);
+    verifie('ordre préservé', reduit[1][0] > reduit[0][0], true);
+
+    // Entrées aberrantes : on rend l'argument, jamais une exception.
+    verifie('null rendu tel quel', prox(null), null);
+    verifie('tableau vide rendu tel quel', prox([]).length, 0);
 }
 
 // ── Pays traversés ──────────────────────────────────────────────────────────────

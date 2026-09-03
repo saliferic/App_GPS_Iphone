@@ -521,6 +521,43 @@
         // === STATIONS-SERVICE : LECTURE DU FLUX ===
         // ═══════════════════════════════════════════════════════════════════
 
+        /* ═══ LE TRACÉ SERVANT AUX TESTS DE PROXIMITÉ EST ÉCHANTILLONNÉ  (04/09/2026) ═══
+           `parseGasStations` (js/17) et `parseEVStations` (js/19) projettent CHAQUE station
+           sur le tracé avec `turf.nearestPointOnLine`, dont le coût est proportionnel au
+           nombre de points de la ligne. Sur un Courbevoie→Lyon, Mapbox rend un tracé de
+           9 770 POINTS : 301 stations × 9 770 segments ≈ 3 millions de projections, et
+           l'appel est SYNCHRONE.
+
+           MESURÉ le 04/09/2026, dans la page, sur ce trajet exact :
+             réseau (récupération des stations)      641 ms
+             parseGasStations, tracé complet       6 189 ms  ← le gel
+             parseGasStations, 1 point sur 10        595 ms  ← même résultat
+           295 stations retenues dans les deux cas, à l'unité près. Ce n'est pas une
+           approximation qu'on accepte : le filtre tranche à 5 ou 7 km près, une ligne à
+           9 770 points est une précision sans objet à cette échelle.
+
+           ⚠ CE QUE LE GEL RENDAIT IMPOSSIBLE. Six secondes de JavaScript synchrone
+           empêchent le navigateur de REPEINDRE : le message « recherche en cours » posé
+           juste avant n'apparaissait jamais à l'écran. On ne pouvait donc même pas
+           prévenir l'utilisateur — il fallait d'abord rendre le calcul court.
+
+           ⚠ RÉSERVÉ AUX TESTS DE PROXIMITÉ. Ne pas s'en servir pour AFFICHER un tracé,
+           mesurer une distance parcourue ou placer une étape : là, chaque point compte.
+           Ici on ne répond qu'à « cette station est-elle à moins de N km de la route ? ». */
+        const PROX_PTS_MAX = 1000;   // au-delà, on échantillonne
+
+        function ligneProximite(routeCoords) {
+            if (!Array.isArray(routeCoords) || routeCoords.length <= PROX_PTS_MAX) return routeCoords;
+            const pas = Math.ceil(routeCoords.length / PROX_PTS_MAX);
+            const out = [];
+            for (let i = 0; i < routeCoords.length; i += pas) out.push(routeCoords[i]);
+            /* Le dernier point est TOUJOURS conservé : sans lui la ligne s'arrête avant
+               l'arrivée, et une station des derniers kilomètres sortirait du corridor. */
+            const dernier = routeCoords[routeCoords.length - 1];
+            if (out[out.length - 1] !== dernier) out.push(dernier);
+            return out;
+        }
+
         function extractGasCoords(s) {
             const rawLat = parseFloat(s.latitude);
             const rawLng = parseFloat(s.longitude);
