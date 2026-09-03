@@ -91,6 +91,32 @@ body.theme-crepuscule {
     --cr-rose:    #FF8FA3;   /* chaleur, accent doux */
     --cr-danger:  #FF6B6B;   /* danger UNIQUEMENT */
 
+    /* Le bouton « C'est parti » — rouge-corail, sa propre couleur depuis le
+       02/09/2026 (voir la règle .itin-start-btn plus bas). Deux teintes parce
+       que c'est un dégradé, plus son triplet pour la lueur. */
+    --cr-go-1:   #FF8A65;
+    --cr-go-2:   #FF5252;
+    --cr-go-rgb: 255,82,82;
+
+    /* ⚠ TRIPLETS RVB DES MÊMES COULEURS — pas un doublon décoratif.
+       Une palette (voir § 1bis) ne peut PAS retendre un `rgba(255,179,92,0.15)`
+       écrit en dur : la valeur est figée dans la déclaration. Seule la forme
+       `rgba(var(--cr-amber-rgb), 0.15)` suit le thème. Toute nouvelle couleur
+       translucide passe donc par un triplet, jamais par des chiffres en clair —
+       sinon elle reste violette dans Canopée et dans Abysse, en silence. */
+    --cr-amber-rgb:    255,179,92;
+    --cr-amber-d-rgb:  255,140,60;    /* l'ambre profond des lueurs */
+    --cr-violet-rgb:   168,139,255;
+    --cr-mint-rgb:     111,227,160;
+    --cr-turq-rgb:     127,216,232;
+    --cr-danger-rgb:   255,107,107;
+    --cr-sky-0-rgb:    27,22,51;
+    --cr-sky-1-rgb:    36,28,66;
+    --cr-sky-2-rgb:    43,32,72;
+    --cr-nav-rgb:      30,23,58;      /* barre d'onglets, légèrement à part du ciel */
+    --cr-shadow-rgb:   10,6,24;       /* toutes les ombres portées */
+    --cr-void-rgb:     15,10,32;      /* voiles et fondus posés SUR le ciel */
+
     /* Géométrie */
     --cr-r-sheet: 32px;
     --cr-r-card:  20px;
@@ -99,6 +125,115 @@ body.theme-crepuscule {
     /* Flou. Un seul endroit à passer à 0px si le GPU souffre en navigation
        continue sur mobile bas de gamme — c'est le premier réglage à sacrifier. */
     --cr-blur: 18px;
+}
+
+
+/* === 1bis. LES DEUX AUTRES PALETTES ========================================
+
+   ⚠ `theme-crepuscule` RESTE POSÉE SUR LE <body> DANS LES TROIS THÈMES. Ce
+   n'est pas un oubli : les 316 sélecteurs de ce fichier en dépendent, et une
+   palette ne redéfinit QUE le bloc de jetons ci-dessus. La retirer éteindrait
+   tout le thème, pas seulement la couleur. Le <body> porte donc, au choix :
+
+       class="theme-crepuscule"                → Crépuscule (le défaut)
+       class="theme-crepuscule pal-canopee"    → Canopée
+       class="theme-crepuscule pal-abysse"     → Abysse
+
+   Crépuscule n'a VOLONTAIREMENT pas de classe `pal-` : ses valeurs sont celles
+   du bloc du dessus. Lui en donner une aurait signifié recopier les vingt-cinq
+   jetons une deuxième fois — donc les voir diverger au premier réglage.
+
+   Deux classes battent une classe en spécificité : ces blocs l'emportent sans
+   `!important`. Les rayons, le flou, les graisses et la géométrie ne sont pas
+   repris ici — ils ne changent pas d'un thème à l'autre, c'est le principe.
+
+   ⚠ Toute couleur ajoutée au bloc du dessus doit être ajoutée ICI DEUX FOIS,
+   sans quoi Canopée et Abysse héritent silencieusement de la valeur violette.
+   C'est le seul vrai coût d'entretien de ces palettes.
+   Le style de la CARTE Mapbox, lui, ne suit pas : il est réglé côté Mapbox
+   (`applyMapStyle()`, js/04) et reste neutre dans les trois thèmes. */
+
+/* --- Canopée — vert forêt profond ---------------------------------------- */
+body.theme-crepuscule.pal-canopee {
+    --cr-sky-0: #101F19;
+    --cr-sky-1: #162C23;
+    --cr-sky-2: #1C382C;
+
+    --cr-ink:   #EFFFF6;
+    --cr-ink-2: #A9D8BE;
+    --cr-ink-3: #7BAE92;
+    --cr-ink-4: #5F9176;
+
+    /* L'or se renforce : un fond vert absorbe plus de lumière qu'un violet. */
+    --cr-amber:   #FFBC63;
+    --cr-amber-2: #FFDCA8;
+    --cr-violet:  #A88BFF;
+    --cr-turq:    #7FC8E8;
+    /* ⚠ L'éco n'est PAS restée verte. Sur un ciel vert, #6FE3A0 disparaissait :
+       « réussite » ne se lisait plus. Elle passe au lime, qui reste dans la
+       famille sans se confondre avec le fond. */
+    --cr-mint:    #B6E86B;
+    --cr-rose:    #F0A9C4;
+    --cr-danger:  #FF6B6B;
+
+    /* Le corail vire à l'orange : un rouge franc sur du vert vire au Noël. */
+    --cr-go-1:   #FF9A5C;
+    --cr-go-2:   #FF6B3D;
+    --cr-go-rgb: 255,107,61;
+
+    --cr-amber-rgb:    255,188,99;
+    --cr-amber-d-rgb:  255,150,70;
+    --cr-violet-rgb:   168,139,255;
+    --cr-mint-rgb:     182,232,107;
+    --cr-turq-rgb:     127,200,232;
+    --cr-danger-rgb:   255,107,107;
+    --cr-sky-0-rgb:    16,31,25;
+    --cr-sky-1-rgb:    22,44,35;
+    --cr-sky-2-rgb:    28,56,44;
+    --cr-nav-rgb:      18,37,29;
+    --cr-shadow-rgb:   4,14,9;
+    --cr-void-rgb:     6,18,12;
+}
+
+/* --- Abysse — bleu nuit profond ------------------------------------------ */
+body.theme-crepuscule.pal-abysse {
+    --cr-sky-0: #101C33;
+    --cr-sky-1: #172642;
+    --cr-sky-2: #1D2F52;
+
+    --cr-ink:   #EFF6FF;
+    --cr-ink-2: #A9C2E0;
+    --cr-ink-3: #7B93B5;
+    --cr-ink-4: #5F7594;
+
+    /* L'ambre d'origine, au pixel près : sur bleu nuit c'est le couple le plus
+       contrasté des trois, il n'y avait rien à corriger. */
+    --cr-amber:   #FFB35C;
+    --cr-amber-2: #FFD9A8;
+    --cr-violet:  #B08BFF;
+    /* ⚠ Le turquoise du temps se noyait dans le ciel bleu : il glisse vers le
+       teal pour rester distinct du fond. */
+    --cr-turq:    #7FE0DC;
+    --cr-mint:    #6FE3A0;
+    --cr-rose:    #FF8FA3;
+    --cr-danger:  #FF6B6B;
+
+    --cr-go-1:   #FF8A65;
+    --cr-go-2:   #FF5252;
+    --cr-go-rgb: 255,82,82;
+
+    --cr-amber-rgb:    255,179,92;
+    --cr-amber-d-rgb:  255,140,60;
+    --cr-violet-rgb:   176,139,255;
+    --cr-mint-rgb:     111,227,160;
+    --cr-turq-rgb:     127,224,220;
+    --cr-danger-rgb:   255,107,107;
+    --cr-sky-0-rgb:    16,28,51;
+    --cr-sky-1-rgb:    23,38,66;
+    --cr-sky-2-rgb:    29,47,82;
+    --cr-nav-rgb:      19,32,56;
+    --cr-shadow-rgb:   3,10,24;
+    --cr-void-rgb:     6,14,32;
 }
 
 
@@ -144,12 +279,12 @@ body.theme-crepuscule #main-bottom-nav * {
 /* === 3. LE PANNEAU (la feuille) ============================================ */
 
 body.theme-crepuscule #ui-panel {
-    background: linear-gradient(180deg, rgba(43,32,72,0.94), rgba(27,22,51,0.98));
+    background: linear-gradient(180deg, rgba(var(--cr-sky-2-rgb),0.94), rgba(var(--cr-sky-0-rgb),0.98));
     -webkit-backdrop-filter: blur(var(--cr-blur));
     backdrop-filter: blur(var(--cr-blur));
     border: 1px solid var(--cr-line);
     border-radius: var(--cr-r-sheet);
-    box-shadow: 0 -24px 60px rgba(10,6,24,0.6);
+    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6);
     color: var(--cr-ink-2);
 }
 
@@ -210,7 +345,7 @@ body.theme-crepuscule #trip-modal .input-with-btn {
    frappe dans le champ d'adresse. */
 body.theme-crepuscule .itin-input-row:focus-within,
 body.theme-crepuscule #trip-modal .input-with-btn:focus-within {
-    border-color: rgba(255,179,92,0.45);
+    border-color: rgba(var(--cr-amber-rgb),0.45);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 
@@ -246,7 +381,7 @@ body.theme-crepuscule .addr-suggestions {
     background: var(--cr-sky-2);
     border: 1px solid var(--cr-line);
     border-radius: var(--cr-r-card);
-    box-shadow: 0 16px 40px rgba(10,6,24,0.6);
+    box-shadow: 0 16px 40px rgba(var(--cr-shadow-rgb),0.6);
 }
 body.theme-crepuscule .addr-suggestion {
     color: var(--cr-ink-2);
@@ -270,27 +405,45 @@ body.theme-crepuscule .itin-start-btn {
     font-size: 19px;
     font-weight: 800;
     padding: clamp(14px, 3.4vw, 17px);
-    box-shadow: 0 10px 30px rgba(255,140,60,0.26);
+    box-shadow: 0 10px 30px rgba(var(--cr-amber-d-rgb),0.26);
 }
 body.theme-crepuscule .itin-start-btn:hover,
 body.theme-crepuscule .itin-start-btn:active {
     color: #2A1226;
     transform: none;
-    box-shadow: 0 6px 20px rgba(255,140,60,0.34);
+    box-shadow: 0 6px 20px rgba(var(--cr-amber-d-rgb),0.34);
 }
 body.theme-crepuscule .itin-start-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+/* Rouge-corail plutôt que l'ambre du thème (02/09/2026, demande utilisateur,
+   repris de la variante « Wii nuit » comparée en maquette). Règle DÉDIÉE et
+   postée APRÈS celle du dessus plutôt qu'une modification en place : la
+   déclaration ci-dessus est partagée avec `.modal-validate-btn` (bouton
+   « Valider » du modal de confirmation de trajet), qui garde l'ambre — ce
+   n'est pas le bouton visé ici. Lueur plus marquée que l'ombre d'origine
+   (blur 40px au lieu de 30px) pour le halo vu sur la maquette. */
+body.theme-crepuscule .itin-start-btn {
+    background: linear-gradient(135deg, var(--cr-go-1), var(--cr-go-2));
+    color: #FFFFFF;
+    box-shadow: 0 8px 40px rgba(var(--cr-go-rgb),0.45);
+}
+body.theme-crepuscule .itin-start-btn:hover,
+body.theme-crepuscule .itin-start-btn:active {
+    color: #FFFFFF;
+    box-shadow: 0 6px 28px rgba(var(--cr-go-rgb),0.55);
+}
 
 body.theme-crepuscule .modal-validate-btn {
     background: linear-gradient(135deg, #FFC578, #FF8F5C);
     border: none;
     color: #2A1226;
-    box-shadow: 0 10px 30px rgba(255,140,60,0.26);
+    box-shadow: 0 10px 30px rgba(var(--cr-amber-d-rgb),0.26);
     animation: none;
 }
 body.theme-crepuscule .modal-validate-btn:hover {
     color: #2A1226;
     transform: none;
-    box-shadow: 0 6px 20px rgba(255,140,60,0.34);
+    box-shadow: 0 6px 20px rgba(var(--cr-amber-d-rgb),0.34);
 }
 body.theme-crepuscule .modal-validate-btn:disabled { opacity: 0.45; box-shadow: none; }
 
@@ -303,7 +456,7 @@ body.theme-crepuscule .nav-search-modes button {
     color: var(--cr-ink-2);
     font-weight: 700;
 }
-body.theme-crepuscule .itin-place-btn.has-place { border-color: rgba(168,139,255,0.32); }
+body.theme-crepuscule .itin-place-btn.has-place { border-color: rgba(var(--cr-violet-rgb),0.32); }
 body.theme-crepuscule .itin-free-title { font-size: 14px; font-weight: 800; color: var(--cr-ink); }
 body.theme-crepuscule .itin-free-sub   { font-size: 11px; font-weight: 600; color: var(--cr-ink-3); }
 
@@ -317,7 +470,7 @@ body.theme-crepuscule #status {
 /* Bascule Réel / Simu */
 body.theme-crepuscule .itin-slider { background: var(--cr-sunken); border: 1px solid var(--cr-line); }
 body.theme-crepuscule .itin-slider::before { background: var(--cr-ink-3); }
-body.theme-crepuscule .itin-switch input:checked + .itin-slider { background: rgba(255,179,92,0.22); border-color: rgba(255,179,92,0.4); }
+body.theme-crepuscule .itin-switch input:checked + .itin-slider { background: rgba(var(--cr-amber-rgb),0.22); border-color: rgba(var(--cr-amber-rgb),0.4); }
 body.theme-crepuscule .itin-switch input:checked + .itin-slider::before { background: var(--cr-amber); }
 body.theme-crepuscule .itin-mode-label { font-size: 13px; font-weight: 700; color: var(--cr-ink-4); }
 body.theme-crepuscule .itin-mode-label.active { color: var(--cr-ink); }
@@ -326,11 +479,11 @@ body.theme-crepuscule .itin-mode-label.active { color: var(--cr-ink); }
 /* === 6. BARRE D'ONGLETS ==================================================== */
 
 body.theme-crepuscule #main-bottom-nav {
-    background: rgba(30,23,58,0.92);
+    background: rgba(var(--cr-nav-rgb),0.92);
     -webkit-backdrop-filter: blur(var(--cr-blur));
     backdrop-filter: blur(var(--cr-blur));
     border-top: 1px solid var(--cr-line);
-    box-shadow: 0 -8px 28px rgba(10,6,24,0.5);
+    box-shadow: 0 -8px 28px rgba(var(--cr-shadow-rgb),0.5);
 }
 body.theme-crepuscule .main-nav-tab { color: var(--cr-ink-4); }
 body.theme-crepuscule .main-nav-tab span { font-size: 10.5px; font-weight: 700; }
@@ -421,8 +574,8 @@ body.theme-crepuscule .carnet-mot-texte {
 
 
 body.theme-crepuscule .wg-timer-pill {
-    background: rgba(127,216,232,0.12);
-    border: 1px solid rgba(127,216,232,0.3);
+    background: rgba(var(--cr-turq-rgb),0.12);
+    border: 1px solid rgba(var(--cr-turq-rgb),0.3);
     border-radius: 14px;
     color: var(--cr-turq);
     font-size: 15px;
@@ -449,11 +602,11 @@ body.theme-crepuscule .wg-item {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
 }
 body.theme-crepuscule .wg-item.completed {
-    background: rgba(111,227,160,0.08);
-    border-color: rgba(111,227,160,0.32);
+    background: rgba(var(--cr-mint-rgb),0.08);
+    border-color: rgba(var(--cr-mint-rgb),0.32);
 }
 body.theme-crepuscule .wg-emblem {
-    background: rgba(168,139,255,0.14);
+    background: rgba(var(--cr-violet-rgb),0.14);
     border: none;
     border-radius: 15px;
 }
@@ -461,11 +614,11 @@ body.theme-crepuscule .wg-emblem {
    carte tirent la même. La coche verte l'emporte dès que c'est bouclé. */
 body.theme-crepuscule .wg-emblem svg { width: 21px; height: 21px; display: block; }
 body.theme-crepuscule .wg-emblem { color: var(--cr-violet); }
-body.theme-crepuscule .wg-emblem-km_total    { background: rgba(255,179,92,0.14); color: var(--cr-amber); }
-body.theme-crepuscule .wg-emblem-km_no_speed { background: rgba(111,227,160,0.14); color: var(--cr-mint); }
-body.theme-crepuscule .wg-emblem-score_total { background: rgba(168,139,255,0.16); color: var(--cr-violet); }
+body.theme-crepuscule .wg-emblem-km_total    { background: rgba(var(--cr-amber-rgb),0.14); color: var(--cr-amber); }
+body.theme-crepuscule .wg-emblem-km_no_speed { background: rgba(var(--cr-mint-rgb),0.14); color: var(--cr-mint); }
+body.theme-crepuscule .wg-emblem-score_total { background: rgba(var(--cr-violet-rgb),0.16); color: var(--cr-violet); }
 body.theme-crepuscule .wg-item.completed .wg-emblem {
-    background: rgba(111,227,160,0.18);
+    background: rgba(var(--cr-mint-rgb),0.18);
     color: var(--cr-mint);
 }
 /* La coche du balisage d'origine (`<span class="wg-emblem-check">✓</span>`) n'est
@@ -493,8 +646,8 @@ body.theme-crepuscule .wg-score_total .wg-item-fill { background: linear-gradien
 body.theme-crepuscule .wg-item-fill.done { background: linear-gradient(90deg, var(--cr-mint), var(--cr-turq)); }
 
 body.theme-crepuscule .wg-remaining {
-    background: rgba(255,179,92,0.09);
-    border: 1px solid rgba(255,179,92,0.26);
+    background: rgba(var(--cr-amber-rgb),0.09);
+    border: 1px solid rgba(var(--cr-amber-rgb),0.26);
     border-radius: 18px;
     color: var(--cr-ink-2);
     font-size: 12.5px; font-weight: 600;
@@ -593,7 +746,7 @@ body.theme-crepuscule .profil-stat {
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.11);
     padding: 11px 14px;
 }
-body.theme-crepuscule .profil-stat.eco { border-color: rgba(111,227,160,0.25); }
+body.theme-crepuscule .profil-stat.eco { border-color: rgba(var(--cr-mint-rgb),0.25); }
 body.theme-crepuscule .profil-stat-val {
     font-family: 'Baloo 2', 'Nunito', sans-serif;
     font-size: 24px; font-weight: 700; line-height: 1.15;
@@ -639,8 +792,8 @@ body.theme-crepuscule .driver-controls select {
     /* styles.css impose width:140px : trop étroit une fois la pastille en place,
        le libellé y était tronqué (« Bon conduct… »). */
     width: auto;
-    background: rgba(111,227,160,0.14);
-    border: 1px solid rgba(111,227,160,0.30);
+    background: rgba(var(--cr-mint-rgb),0.14);
+    border: 1px solid rgba(var(--cr-mint-rgb),0.30);
     border-radius: 12px;
     color: var(--cr-mint);
     font-size: 12px; font-weight: 800;
@@ -653,7 +806,7 @@ body.theme-crepuscule .profil-row-ico svg { width: 19px; height: 19px; display: 
 body.theme-crepuscule .tg-count {
     flex-shrink: 0;
     font-size: 11px; font-weight: 800; color: var(--cr-amber-2);
-    background: rgba(255,179,92,0.16); border-radius: 8px; padding: 3px 8px;
+    background: rgba(var(--cr-amber-rgb),0.16); border-radius: 8px; padding: 3px 8px;
     font-variant-numeric: tabular-nums;
 }
 /* Le libellé ne s'étire plus par space-between (le picto en tête l'aurait poussé
@@ -686,8 +839,8 @@ body.theme-crepuscule .profil-row-btn:hover,
 body.theme-crepuscule .profil-row-btn:active { background: var(--cr-surface-2); }
 
 body.theme-crepuscule #compagnon-carte {
-    background: linear-gradient(150deg, rgba(168,139,255,0.16), rgba(255,255,255,0.03));
-    border: 1px solid rgba(168,139,255,0.28);
+    background: linear-gradient(150deg, rgba(var(--cr-violet-rgb),0.16), rgba(255,255,255,0.03));
+    border: 1px solid rgba(var(--cr-violet-rgb),0.28);
     border-radius: 26px;
 }
 body.theme-crepuscule #compagnon-carte-titre { font-size: 12px; font-weight: 700; color: var(--cr-ink-3); }
@@ -697,12 +850,12 @@ body.theme-crepuscule #compagnon-carte-titre { font-size: 12px; font-weight: 700
 
 body.theme-crepuscule #info-widget-panel,
 body.theme-crepuscule #recenter-btn {
-    background: rgba(36,28,66,0.82);
+    background: rgba(var(--cr-sky-1-rgb),0.82);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
     border: 1px solid var(--cr-line);
     border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(10,6,24,0.45);
+    box-shadow: 0 8px 24px rgba(var(--cr-shadow-rgb),0.45);
 }
 body.theme-crepuscule #recenter-btn { color: var(--cr-amber); }
 body.theme-crepuscule #weather-temp { font-size: 16px; font-weight: 800; color: var(--cr-ink); }
@@ -720,7 +873,7 @@ body.theme-crepuscule #nav-panel-overlay-body {
     background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
     border: 1px solid var(--cr-line);
     border-radius: 26px;
-    box-shadow: 0 20px 60px rgba(10,6,24,0.7);
+    box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7);
     color: var(--cr-ink-2);
 }
 body.theme-crepuscule #exit-confirm-box h3,
@@ -736,12 +889,12 @@ body.theme-crepuscule #export-json-title {
 }
 /* Oui/Non : le refus reste rouge, l'action de rester prend l'ambre. */
 body.theme-crepuscule #exit-confirm-no {
-    background: rgba(255,179,92,0.12); color: var(--cr-amber);
-    border: 1px solid rgba(255,179,92,0.3); border-radius: 14px;
+    background: rgba(var(--cr-amber-rgb),0.12); color: var(--cr-amber);
+    border: 1px solid rgba(var(--cr-amber-rgb),0.3); border-radius: 14px;
 }
 body.theme-crepuscule #exit-confirm-yes {
-    background: rgba(255,107,107,0.10); color: var(--cr-danger);
-    border: 1px solid rgba(255,107,107,0.28); border-radius: 14px;
+    background: rgba(var(--cr-danger-rgb),0.10); color: var(--cr-danger);
+    border: 1px solid rgba(var(--cr-danger-rgb),0.28); border-radius: 14px;
 }
 
 /* Fin de trajet (croix de la barre de navigation, 31/08/2026). Elle pose la même
@@ -750,12 +903,12 @@ body.theme-crepuscule #exit-confirm-yes {
    thème — laissé au gris bleuté de styles.css, il trahissait la fenêtre à lui seul. */
 body.theme-crepuscule #stop-course-sub { color: var(--cr-ink-3); }
 body.theme-crepuscule #stop-course-no {
-    background: rgba(255,179,92,0.12); color: var(--cr-amber);
-    border: 1px solid rgba(255,179,92,0.3); border-radius: 14px;
+    background: rgba(var(--cr-amber-rgb),0.12); color: var(--cr-amber);
+    border: 1px solid rgba(var(--cr-amber-rgb),0.3); border-radius: 14px;
 }
 body.theme-crepuscule #stop-course-yes {
-    background: rgba(255,107,107,0.10); color: var(--cr-danger);
-    border: 1px solid rgba(255,107,107,0.28); border-radius: 14px;
+    background: rgba(var(--cr-danger-rgb),0.10); color: var(--cr-danger);
+    border: 1px solid rgba(var(--cr-danger-rgb),0.28); border-radius: 14px;
 }
 
 
@@ -900,7 +1053,7 @@ body.theme-crepuscule .pa-planche.pa-libre .cl-sous { color: #A9F0C8; }
 body.theme-crepuscule .pa-vign {
     position: relative; flex: 1 1 0; min-width: 0;
     border-radius: 18px; overflow: hidden;
-    border: 1.5px dashed rgba(168,139,255,0.45);
+    border: 1.5px dashed rgba(var(--cr-violet-rgb),0.45);
 }
 /* Désaturée : la scène se devine, le détail se garde pour le jour du
    déblocage. */
@@ -909,7 +1062,7 @@ body.theme-crepuscule .pa-vign .cl-svg {
 }
 body.theme-crepuscule .pa-vign::after {
     content: ''; position: absolute; inset: 0;
-    background: rgba(15,10,32,0.35); pointer-events: none;
+    background: rgba(var(--cr-void-rgb),0.35); pointer-events: none;
 }
 body.theme-crepuscule .pa-cadenas {
     position: absolute; top: 7px; right: 7px; width: 18px; height: 18px;
@@ -919,13 +1072,13 @@ body.theme-crepuscule .pa-cadenas svg { width: 100%; height: 100%; display: bloc
 body.theme-crepuscule .pa-nom {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
     padding: 6px 8px;
-    background: linear-gradient(transparent, rgba(15,10,32,0.92));
+    background: linear-gradient(transparent, rgba(var(--cr-void-rgb),0.92));
     font-size: 10.5px; font-weight: 700; color: #C3AEFF;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Un animal sauvé n'a plus de barreaux : sa carte le dit aussi. */
-body.theme-crepuscule .cpx-sauve .cpx-etat { color: #6FE3A0; }
+body.theme-crepuscule .cpx-sauve .cpx-etat { color: var(--cr-mint); }
 
 /* Les pousses respirent, les lucioles dérivent. Comme tout le reste du thème,
    c'est neutralisé par le bloc prefers-reduced-motion du § 11. */
@@ -981,7 +1134,7 @@ body.theme-crepuscule #parking-scan-sheet {
     border: 1px solid var(--cr-line);
     border-top: 1px solid var(--cr-line);
     border-radius: var(--cr-r-sheet) var(--cr-r-sheet) 0 0;
-    box-shadow: 0 -24px 60px rgba(10,6,24,0.6);
+    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6);
 }
 body.theme-crepuscule #gas-scan-sheet::before,
 body.theme-crepuscule #parking-scan-sheet::before {
@@ -1018,11 +1171,11 @@ body.theme-crepuscule .gas-scan-chip {
     text-transform: none; letter-spacing: normal;
 }
 body.theme-crepuscule .gas-scan-chip.active {
-    background: rgba(255,179,92,0.16); border-color: rgba(255,179,92,0.45); color: var(--cr-amber);
+    background: rgba(var(--cr-amber-rgb),0.16); border-color: rgba(var(--cr-amber-rgb),0.45); color: var(--cr-amber);
 }
 body.theme-crepuscule .gas-scan-chip.mode.active,
 body.theme-crepuscule .gas-scan-chip.ev.active {
-    background: rgba(127,216,232,0.16); border-color: rgba(127,216,232,0.45); color: var(--cr-turq);
+    background: rgba(var(--cr-turq-rgb),0.16); border-color: rgba(var(--cr-turq-rgb),0.45); color: var(--cr-turq);
 }
 
 body.theme-crepuscule #gas-scan-radius-row input[type=range] {
@@ -1058,12 +1211,12 @@ body.theme-crepuscule .gas-card-addr { color: var(--cr-ink-4); }
 body.theme-crepuscule #gas-scan-list .gas-card-dist,
 body.theme-crepuscule #parking-scan-list .gas-card-dist { color: var(--cr-turq); font-weight: 700; }
 body.theme-crepuscule #gas-scan-list .gas-station-card.focused {
-    border-color: rgba(255,179,92,0.5); background: rgba(255,179,92,0.08);
+    border-color: rgba(var(--cr-amber-rgb),0.5); background: rgba(var(--cr-amber-rgb),0.08);
 }
 /* Carte sélectionnée côté parkings : turquoise, pour que le liseré de la carte
    et le marqueur mis en avant sur la carte parlent la même langue. */
 body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
-    border-color: rgba(127,216,232,0.55); background: rgba(127,216,232,0.10);
+    border-color: rgba(var(--cr-turq-rgb),0.55); background: rgba(var(--cr-turq-rgb),0.10);
 }
 
 
@@ -1082,7 +1235,7 @@ body.theme-crepuscule #parking-scan-list .gas-station-card.focused {
 body.theme-crepuscule #profil-sheet {
     background: linear-gradient(180deg, var(--cr-sky-2), var(--cr-sky-1));
     border: 1px solid var(--cr-line);
-    box-shadow: 0 20px 60px rgba(10,6,24,0.7);
+    box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7);
 }
 /* --- Historique des trajets. #trip-history-body est stylé par sélecteur
    (styles.css), pas en inline : une reprise CSS classique suffit ici, sans
@@ -1115,7 +1268,7 @@ body.theme-crepuscule .trip-cal-day.lvl-good .trip-cal-day-dot { background: var
 body.theme-crepuscule .trip-cal-day.lvl-mid  .trip-cal-day-dot { background: var(--cr-amber); }
 body.theme-crepuscule .trip-cal-day.lvl-bad  .trip-cal-day-dot { background: var(--cr-danger); }
 body.theme-crepuscule .trip-cal-day.sel {
-    background: rgba(255,179,92,0.16); border-color: var(--cr-amber); color: var(--cr-amber);
+    background: rgba(var(--cr-amber-rgb),0.16); border-color: var(--cr-amber); color: var(--cr-amber);
 }
 body.theme-crepuscule .trip-day-title { color: var(--cr-ink-4); }
 body.theme-crepuscule .trip-rank-num { background: var(--cr-surface-2); color: var(--cr-turq); }
@@ -1135,19 +1288,19 @@ body.theme-crepuscule .trip-row-pts { color: var(--cr-ink); }
 body.theme-crepuscule .trip-row-pts-unit { color: var(--cr-ink-4); }
 /* Le drapeau reprend la sémantique du thème : mint pour une conduite propre,
    danger pour un excès — jamais l'inverse. */
-body.theme-crepuscule .trip-row-flag.ok  { color: var(--cr-mint); background: rgba(111,227,160,0.14); }
-body.theme-crepuscule .trip-row-flag.bad { color: var(--cr-danger); background: rgba(255,107,107,0.14); }
+body.theme-crepuscule .trip-row-flag.ok  { color: var(--cr-mint); background: rgba(var(--cr-mint-rgb),0.14); }
+body.theme-crepuscule .trip-row-flag.bad { color: var(--cr-danger); background: rgba(var(--cr-danger-rgb),0.14); }
 body.theme-crepuscule .trip-row-chevron { color: var(--cr-ink-4); }
 body.theme-crepuscule .trip-row-detail { border-top: 1px solid var(--cr-line); }
 body.theme-crepuscule .trip-endpoint { background: var(--cr-sunken); }
 body.theme-crepuscule .trip-endpoint-role { color: var(--cr-ink-4); }
 body.theme-crepuscule .trip-endpoint-addr { color: var(--cr-ink); }
 body.theme-crepuscule .trip-endpoint-go {
-    border: 1px solid rgba(255,179,92,0.4);
-    background: rgba(255,179,92,0.15);
+    border: 1px solid rgba(var(--cr-amber-rgb),0.4);
+    background: rgba(var(--cr-amber-rgb),0.15);
     color: var(--cr-amber);
 }
-body.theme-crepuscule .trip-endpoint-go:active { background: rgba(255,179,92,0.3); }
+body.theme-crepuscule .trip-endpoint-go:active { background: rgba(var(--cr-amber-rgb),0.3); }
 body.theme-crepuscule .trip-detail-cell { background: var(--cr-sunken); }
 body.theme-crepuscule .trip-detail-label { color: var(--cr-ink-4); }
 body.theme-crepuscule .trip-detail-value { color: var(--cr-ink); }
@@ -1167,7 +1320,7 @@ body.theme-crepuscule .vcell-input {
     border: 1px solid var(--cr-line);
     color: var(--cr-ink);
 }
-body.theme-crepuscule .vcell-input:focus { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .vcell-input:focus { border-color: rgba(var(--cr-amber-rgb),0.45); }
 body.theme-crepuscule .vtype-btn {
     background: var(--cr-surface);
     border: 1px solid var(--cr-line);
@@ -1175,8 +1328,8 @@ body.theme-crepuscule .vtype-btn {
 }
 body.theme-crepuscule .vtype-btn:hover { border-color: var(--cr-line-2); color: var(--cr-ink-2); }
 body.theme-crepuscule .vtype-btn.active {
-    background: rgba(255,179,92,0.15);
-    border-color: rgba(255,179,92,0.45);
+    background: rgba(var(--cr-amber-rgb),0.15);
+    border-color: rgba(var(--cr-amber-rgb),0.45);
     color: var(--cr-amber);
 }
 /* Le Crit'Air INACTIF suit le thème ; les couleurs de vignette ACTIVE
@@ -1194,12 +1347,12 @@ body.theme-crepuscule .zfe-select {
     border: 1px solid var(--cr-line);
     color: var(--cr-ink);
 }
-body.theme-crepuscule .zfe-select:focus { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .zfe-select:focus { border-color: rgba(var(--cr-amber-rgb),0.45); }
 body.theme-crepuscule .fuel-kind-pill { color: var(--cr-ink-3); }
 body.theme-crepuscule .fuel-kind-pill:hover { color: var(--cr-ink-2); }
 body.theme-crepuscule .fuel-kind-pill.active {
-    background: rgba(255,179,92,0.15);
-    border-color: rgba(255,179,92,0.45);
+    background: rgba(var(--cr-amber-rgb),0.15);
+    border-color: rgba(var(--cr-amber-rgb),0.45);
     color: var(--cr-amber);
 }
 body.theme-crepuscule .fuel-manual-check { color: var(--cr-ink-3); }
@@ -1209,7 +1362,7 @@ body.theme-crepuscule .fuel-refresh-btn {
     border: 1px solid var(--cr-line);
     color: var(--cr-amber);
 }
-body.theme-crepuscule .fuel-refresh-btn:hover { border-color: rgba(255,179,92,0.45); }
+body.theme-crepuscule .fuel-refresh-btn:hover { border-color: rgba(var(--cr-amber-rgb),0.45); }
 
 /* --- Aide à la conduite. #aide-conduite-body est stylé par sélecteur, comme
    #trip-history-body ci-dessus : pas d'inline à contourner ici. --- */

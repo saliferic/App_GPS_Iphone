@@ -828,7 +828,17 @@
                        onOpen: () => { try { openTripHistory(); } catch (e) { logAppError('profilSheet/openTripHistory', e); } } },
             co2:     { bodyId: 'co2-panel-body',      title: 'Empreinte CO2', dot: true,
                        onOpen: () => { try { renderCO2Panel(); } catch (e) { logAppError('profilSheet/renderCO2Panel', e); } } },
-            aide:    { bodyId: 'aide-conduite-body',  title: 'Aide à la conduite', dot: true }
+            aide:    { bodyId: 'aide-conduite-body',  title: 'Aide à la conduite', dot: true },
+            /* `onOpen` est indispensable ici, contrairement à `aide` : la liste des
+               palettes est construite par le JS et n'existe pas dans le balisage.
+               Sans elle, la page s'ouvrirait vide. renderThemePicker vit dans js/28,
+               chargé APRÈS ce fichier — l'appel n'a lieu qu'à l'ouverture, donc bien
+               après le chargement complet, et le `typeof` couvre le cas où js/28
+               aurait échoué au chargement. */
+            theme:   { bodyId: 'theme-panel-body',    title: 'Thème', dot: true,
+                       onOpen: () => { if (typeof renderThemePicker === 'function') {
+                           try { renderThemePicker(); } catch (e) { logAppError('profilSheet/renderThemePicker', e); }
+                       } } }
         };
 
         let _profilSheetOpen = null;   // { bodyEl, parent, next }

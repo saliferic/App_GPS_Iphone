@@ -3737,6 +3737,36 @@
             border-top: 1px solid rgba(0,140,255,0.08);
         }
         #co2-panel-content { display: flex; flex-direction: column; gap: 12px; }
+
+        /* === THEME === */
+        /* Meme regle que #co2-panel-body : masque dans le panneau Profil, revele une
+           fois deplace dans la page pleine par openProfilSheet. */
+        #theme-panel-body {
+            display: none; padding: 14px 12px 16px;
+            background: linear-gradient(170deg, #0a0e17, #080b12);
+            border-top: 1px solid rgba(0,140,255,0.08);
+        }
+        #theme-picker { display: flex; flex-direction: column; gap: 10px; }
+        /* Chaque ligne est peinte avec LES COULEURS DU THEME QU'ELLE PROPOSE, en
+           dur : c'est un apercu, il doit montrer la palette qu'on va obtenir et
+           surtout PAS suivre le theme courant. Les valeurs viennent donc du JS
+           (voir THEMES, js/28-theme.js), jamais des variables --cr-*. */
+        .theme-pick {
+            display: flex; align-items: center; gap: 12px;
+            width: 100%; padding: 12px 14px; text-align: left;
+            border-radius: 16px; cursor: pointer; font-family: inherit;
+            transition: transform 0.12s ease, border-color 0.15s ease;
+        }
+        .theme-pick:active { transform: scale(0.985); }
+        .theme-pick-swatch {
+            flex-shrink: 0; display: flex; gap: 4px;
+            padding: 7px; border-radius: 12px;
+        }
+        .theme-pick-dot { width: 13px; height: 13px; border-radius: 50%; }
+        .theme-pick-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .theme-pick-name { font-size: 14px; font-weight: 800; }
+        .theme-pick-sub  { font-size: 11px; font-weight: 600; }
+        .theme-pick-check { flex-shrink: 0; width: 22px; height: 22px; }
         .co2-info-row { display: flex; justify-content: center; }
         .co2-info-btn {
             width: 24px; height: 24px; border-radius: 50%;

@@ -337,7 +337,7 @@ Le token Mapbox (`js/01`) et la clé `sb_publishable_` (`js/21`) sont **publics 
 
 Pas d'IndexedDB ; `sessionStorage` utilisé seulement en cache TTL 15 min pour les stations. Clés principales préfixées `gps_` (badges préfixés `salif_gps_`) :
 
-`gps_home` et `gps_work` (lieux fixes : `{address, coords:[lng,lat], ts}` — **fiche entière ou rien**, une adresse sans coordonnées est traitée comme une absence ; même forme pour les deux, voir « Go home / Go work »), `gps_intro_seen`, `gps_hotbox`, `gps_hotbox_hint`, `gps_dest_draft` (TTL 6 h — **décide de l'écran d'accueil**, voir la puce dédiée), `gps_gas_scan_radius`, `gps_weekly_goals`, `gps_map_theme`, `gps_map_traffic`, `gps_buildings_3d`, `gps_voice_enabled`, `gps_voice_quiet`, `gps_eco_counter`, `gps_km_history`, `gps_last_km_goal`, `gps_favorites`, `gps_tenmin_enabled`, `gps_trip_history`, `gps_profiles`, `gps_active_profile_id`, `salif_gps_badges` (+ suffixe `_${profileId}`), `gps_avoid_tolls`, `gps_vehicle_type`, `gps_vehicle_consumption`, `gps_fuel_price`, `gps_fuel_type`, `gps_fuel_price_manual`, `gps_fuel_price_auto`, `gps_vehicle_consumption_elec`, `gps_elec_price`, `gps_vehicle_license_points`, `gps_critair`, `gps_vehicle_category`, `gps_zfe_alerts`, `gps_zfe_cache_v1` (TTL 7j), `gps_gas_sort_mode`, `gps_error_log` (20 dernières erreurs, voir ci-dessous), `gas_favorites_v1` (TTL 90j).
+`gps_home` et `gps_work` (lieux fixes : `{address, coords:[lng,lat], ts}` — **fiche entière ou rien**, une adresse sans coordonnées est traitée comme une absence ; même forme pour les deux, voir « Go home / Go work »), `gps_intro_seen`, `gps_hotbox`, `gps_hotbox_hint`, `gps_dest_draft` (TTL 6 h — **décide de l'écran d'accueil**, voir la puce dédiée), `gps_gas_scan_radius`, `gps_weekly_goals`, `gps_map_theme` (style Mapbox jour/nuit — **à ne pas confondre avec `gps_theme`**, la palette de l'interface, voir « Les trois palettes »), `gps_theme`, `gps_map_traffic`, `gps_buildings_3d`, `gps_voice_enabled`, `gps_voice_quiet`, `gps_eco_counter`, `gps_km_history`, `gps_last_km_goal`, `gps_favorites`, `gps_tenmin_enabled`, `gps_trip_history`, `gps_profiles`, `gps_active_profile_id`, `salif_gps_badges` (+ suffixe `_${profileId}`), `gps_avoid_tolls`, `gps_vehicle_type`, `gps_vehicle_consumption`, `gps_fuel_price`, `gps_fuel_type`, `gps_fuel_price_manual`, `gps_fuel_price_auto`, `gps_vehicle_consumption_elec`, `gps_elec_price`, `gps_vehicle_license_points`, `gps_critair`, `gps_vehicle_category`, `gps_zfe_alerts`, `gps_zfe_cache_v1` (TTL 7j), `gps_gas_sort_mode`, `gps_error_log` (20 dernières erreurs, voir ci-dessous), `gas_favorites_v1` (TTL 90j).
 
 L'export/import JSON (`exportProfile`/`importProfile`) sérialise un instantané (`_buildProfileSnapshot`) de ces clés pour migration vers un autre appareil.
 
@@ -401,7 +401,10 @@ L'export/import JSON (`exportProfile`/`importProfile`) sérialise un instantané
   **Trois correctifs, tous nécessaires :** (1) `_clampMapPadding(pad, mapW, mapH, minBand)` normalise le padding **après** le calcul métier et **pour les deux orientations** — le calcul portrait bornait déjà le bas, mais rien ne bornait la largeur en paysage, où `modalEl.offsetWidth + 30` peut à lui seul dépasser le canevas ; les deux côtés sont réduits **proportionnellement**, en réduire un seul déplacerait le centre du cadrage. (2) Les dimensions sont lues sur le **canevas** (`map.getCanvas().clientWidth/Height`), et `map.resize()` est devenu **inconditionnel** : il était réservé à `map.loaded()`, or c'est précisément quand la carte n'a pas fini de charger que sa taille interne est périmée. (3) `fitBounds` est enveloppé dans un `try` qui **journalise au lieu de lever** — la règle générale des commandes caméra, que cette fonction était réputée respecter alors qu'elle ne contrôlait que ses bornes.
   **Pourquoi le symptôme différait entre téléphone et simulateur** : l'exception emportait la ligne **suivante**, `isUserPanning = true`. La caméra n'était donc même pas détachée, et la boucle de suivi GPS ramenait aussitôt la vue sur le conducteur — invisible sur un poste de bureau, où aucun fix GPS ne vient la ramener. **Leçon générale** : quand une exception traverse un bloc d'affichage, regarder ce qui la suit et qui ne s'exécutera pas, pas seulement ce qui la précède.
 - **⚠ NE JAMAIS ÉDITER `index.html`, `css/styles.css` NI AUCUN `js/*.js` PAR UN PIPELINE POWERSHELL.** Ces fichiers sont tous en **UTF-8 sans BOM** ; `(Get-Content $f -Raw) | Set-Content $f -Encoding utf8` le corrompt **doublement** en Windows PowerShell 5.1 : sans BOM, `Get-Content` lit en **CP1252** (mojibake sur tous les accents) et `Set-Content -Encoding utf8` **ajoute un BOM**. Mesuré le 14/08/2026 sur un simple remplacement de nom de fonction : **4926 caractères cassés et +42 Ko** en un appel, sans que rien n'échoue — le résultat reste du HTML valide, donc la corruption est silencieuse. Faire tous les remplacements avec l'outil d'édition de fichier.
-  **Réparation, sans perte, tant qu'on n'a pas ré-enregistré par-dessus** : la transformation est déterministe et réversible — relire en UTF-8, réécrire les octets en CP1252 (`[System.Text.Encoding]::GetEncoding(1252).GetBytes($txt)` puis `[System.IO.File]::WriteAllBytes`). **Vérifier ensuite par `git diff`** (avant, il fallait comparer les octets avec le dernier fichier de `backup/`) : la première divergence doit tomber exactement sur la première modification voulue, et le compte de `U+FFFD` doit être nul. Depuis que `.gitattributes` impose `* -text`, un `git diff` qui ne montre QUE la modification voulue est une preuve d'intégrité complète — c'est le contrôle le plus rapide dont on dispose, et il est gratuit. Le repère qui a permis de détecter l'incident est l'**inflation de taille** — +42 Ko pour ~4 Ko de texte ajouté.
+- **⚠ MÊME PIÈGE AVEC PYTHON, ET IL EST PLUS DISCRET (03/09/2026).** Un script de remplacement en masse écrit avec `io.open(f, 'w', encoding='utf-8')` **retraduit tous les `\n` en `\r\n` sous Windows** (c'est le mode texte, `newline=None`). Les sources étant en **LF seul**, un seul passage a converti `AGENTS.md`, `index.html` et `theme-crepuscule.css` en CRLF intégral. Rien n'échoue, l'app fonctionne, les tests passent — mais `* -text` fait que git committe les octets tels quels : le diff annonçait **2 201 lignes changées pour 85 ajoutées**, et la vraie modification devenait introuvable. **Toujours lire ET écrire en binaire** (`open(f,'rb')` / `open(f,'wb')`), ou passer `newline=''`.
+  Le symptôme se lit d'un coup d'œil dans `git diff --stat` : un nombre de lignes changées **de l'ordre de la taille du fichier**. Réparation : `open(f,'rb').read().replace(b'\r\n', b'\n')` réécrit en `'wb'`. Vérifier ensuite que le `--stat` retombe sur le compte attendu.
+
+  **Réparation du cas PowerShell, sans perte, tant qu'on n'a pas ré-enregistré par-dessus** : la transformation est déterministe et réversible — relire en UTF-8, réécrire les octets en CP1252 (`[System.Text.Encoding]::GetEncoding(1252).GetBytes($txt)` puis `[System.IO.File]::WriteAllBytes`). **Vérifier ensuite par `git diff`** (avant, il fallait comparer les octets avec le dernier fichier de `backup/`) : la première divergence doit tomber exactement sur la première modification voulue, et le compte de `U+FFFD` doit être nul. Depuis que `.gitattributes` impose `* -text`, un `git diff` qui ne montre QUE la modification voulue est une preuve d'intégrité complète — c'est le contrôle le plus rapide dont on dispose, et il est gratuit. Le repère qui a permis de détecter l'incident est l'**inflation de taille** — +42 Ko pour ~4 Ko de texte ajouté.
 - **⚠ UN ÉCOUTEUR D'ÉVÉNEMENT NE DIT RIEN DE L'ÉTAT DE DÉPART (résolu le 15/08/2026).** `initPanelOrientationWatcher()` ne s'abonnait qu'à `orientationchange` et au `change` du media query paysage : deux **transitions**. Quand l'app DÉMARRE déjà en paysage (téléphone tourné au lancement, simulateur ouvert en Paysage), aucun des deux ne se déclenche, `refreshPanelForViewport()` n'est jamais appelée, et les `min-height`/`max-height` **inline** posés par le chemin portrait restent en place — or l'inline l'emporte sur le `height: calc(100vh - …)` de la règle CSS paysage. Le panneau prenait donc la bonne **largeur** (380 px, la feuille de styles s'applique bien) mais restait haut de **160 px**, soit `SHEET_MIN_H`, puisque `412 / 2 - 64 = 142` tombe sous le plancher — avec ses deux barres de défilement, la seconde (horizontale) n'étant qu'un effet de bord de la première. **Le décalage largeur correcte / hauteur absurde est la signature d'un inline qui survit à un changement de règle**, pas d'un media query qui ne s'applique pas. **⚠ ET CE N'ÉTAIT QUE LA MOITIÉ DU BUG.** Corriger le seul démarrage ne changeait rien à l'écran : `setPanelSnap()` raisonne entièrement en géométrie PORTRAIT (feuille ancrée en bas, hauteur fixée en pixels par `min-height` + `max-height` inline) et elle est appelée depuis **une vingtaine d'endroits** — changement d'onglet, loupe, ouverture du modal, fin de trajet. Le premier appui sur ITINÉRAIRE reposait aussitôt les 160 px que l'init venait d'effacer. **La garde d'orientation doit être DANS `setPanelSnap()`, pas autour d'elle** : en paysage elle sort après avoir vidé `bottom`/`maxHeight`/`minHeight` et ne pose aucune hauteur, laissant la règle CSS gouverner. Les états intermédiaires ('min' 54 px, 'half' 200 px) y sont ramenés à « déployé » — ce sont des hauteurs de feuille, sur une colonne ils masqueraient le contenu sans rien libérer. Seul 'hidden' garde un sens. `panelSnapState` restant mémorisé, le retour en portrait rejoue l'état exact. Correctifs complémentaires : appel initial de `refreshPanelForViewport()` **uniquement si `isPanelLandscape()`** (en portrait, rejouer `setPanelSnap()` écraserait l'état escamoté du chargement), plus un écouteur `resize` filtré sur le **changement** de verdict paysage — le simulateur ne tourne pas l'écran, il redimensionne une iframe, et sans le filtre chaque ouverture du clavier virtuel rejouerait la géométrie en pleine saisie.
 - **Dette de dev à nettoyer avant prod** : bouton `⚡ DEBUG — Mettre objectifs à 95%` (`_debugFillGoals95()`) visible dans l'onglet Objectifs, marqué `<!-- SUPPRIMER APRÈS TEST -->`.
 - **Live Share Firebase non finalisé** : `FIREBASE_DB_URL` est un placeholder littéral (`TON_PROJET-default-rtdb.firebaseio.com`).
@@ -1051,6 +1054,91 @@ Cas visé : téléphone en panne, on emprunte celui d'un proche et on veut y ret
 - **Le projet gratuit se met en pause après ~1 semaine sans requête.** Réveil manuel depuis le dashboard. Symptôme côté app : « Classement injoignable », les points continuent de s'accumuler en local et repartent au réveil.
 - **Le SDK vient d'un CDN** (`dist/umd/` explicitement — la racine du paquet sert de l'ESM, qui ne définirait aucun global). CDN bloqué ou hors ligne = `_clPret()` rend `null` et le classement affiche « indisponible ». **Le reste de l'app doit continuer de fonctionner** : ce n'est pas une fonction vitale d'un GPS.
 - **Le lien profil local ↔ compte est explicite depuis le 23/08/2026** — il ne l'était pas, et ça se voyait tout de suite. Le cumul est stocké par profil local, la session Supabase est globale à l'appareil : sans lien, la règle de fait était « le profil actif au moment de l'envoi ». Les points de `Steve` remontaient donc dans la ligne du compte `Saliferic`, et changer de profil local sans se déconnecter écrasait le score d'un compte avec celui d'un autre conducteur. Chaque état local porte désormais `compte: <user_id>`, posé par `clLierProfil()` à chaque connexion réussie ; `clPousser()` refuse d'envoyer quand ça ne correspond pas, et la modale affiche l'avertissement au lieu d'un compteur faux. ⚠ `compte` **survit au changement de semaine** alors que les points repartent de zéro : c'est un lien d'identité, pas un compteur. Un compte ne représente qu'un profil local à la fois — lier délie l'éventuel précédent.
+
+---
+## 🎨 Les trois palettes — Crépuscule / Canopée / Abysse (03/09/2026)
+
+Trois thèmes de couleur, **une seule feuille de style**. `theme-crepuscule.css` n'a pas été
+dupliqué : ses 316 sélecteurs restent scopés sur `body.theme-crepuscule`, et une palette ne
+redéfinit **que le bloc de jetons** (§ 1bis du fichier). Le `<body>` porte donc, au choix :
+
+| `<body class="…">` | thème |
+|---|---|
+| `theme-crepuscule` | Crépuscule — le violet d'origine |
+| `theme-crepuscule pal-canopee` | Canopée — vert forêt |
+| `theme-crepuscule pal-abysse` | Abysse — bleu nuit |
+
+**⚠ `theme-crepuscule` reste posée dans les trois cas.** Ce n'est pas un oubli de nommage :
+la retirer n'éteint pas la couleur, elle éteint TOUT le thème, et l'app retombe sur l'ancien
+dark/néon de `styles.css` avec la moitié des composants dépareillés. Deux classes battent une
+classe en spécificité, donc les blocs `pal-` l'emportent sans `!important`.
+
+**Crépuscule n'a volontairement pas de classe `pal-`** : ses valeurs *sont* le bloc par
+défaut. Lui en donner une aurait signifié recopier les vingt-cinq jetons une deuxième fois,
+donc les voir diverger au premier réglage.
+
+### ⚠ La règle qui coûte cher : pas de couleur translucide en clair
+
+Une palette ne peut pas retendre un `rgba(255,179,92,0.15)` écrit en dur — la valeur est
+figée dans la déclaration. **Seule la forme `rgba(var(--cr-amber-rgb), 0.15)` suit le
+thème.** Le passage aux palettes a donc commencé par tokéniser **62 valeurs** réparties dans
+le fichier, via douze triplets (`--cr-amber-rgb`, `--cr-violet-rgb`, `--cr-mint-rgb`,
+`--cr-turq-rgb`, `--cr-danger-rgb`, `--cr-go-rgb`, `--cr-sky-0/1/2-rgb`, `--cr-nav-rgb`,
+`--cr-shadow-rgb`, `--cr-void-rgb`).
+
+C'est un piège **silencieux** : une couleur oubliée ne lève rien, ne casse rien, et reste
+simplement violette au milieu du vert. Toute couleur translucide ajoutée passe donc par un
+triplet. Même chose pour l'inverse : **toute couleur ajoutée au bloc de jetons doit être
+ajoutée aussi dans les deux blocs `pal-`**, sans quoi Canopée et Abysse en héritent en
+violet. C'est le seul vrai coût d'entretien de ces palettes.
+
+### Ce qui a dû changer d'une palette à l'autre, et pourquoi
+
+Une rotation de teinte mécanique ne suffit pas — trois jetons ont dû être retendus :
+
+- **Canopée : l'éco n'est plus verte.** `#6FE3A0` sur un ciel vert, « réussite » ne se lisait
+  plus. Elle passe au lime `#B6E86B`, qui reste dans la famille sans se confondre avec le fond.
+- **Canopée : l'or de l'action se renforce** (`#FFBC63`) — un fond vert absorbe plus de
+  lumière qu'un violet. Et le corail du bouton « C'est parti » vire à l'orange (`#FF6B3D`) :
+  un rouge franc sur du vert vire au Noël.
+- **Abysse : le turquoise du temps se noyait** dans le ciel bleu, il glisse vers le teal
+  `#7FE0DC`. L'ambre, lui, est conservé au pixel près : sur bleu nuit c'est le couple le plus
+  contrasté des trois.
+
+### Le choix, et le clignotement évité
+
+`js/28-theme.js` porte la table `THEMES`, applique la classe et persiste dans `gps_theme`.
+Il est chargé **en dernier** et n'a aucune dépendance. Mais **la pose initiale n'est pas
+faite là** : un script en clair en tête de `<body>` relit la clé avant toute peinture. Sans
+lui, l'écran s'affiche en Crépuscule puis bascule au vert à chaque lancement. La CSP du
+projet ne déclare que `connect-src`, le script en clair passe donc.
+
+Ce script d'amorçage **ne valide rien** — il pose `pal-` + ce qu'il a lu. Une clé corrompue
+donne une classe inconnue : inoffensive à l'affichage (on obtient Crépuscule), mais elle
+resterait sur `<body>`. `js/28` repasse donc une fois au chargement pour faire le ménage.
+
+L'écran de choix vit dans le Profil (`openProfilSheet('theme')`, table `PROFIL_SHEETS` de
+js/13). **Les couleurs des trois lignes de la liste sont figées en dur dans `THEMES.apercu`,
+et ce n'est pas un doublon à remplacer par des `var(--cr-*)`** : branchées sur les variables,
+les trois lignes s'afficheraient dans le thème courant et le choix deviendrait aveugle.
+Elles doivent en revanche suivre le CSS à la main si celui-ci change — c'est le prix de l'aperçu.
+
+### Ce que les palettes ne couvrent pas (limites connues)
+
+- **La carte Mapbox reste neutre dans les trois thèmes.** Elle est réglée côté Mapbox
+  (`applyMapStyle()`, js/04), pas en CSS : la teinter demande un style Mapbox dédié. C'est,
+  visuellement, la plus grosse rupture d'harmonie restante — plus de la moitié de l'écran.
+- **⚠ Ne pas confondre avec `toggleMapTheme()`** (bouton `#theme-switch` flottant sur la
+  carte), qui bascule le style Mapbox jour/nuit et n'a rien à voir. Deux réglages
+  indépendants, d'où deux libellés distincts : « Thème » dans le Profil, « mode jour/nuit »
+  sur la carte.
+- **Le bloc de connexion au classement n'est pas thémé** (champs Pseudo / Mot de passe,
+  bouton bleu « Créer un compte », lien « Continuer sans compte »). Il ne l'était déjà pas en
+  Crépuscule : ses couleurs viennent de `styles.css` et n'ont jamais été reprises par le
+  thème. Ce n'est pas une régression des palettes, mais ça se voit davantage sur du vert.
+- **Trois couleurs d'état restent en dur dans le JS** : la jauge éco (js/13) choisit entre
+  `#6FE3A0`, `#FFB35C` et `#FF6B6B` en clair. Sémantiques et lisibles partout, elles n'ont pas
+  été tokénisées — mais elles ne suivent pas la palette.
 
 ---
 ## 💾 `backup/` — pourquoi ce dossier existe encore

@@ -54,6 +54,12 @@ Ces règles ont chacune coûté un bug en production. Aucune n'est négociable.
    étant inaccessible dans l'APK.
 7. **Ne jamais mettre la clé `service_role` de Supabase dans le code.** La clé publishable
    présente dans `js/21` est publique par construction.
+8. **Dans `theme-crepuscule.css`, aucune couleur translucide écrite en clair.** Un
+   `rgba(255,179,92,0.15)` est figé : il reste violet dans Canopée et dans Abysse, sans rien
+   lever. Seule la forme `rgba(var(--cr-amber-rgb), 0.15)` suit la palette. Corollaire :
+   **toute couleur ajoutée au bloc de jetons doit l'être aussi dans les deux blocs `pal-`**.
+   Et `theme-crepuscule` **reste posée sur le `<body>` dans les trois thèmes** — la retirer
+   n'enlève pas la couleur, elle éteint tout le thème.
 
 ## Vérifier son travail
 
@@ -87,6 +93,7 @@ tourné en paysage en annonçant du portrait. Vérifier la capture produite, pas
 | Scans ⛽ ⚡ 🅿️ et coût du rendu | « Panneau stations », « Scan stations autour de moi » |
 | Compagnons, images et vidéos | « La troupe des compagnons » |
 | Classement, Supabase, schéma SQL | « Classement en ligne » |
+| Palettes de couleur, jetons `--cr-*` | « Les trois palettes » |
 | localStorage, clés persistées | « Persistance des données » |
 | Écarts navigateurs | « Compatibilité navigateurs » |
 
