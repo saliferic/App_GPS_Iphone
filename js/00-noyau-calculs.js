@@ -1752,6 +1752,53 @@
         }
 
 
+        /* ─── L'ÂGE D'UN COMPAGNON  (03/09/2026) ──────────────────────────────
+           Le temps passé auprès du joueur, des jours entiers. Les deux bouts
+           viennent du stockage (js/24) : `ne` est posé par `choisir()`, `fin` par
+           `declarerMort()`. Un animal vivant se mesure jusqu'à `maintenant`.
+
+           ⚠ `null` QUAND LA NAISSANCE EST INCONNUE, jamais 0. Les compagnons déjà
+           en cours au moment où le registre est apparu n'ont pas de date, et un 0
+           se lirait « adopté aujourd'hui » — un âge faux se lit comme un âge vrai.
+           `texteAge()` le rend par « — ».
+
+           ⚠ L'INSTANT EST INJECTÉ, jamais lu ici. Même règle que `heureArrivee()`
+           et `getTimeUntilEndOfWeek()` : c'est ce qui rend la fonction testable. */
+        function dureeVieJours(ne, fin, maintenant) {
+            const debut = Number(ne);
+            if (!isFinite(debut) || debut <= 0) return null;
+            const bout = isFinite(Number(fin)) && Number(fin) > 0 ? Number(fin) : Number(maintenant);
+            if (!isFinite(bout)) return null;
+            /* Une fin antérieure au début ne peut venir que d'une horloge reculée ou
+               d'un stockage bricolé : on rend 0 plutôt qu'un âge négatif, qui
+               s'afficherait tel quel. */
+            return Math.max(0, Math.floor((bout - debut) / 86400000));
+        }
+
+        /* Le libellé court affiché sous l'animal. Volontairement approximatif au-delà
+           du mois — « 3 mois » dit ce qu'il faut, « 94 jours » demande un calcul au
+           lecteur. Mois de 30 jours et année de 365 : on parle de la durée d'une
+           compagnie, pas d'un calendrier. */
+        function texteAge(jours) {
+            /* ⚠ `null` EST TESTÉ AVANT LA CONVERSION : `Number(null)` vaut 0, qui
+               passe `isFinite` et sortirait « aujourd'hui » — donc un âge inventé
+               pour un animal dont on ne sait justement rien. C'est exactement le
+               cas que `dureeVieJours()` signale par `null`. */
+            if (jours === null || jours === undefined) return '—';
+            const j = Number(jours);
+            if (!isFinite(j) || j < 0) return '—';
+            if (j < 1)   return "aujourd'hui";
+            if (j === 1) return '1 jour';
+            if (j < 30)  return j + ' jours';
+            if (j < 365) {
+                const m = Math.floor(j / 30);
+                return m + ' mois';
+            }
+            const a = Math.floor(j / 365);
+            return a + (a === 1 ? ' an' : ' ans');
+        }
+
+
         // ═══════════════════════════════════════════════════════════════════
         // === HEURE D'ARRIVÉE ===
         // ═══════════════════════════════════════════════════════════════════

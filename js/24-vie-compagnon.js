@@ -335,6 +335,57 @@
         return !!morts[cle || cleCourante()];
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       LES DEUX BOUTS D'UNE VIE — naissance et décès          (03/09/2026)
+       ----------------------------------------------------------------------
+       La page des animaux sauvés affiche « né le … — mort le … » et l'âge.
+       Il fallait donc dater les deux bouts, ce que rien ne faisait.
+
+       ⚠ LE REGISTRE DES MORTS CHANGE DE FORME, EN RESTANT COMPATIBLE. Il valait
+       `{ cle: true }` ; il vaut désormais `{ cle: horodatage }`. `estMort()` ne
+       teste que la vérité de la valeur, donc les deux formes marchent — et un
+       `true` hérité d'avant ce jour signifie « mort, date inconnue », ce que
+       `dateDeces()` rend par `null`. NE PAS « nettoyer » ces `true` en les
+       remplaçant par la date du jour : ce serait inventer une date de décès.
+
+       ⚠ LA NAISSANCE EST STAMPÉE PAR `choisir()` (js/22), pas ici : c'est le
+       geste qui fait entrer l'animal dans la vie du joueur. Elle ne s'écrase
+       jamais — reprendre un compagnon des mois plus tard ne le fait pas
+       renaître, sans quoi son âge repartirait de zéro à chaque changement.
+       Conséquence connue : les compagnons déjà en cours au moment de cette mise
+       à jour n'ont AUCUNE date de naissance. Leur âge s'affiche « — » plutôt
+       qu'un chiffre faux, et ils seront datés au prochain changement.
+       ══════════════════════════════════════════════════════════════════════ */
+    const CLE_NAISSANCES = 'gps_compagnons_nes';
+
+    function lireNaissances() {
+        try {
+            const o = JSON.parse(localStorage.getItem(CLE_NAISSANCES) || 'null');
+            return (o && typeof o === 'object') ? o : {};
+        } catch (e) { return {}; }
+    }
+
+    let naissances = lireNaissances();
+
+    function naitre(cle) {
+        const k = cle || cleCourante();
+        if (!k || naissances[k]) return false;   // déjà daté : on n'écrase pas
+        naissances[k] = Date.now();
+        try { localStorage.setItem(CLE_NAISSANCES, JSON.stringify(naissances)); } catch (e) { /* non bloquant */ }
+        return true;
+    }
+
+    /* Rendent un horodatage, ou `null` quand la date est inconnue — jamais une
+       date de repli : un âge faux se lit comme un âge vrai. */
+    function dateNaissance(cle) {
+        const v = naissances[cle || cleCourante()];
+        return (typeof v === 'number' && isFinite(v)) ? v : null;
+    }
+    function dateDeces(cle) {
+        const v = morts[cle || cleCourante()];
+        return (typeof v === 'number' && isFinite(v)) ? v : null;
+    }
+
     /* Rend `true` seulement si c'est CE geste qui a tué l'animal : l'appelant
        (js/12) s'en sert pour n'ouvrir la fenêtre de choix qu'une fois, et pas à
        chaque arrivée suivante sur un compagnon déjà enterré. */
@@ -353,7 +404,7 @@
            perdre.
            ⚠ NE PAS LA REMETTRE « pour cohérence » en voyant la page des sauvés
            afficher un animal mort : c'est le comportement voulu, pas un oubli. */
-        morts[k] = true;
+        morts[k] = Date.now();
         try { localStorage.setItem(CLE_MORTS, JSON.stringify(morts)); } catch (e) { /* non bloquant */ }
         return true;
     }
@@ -385,7 +436,9 @@
     function ressusciterTout() {
         morts = {};
         vies  = {};
+        naissances = {};
         try { localStorage.removeItem(CLE_MORTS); }     catch (e) { /* non bloquant */ }
+        try { localStorage.removeItem(CLE_NAISSANCES); } catch (e) { /* non bloquant */ }
         try { localStorage.removeItem(CLE_STOCKAGE); }  catch (e) { /* non bloquant */ }
         dernierEcrit = Date.now();
 
@@ -411,6 +464,7 @@
         monter: monter, rendre: rendre, avancer: avancer, choc: choc,
         valeur: valeur, poser: poser, enregistrer: enregistrer,
         estMort: estMort, declarerMort: declarerMort,
+        naitre: naitre, dateNaissance: dateNaissance, dateDeces: dateDeces,
         ressusciterTout: ressusciterTout, onChangement: onChangement
     };
 })();

@@ -1319,6 +1319,14 @@
         if (window.VieCompagnon && typeof VieCompagnon.estMort === 'function'
             && VieCompagnon.estMort(cle)) return false;
         courant = cle;
+        /* La date d'entrée de l'animal dans la vie du joueur (voir `naitre()`,
+           js/24) : elle est posée ICI parce que `choisir()` est l'unique porte du
+           changement de compagnon, comme la garde des morts juste au-dessus. Elle
+           ne s'écrase jamais — reprendre un compagnon des mois plus tard ne le
+           fait pas renaître. Registre absent : l'âge s'affichera « — ». */
+        if (window.VieCompagnon && typeof VieCompagnon.naitre === 'function') {
+            try { VieCompagnon.naitre(cle); } catch (e) { /* date perdue, pas l'animal */ }
+        }
         try { localStorage.setItem('gps_compagnon', cle); } catch (e) { /* non bloquant */ }
         etat(etatCourant);
         if (typeof window.renderCarteCompagnon === 'function') {

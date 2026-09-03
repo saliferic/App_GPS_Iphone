@@ -50,6 +50,7 @@ function chargerNoyau() {
         'severiteExces', 'robustesseCompagnon', 'majVie', 'vieApresChoc', 'palierVie',
         'VIE_SEUIL_SANTE', 'etatSanteVie',
         'VIE_SEUIL_BLESSE', 'etatPhysiqueVie',
+        'dureeVieJours', 'texteAge',
         'heureArrivee',
     ];
     const retour = `\n;return { ${noms.join(', ')} };`;
@@ -1363,6 +1364,33 @@ section('Vie du compagnon');
        supprimer un compagnon — le doute lui profite, comme partout ailleurs. */
     verifie('valeur aberrante → sain, jamais mort', physique(NaN), 'sain');
     verifie('vie absente → sain',                 physique(undefined), 'sain');
+
+    /* ═══ L'ÂGE D'UN COMPAGNON (03/09/2026) — affiché sous chaque animal de la
+       page des sauvés, avec ses deux dates. L'instant est INJECTÉ, comme partout
+       dans ce fichier : c'est ce qui rend ces vérifications possibles. */
+    const { dureeVieJours: duree, texteAge: age } = N;
+    const J = 86400000, T0 = Date.UTC(2026, 7, 1);   // 1er août 2026
+    verifie('vivant : 12 jours écoulés',          duree(T0, null, T0 + 12 * J), 12);
+    verifie('mort : on s’arrête à la date de décès', duree(T0, T0 + 5 * J, T0 + 40 * J), 5);
+    /* ⚠ LE JOUR EST ENTIER : 23 h de compagnie ne font pas encore un jour. */
+    verifie('23 h → 0 jour',                      duree(T0, null, T0 + 23 * 3600000), 0);
+    /* ⚠ NAISSANCE INCONNUE → null, JAMAIS 0. Les compagnons antérieurs au registre
+       n'ont pas de date, et un 0 se lirait « adopté aujourd'hui ». */
+    verifie('naissance inconnue → null',          duree(null, null, T0), null);
+    verifie('naissance illisible → null',         duree(NaN, null, T0), null);
+    /* Horloge reculée ou stockage bricolé : 0, pas un âge négatif. */
+    verifie('fin avant début → 0',                duree(T0, T0 - 10 * J, T0), 0);
+
+    verifie('libellé : âge inconnu',              age(null), '—');
+    verifie('libellé : le jour même',             age(0), "aujourd'hui");
+    verifie('libellé : singulier',                age(1), '1 jour');
+    verifie('libellé : pluriel',                  age(12), '12 jours');
+    /* ⚠ BASCULE EN MOIS À 30 JOURS : « 94 jours » demande un calcul au lecteur. */
+    verifie('libellé : 29 jours reste en jours',  age(29), '29 jours');
+    verifie('libellé : 30 jours passe en mois',   age(30), '1 mois');
+    verifie('libellé : 94 jours → 3 mois',        age(94), '3 mois');
+    verifie('libellé : un an',                    age(365), '1 an');
+    verifie('libellé : deux ans',                 age(800), '2 ans');
     verifie('chaîne illisible → sain',            physique('abcd'), 'sain');
     verifie('au-delà de 100 → borné, puis sain',  physique(300), 'sain');
 }

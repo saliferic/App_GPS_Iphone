@@ -345,7 +345,7 @@ Le token Mapbox (`js/01`) et la clé `sb_publishable_` (`js/21`) sont **publics 
 
 Pas d'IndexedDB ; `sessionStorage` utilisé seulement en cache TTL 15 min pour les stations. Clés principales préfixées `gps_` (badges préfixés `salif_gps_`) :
 
-`gps_home` et `gps_work` (lieux fixes : `{address, coords:[lng,lat], ts}` — **fiche entière ou rien**, une adresse sans coordonnées est traitée comme une absence ; même forme pour les deux, voir « Go home / Go work »), `gps_intro_seen`, `gps_hotbox`, `gps_hotbox_hint`, `gps_dest_draft` (TTL 6 h — **décide de l'écran d'accueil**, voir la puce dédiée), `gps_gas_scan_radius`, `gps_weekly_goals`, `gps_map_theme` (style Mapbox jour/nuit — **à ne pas confondre avec `gps_theme`**, la palette de l'interface, voir « Les trois palettes »), `gps_theme`, `gps_map_traffic`, `gps_buildings_3d`, `gps_voice_enabled`, `gps_voice_quiet`, `gps_eco_counter`, `gps_km_history`, `gps_last_km_goal`, `gps_favorites`, `gps_tenmin_enabled`, `gps_trip_history`, `gps_profiles`, `gps_active_profile_id`, `salif_gps_badges` (+ suffixe `_${profileId}`), `gps_avoid_tolls`, `gps_vehicle_type`, `gps_vehicle_consumption`, `gps_fuel_price`, `gps_fuel_type`, `gps_fuel_price_manual`, `gps_fuel_price_auto`, `gps_vehicle_consumption_elec`, `gps_elec_price`, `gps_vehicle_license_points`, `gps_critair`, `gps_vehicle_category`, `gps_zfe_alerts`, `gps_zfe_cache_v1` (TTL 7j), `gps_gas_sort_mode`, `gps_error_log` (20 dernières erreurs, voir ci-dessous), `gas_favorites_v1` (TTL 90j).
+`gps_home` et `gps_work` (lieux fixes : `{address, coords:[lng,lat], ts}` — **fiche entière ou rien**, une adresse sans coordonnées est traitée comme une absence ; même forme pour les deux, voir « Go home / Go work »), `gps_intro_seen`, `gps_hotbox`, `gps_hotbox_hint`, `gps_dest_draft` (TTL 6 h — **décide de l'écran d'accueil**, voir la puce dédiée), `gps_gas_scan_radius`, `gps_weekly_goals`, `gps_map_theme` (style Mapbox jour/nuit — **à ne pas confondre avec `gps_theme`**, la palette de l'interface, voir « Les trois palettes »), `gps_theme`, `gps_map_traffic`, `gps_buildings_3d`, `gps_voice_enabled`, `gps_voice_quiet`, `gps_eco_counter`, `gps_km_history`, `gps_last_km_goal`, `gps_favorites`, `gps_tenmin_enabled`, `gps_trip_history`, `gps_profiles`, `gps_active_profile_id`, `salif_gps_badges` (+ suffixe `_${profileId}`), `gps_avoid_tolls`, `gps_vehicle_type`, `gps_vehicle_consumption`, `gps_fuel_price`, `gps_fuel_type`, `gps_fuel_price_manual`, `gps_fuel_price_auto`, `gps_vehicle_consumption_elec`, `gps_elec_price`, `gps_vehicle_license_points`, `gps_critair`, `gps_vehicle_category`, `gps_zfe_alerts`, `gps_zfe_cache_v1` (TTL 7j), `gps_gas_sort_mode`, `gps_compagnons_nes` (date d'entrée de chaque compagnon dans la vie du joueur, pour l'âge affiché — voir « La mort est possible pour TOUS »), `gps_compagnons_morts` (⚠ `{cle: horodatage}` depuis le 03/09/2026, `{cle: true}` avant — les deux formes se lisent), `gps_error_log` (20 dernières erreurs, voir ci-dessous), `gas_favorites_v1` (TTL 90j).
 
 L'export/import JSON (`exportProfile`/`importProfile`) sérialise un instantané (`_buildProfileSnapshot`) de ces clés pour migration vers un autre appareil.
 
@@ -1102,6 +1102,47 @@ la grille.
 Le reste du parcours de deuil **existait déjà** et n'a pas bougé : portrait de l'animal mort,
 « Choisis un autre animal pour continuer. », bouton « Choisir un autre animal », grille ouverte
 400 ms après la fermeture.
+
+### ⚠ La mort n'est actée qu'à L'ARRIVÉE, jamais en roulant
+
+**Exigence de l'utilisateur, et elle est garantie par construction** : `declarerMort()` n'a
+**qu'un seul appelant**, `showArrivalSummary()` (js/12), qui ne s'exécute qu'en fin de trajet.
+Tomber à 0 en roulant ne tue pas — la barre peut remonter avant d'arriver, et seule la vie **à
+l'arrivée** compte. Ne jamais appeler `declarerMort()` depuis la boucle de navigation ni depuis
+`VieCompagnon.avancer()/choc()` : ce serait annoncer un décès au conducteur au volant.
+
+### Les perdus restent à la page des sauvés — sépia, deux dates, et l'âge (03/09/2026)
+
+C'était la question ouverte laissée par le retrait de l'immortalité ; elle est tranchée : **un
+animal perdu reste dans « Animaux sauvés »**, décoloré, avec ses deux dates. Cette page devient
+la seule qui se souvienne de lui, là où la fenêtre de choix le sort du jeu.
+
+- **Sépia, pas gris.** `.cpx-perdu` (js/25 + styles.css) vire au jauni ; `.cpx-mort` (fenêtre de
+  choix, js/23) grise et écrit « MORT » en rouge. **Deux règles séparées et c'est délibéré** :
+  l'une dit « souvenir », l'autre « hors jeu ». Le jour où l'une change, l'autre ne doit pas
+  suivre — même raison qui sépare déjà `.cpx-mort` de `.cpx-verrou`.
+- **Deux nouvelles données datées.** `gps_compagnons_nes` = `{cle: horodatage}`, posé par
+  `choisir()` (js/22) et **jamais écrasé** — reprendre un compagnon ne le fait pas renaître. Et
+  `gps_compagnons_morts` **change de forme en restant compatible** : `{cle: true}` devient
+  `{cle: horodatage}`. `estMort()` ne teste que la vérité de la valeur, donc les deux marchent ;
+  un `true` hérité signifie « mort, date inconnue ». **⚠ Ne pas « nettoyer » ces `true` en les
+  datant du jour** — ce serait inventer une date de décès.
+- **L'âge est calculé dans le noyau**, donc testable : `dureeVieJours(ne, fin, maintenant)` et
+  `texteAge(jours)` (js/00, l'instant est injecté comme pour `heureArrivee()`). **`null` quand
+  la naissance est inconnue, jamais 0** : les compagnons antérieurs au registre n'ont pas de
+  date, et un 0 se lirait « adopté aujourd'hui ». L'écran affiche « — ». ⚠ Piège attrapé par le
+  test : `Number(null)` vaut 0 et passe `isFinite` — `texteAge()` teste donc `null` **avant**
+  la conversion.
+- **L'année n'apparaît dans la plage que si les deux dates n'ont pas la même** — sans ça, un
+  animal gardé quatorze mois affichait « 30 juil. – 22 août », soit trois semaines à la lecture.
+  Et cette ligne-là **s'enroule** au lieu d'être coupée aux points de suspension : un état
+  tronqué reste lisible, une date tronquée ne veut plus rien dire.
+- **Dates formatées à la main** (table de douze mois, js/25), pas de `toLocaleDateString()` —
+  même raison que `heureArrivee()` : la locale dépend de l'environnement, et l'app tourne aussi
+  depuis `android_asset`.
+- **Le bouton « Prendre comme compagnon » se désactive** sur un perdu : `Compagnon.choisir()` le
+  refusait déjà et le clic ne faisait rien, ce qui est exactement le « bouton mort-vivant » que
+  js/25 s'interdit. Sa fiche, elle, reste consultable — c'est le sujet de la page.
 
 ---
 ## 🎨 Les trois palettes — Crépuscule / Canopée / Abysse (03/09/2026)

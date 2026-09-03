@@ -45,6 +45,62 @@
         return Compagnon.catalogue().filter(c => c.debloque && estSauve(c.cle));
     }
 
+    /* ─── CE QU'UN ANIMAL A VÉCU  (03/09/2026) ─────────────────────────────
+       Depuis que les sauvés peuvent mourir (voir js/24), cette page est la seule
+       qui garde leur trace : un animal perdu Y RESTE, décoloré, avec ses deux
+       dates. C'est le contraire de la fenêtre de choix, qui le retire du jeu.
+       Les deux écrans disent deux choses différentes — ce qu'il a accompli, et
+       ce qu'il est devenu.
+
+       ⚠ FORMATAGE DES DATES À LA MAIN, pas de `toLocaleDateString()`. Même raison
+       que `heureArrivee()` dans le noyau : la locale dépend de l'environnement, et
+       l'app tourne aussi bien dans un navigateur de bureau que dans une WebView
+       chargée depuis `android_asset`. Douze noms de mois coûtent moins cher qu'un
+       rendu qui change d'un appareil à l'autre. */
+    const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
+                  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+    function jourMois(ts, avecAnnee) {
+        const t = Number(ts);
+        if (!isFinite(t) || t <= 0) return null;
+        const d = new Date(t);
+        return d.getDate() + ' ' + MOIS[d.getMonth()] + (avecAnnee ? ' ' + d.getFullYear() : '');
+    }
+
+    function estPerdu(cle) {
+        return !!(window.VieCompagnon && typeof VieCompagnon.estMort === 'function'
+                  && VieCompagnon.estMort(cle));
+    }
+
+    /* ⚠ LES DEUX BOUTS, OU RIEN. Une seule date connue ne se rend pas en
+       « 12 août – ? » : une moitié d'information présentée comme une plage se lit
+       comme une donnée sûre. Le cas arrive pour de bon — les animaux morts avant
+       l'apparition du registre daté n'ont qu'un `true` en stockage. */
+    function plageDeVie(cle) {
+        if (!window.VieCompagnon || typeof VieCompagnon.dateNaissance !== 'function') return null;
+        const tNe  = VieCompagnon.dateNaissance(cle);
+        const tFin = VieCompagnon.dateDeces(cle);
+        if (!tNe || !tFin) return null;
+        /* ⚠ L'ANNÉE APPARAÎT DÈS QUE LES DEUX DATES N'ONT PAS LA MÊME. Sans elle,
+           un animal gardé quatorze mois affichait « 30 juil. – 22 août » : trois
+           semaines à la lecture, un an et un mois dans les faits. On ne l'ajoute
+           PAS quand l'année est commune — elle serait du bruit sur l'écrasante
+           majorité des cas. */
+        const memeAnnee = new Date(tNe).getFullYear() === new Date(tFin).getFullYear();
+        const ne  = jourMois(tNe,  !memeAnnee);
+        const fin = jourMois(tFin, !memeAnnee);
+        return (ne && fin) ? (ne + ' – ' + fin) : null;
+    }
+
+    /* L'âge : le temps passé auprès du joueur. Arrêté à la date de décès pour un
+       animal perdu, sinon compté jusqu'à maintenant. Le calcul est dans le noyau,
+       testable ; ici on ne fait que lui donner les dates. */
+    function ageTexte(cle) {
+        if (!window.VieCompagnon || typeof VieCompagnon.dateNaissance !== 'function') return '—';
+        return texteAge(dureeVieJours(VieCompagnon.dateNaissance(cle),
+                                      VieCompagnon.dateDeces(cle), Date.now()));
+    }
+
     /* ─── LA GRILLE ────────────────────────────────────────────────────────
        Mêmes classes `.cpx-*` que la fenêtre de choix, et c'est voulu : un
        animal doit se présenter de la même façon des deux côtés, sinon on ne
@@ -65,13 +121,25 @@
             /* « SauvéE » pour les femelles de la troupe. Le genre est DÉCLARÉ
                dans js/22, jamais déduit du nom ni de l'espèce. */
             const e = (Compagnon.genre && Compagnon.genre(c.cle) === 'f') ? 'e' : '';
+            const perdu = estPerdu(c.cle);
+            /* La ligne du bas dit l'essentiel de chaque cas : pour un vivant, qu'il
+               est sauvé ; pour un perdu, QUAND il a vécu. Deux dates valent mieux
+               que le mot « perdu » répété sous une carte déjà décolorée — et si
+               elles manquent (animal mort avant le registre daté), on retombe sur
+               le mot. */
+            const plage = perdu ? plageDeVie(c.cle) : null;
+            const bas   = perdu ? (plage || `Perdu${e}`) : `Sauvé${e}`;
+            const dit   = perdu
+                ? `${c.nom}, ${c.espece} — sauvé${e} puis perdu${e}${plage ? ', ' + plage : ''}, voir sa fiche`
+                : `${c.nom}, ${c.espece} — sauvé${e}, voir sa fiche`;
             return `
-                <div class="cpx-carte cpx-sauve" role="button" tabindex="0" data-cle="${c.cle}"
-                     aria-label="${c.nom}, ${c.espece} — sauvé${e}, voir sa fiche">
+                <div class="cpx-carte cpx-sauve${perdu ? ' cpx-perdu' : ''}" role="button" tabindex="0" data-cle="${c.cle}"
+                     aria-label="${dit}">
                     <div class="cpx-vignette" style="--cpx-accent:${c.accent}">${c.vignette}</div>
                     <div class="cpx-nom">${c.nom}</div>
                     <div class="cpx-espece">${c.espece}</div>
-                    <div class="cpx-etat">Sauvé${e}</div>
+                    <div class="cpx-age">${ageTexte(c.cle)}</div>
+                    <div class="cpx-etat">${bas}</div>
                 </div>`;
         }).join('');
     }
@@ -123,6 +191,19 @@
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'cpx-prendre';
+
+        /* ⚠ UN ANIMAL PERDU NE SE REPREND PAS (03/09/2026, depuis que les sauvés
+           peuvent mourir). `Compagnon.choisir()` le refuse déjà et le clic ne
+           faisait donc rien — exactement le « bouton mort-vivant » que la branche
+           suivante interdit. Sa fiche reste consultable : c'est le sujet même de
+           cette page. */
+        if (estPerdu(cle)) {
+            b.className += ' cpx-prendre-actif';
+            b.disabled = true;
+            const e = (window.Compagnon && Compagnon.genre && Compagnon.genre(cle) === 'f') ? 'e' : '';
+            b.textContent = `Perdu${e} — ne peut plus être joué${e}`;
+            return b;
+        }
 
         const dejaActif = window.Compagnon && typeof Compagnon.cle === 'function'
                           && Compagnon.cle() === cle;

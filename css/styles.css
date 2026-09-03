@@ -3191,6 +3191,44 @@
         .cpx-sauve .cpx-etat { color: #6FE3A0; }
         .cpx-sauve[data-cle]:hover { background: rgba(111,227,160,0.13); }
 
+        /* L'age, sous l'espece : le temps passe aupres du joueur. « — » quand la
+           naissance n'est pas connue (compagnons anterieurs au registre date). */
+        .cpx-age {
+            font-size: 10px; color: #6E668F; margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+
+        /* ═══ L'ANIMAL SAUVE PUIS PERDU                         (03/09/2026) ═══
+           Depuis que les sauves peuvent mourir (js/24), cette page les GARDE au lieu
+           de les retirer : c'est la seule qui se souvienne d'eux, la fenetre de choix
+           les sort du jeu. La carte vire donc au SEPIA, pas au gris.
+
+           ⚠ LE SEPIA N'EST PAS UN CAPRICE, IL DISTINGUE DEUX ECRANS. `.cpx-mort`
+           (fenetre de choix) grise et ecrit « MORT » en rouge : elle dit « hors jeu ».
+           Ici on dit « souvenir » — une photo jaunie, pas un dossier ferme. Le jour ou
+           l'un des deux change, l'autre ne doit pas suivre : deux regles separees,
+           comme `.cpx-mort` l'est deja de `.cpx-verrou` pour la meme raison.
+
+           La ligne du bas porte les deux dates de sa vie ; elle garde donc une casse
+           normale, la ou `.cpx-etat` est en capitales — « 12 AOUT – 3 SEPT. » se lit
+           mal, et ce n'est plus un etat mais une date. */
+        .cpx-perdu { border-color: rgba(200,160,90,0.32); background: rgba(200,160,90,0.06); }
+        .cpx-perdu .cpx-vignette { filter: sepia(0.85) brightness(0.82) contrast(0.95); opacity: 0.7; }
+        .cpx-perdu .cpx-nom    { color: #B8A98A; }
+        .cpx-perdu .cpx-espece,
+        .cpx-perdu .cpx-age    { color: #8A7F66; }
+        /* ⚠ CETTE LIGNE-LA S'ENROULE, contrairement a `.cpx-etat` qui la coupe aux
+           points de suspension. Une plage de vie a cheval sur deux annees fait
+           « 30 juil. 2025 – 22 aout 2026 » : coupee, elle donnait « 30 juil. 2025 – 2… »,
+           c'est-a-dire une date de fin illisible. Un mot d'etat tronque reste
+           comprehensible ; une date tronquee ne veut plus rien dire. La carte gagne
+           une ligne, la rangee suit — c'est le prix, et il est juste. */
+        .cpx-perdu .cpx-etat {
+            color: #C8A05A; text-transform: none; letter-spacing: 0.2px; font-weight: 700;
+            white-space: normal; overflow: visible; font-size: 9.5px; line-height: 1.3;
+        }
+        .cpx-perdu[data-cle]:hover { background: rgba(200,160,90,0.12); }
+
         #animaux-sauves-fiche { margin-top: 4px; }
         #animaux-sauves-fiche .clairiere { position: relative; border-radius: 18px; overflow: hidden; }
 
