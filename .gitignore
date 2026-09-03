@@ -29,3 +29,18 @@ tests/*.png
 # Fichiers de travail, pas des fichiers de l'app. Animaux.psd fait 13 Mo et git
 # garderait CHAQUE version pour toujours. Les PNG exportes, eux, sont suivis.
 *.psd
+
+# === Maquettes et planches de direction artistique ===
+# Sorties de l'outil de design : 2,5 Mo par planche, régénérables depuis les
+# sources .dc.html qu'elles contiennent. Même raison que Zone_cea ci-dessous —
+# et même réserve : le dossier est DANS l'arborescence empaquetée, donc à
+# écarter aussi du dossier d'export APK.
+design/
+
+# === Zone de création (sources lourdes, pas des fichiers de l'app) ===
+# Photoshop, logiciel de montage : sert a produire les assets, jamais utilise par
+# l'app elle-meme. Meme logique que *.psd ci-dessus, meme limite : exclu de git,
+# mais PROBABLEMENT PAS de l'APK (voir docs/journal-dette.md, point 6) puisque
+# Website 2 APK Builder empaquette le dossier de travail tel quel, pas ce que git
+# suit. A deplacer hors de Go_app/ si on veut une garantie reelle.
+Zone_cea/
