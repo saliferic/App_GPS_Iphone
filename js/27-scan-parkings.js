@@ -54,8 +54,30 @@
            survit à la fermeture ferait rouvrir la feuille sur une liste amputée sans
            que rien n'explique pourquoi, deux jours plus tard. */
         let _pkFee = null;
-        let _pkRadiusKm = parseFloat(localStorage.getItem('gps_parking_scan_radius') || '1.5');
-        if (!Number.isFinite(_pkRadiusKm) || _pkRadiusKm < 0.5 || _pkRadiusKm > 5) _pkRadiusKm = 1.5;
+        /* ⚠ 1 km PAR DÉFAUT, ET NON 1,5  (04/09/2026, demande utilisateur).
+           DEUX RAISONS, et la première n'est pas technique : PERSONNE NE SE GARE À PLUS
+           D'UN KILOMÈTRE de sa destination — au-delà, c'est une marche, pas un
+           stationnement. Proposer d'emblée un rayon plus large, c'est proposer des
+           parkings que le conducteur n'ira pas prendre.
+           La seconde est la CHARGE, et il faut être précis sur ce qu'elle vaut. La
+           requête part sur une bbox, dont la surface croît au carré du rayon : 1 km au
+           lieu de 1,5 retire 56 % de la zone. Mesuré place de la République le
+           04/09/2026 : 16 objets bruts contre 59, soit 10 parkings retenus contre 43.
+           C'est autant de moins à lire, sérialiser et transporter, sur des miroirs
+           bénévoles qui rendaient déjà 504 à 2,5 km dans Paris (voir le pavé de
+           _pkFetchRaw).
+           ⚠ EN REVANCHE, NE PAS PROMETTRE UN SCAN PLUS RAPIDE. Mesuré le même jour :
+           1 km en 3,7 s et 1,5 km en 1,8 s — l'inverse de l'intuition. Sur Overpass, le
+           temps de réponse est dominé par la file d'attente du miroir, pas par la taille
+           du résultat. Le gain est en pertinence et en charge, pas en secondes.
+           ⚠ NE PAS ALIGNER LE SCAN STATIONS LÀ-DESSUS : on ROULE jusqu'à une station,
+           5 km y sont une distance normale. Les deux curseurs répondent à deux questions
+           différentes, leurs valeurs n'ont aucune raison de se suivre.
+           Le curseur reste réglable de 0,5 à 5 km, et le choix de l'utilisateur est
+           persisté : ce défaut ne concerne que ceux qui n'y ont jamais touché. */
+        const PK_RAYON_DEFAUT_KM = 1;
+        let _pkRadiusKm = parseFloat(localStorage.getItem('gps_parking_scan_radius') || String(PK_RAYON_DEFAUT_KM));
+        if (!Number.isFinite(_pkRadiusKm) || _pkRadiusKm < 0.5 || _pkRadiusKm > 5) _pkRadiusKm = PK_RAYON_DEFAUT_KM;
 
         /* Cache du dernier relevé Overpass + veille silencieuse (voir _scanCacheFresh,
            js/00). Le conducteur rouvre souvent la feuille après l'avoir juste repliée,

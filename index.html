@@ -1894,9 +1894,12 @@
                  pastilles Gratuit / Payant, chacune se désélectionnant au second clic. -->
             <div id="parking-scan-fees"></div>
             <div id="parking-scan-radius-row">
-                <input type="range" id="parking-scan-radius" min="0.5" max="5" step="0.5" value="1.5"
+                <!-- 1 km : voir PK_RAYON_DEFAUT_KM (js/27) pour le pourquoi. Ces deux
+                     valeurs en dur ne servent qu'avant l'ouverture de la feuille —
+                     _pkOuvre() aligne ensuite le curseur sur la valeur persistée. -->
+                <input type="range" id="parking-scan-radius" min="0.5" max="5" step="0.5" value="1"
                        oninput="onParkingScanRadiusInput(this.value)" onchange="onParkingScanRadiusCommit(this.value)">
-                <span id="parking-scan-radius-val">1,5 km</span>
+                <span id="parking-scan-radius-val">1 km</span>
             </div>
             <div id="parking-scan-status"></div>
             <div id="parking-scan-list"></div>
