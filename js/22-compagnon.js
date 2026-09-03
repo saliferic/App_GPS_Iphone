@@ -681,6 +681,16 @@
             x: -68.7, y: -30.2, taille: 453.8,   // calage du hero, réglé sur la frame 1 (304×308 à 106,130)
             sol: { cx: 160, rx: 59 },
             larme: [126, 196], zzz: [258, 96], etoiles: [[46, 104, 13], [276, 92, 10]],
+            /* ⚠ LES BOÎTES CI-DESSOUS SONT CELLES DES PNG D'ÉTAT, pas celle du webp
+               animé au-dessus : ce sont trois fichiers différents, et `variante()`
+               recalcule le calage à partir de la boîte qu'on lui donne. Mesurées au
+               seuil 64 avec `node tools/_alpha-bbox.js` sur les fichiers réels. */
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesse/Elephant_Blesse.png', taille: 336.5,
+                          boite: { x: 29, y: 68, w: 448, h: 400 } },
+                mort:   { fichier: 'Images/Animals/Dead/Elephant_dead.PNG', taille: 336.5,
+                          boite: { x: 58, y: 60, w: 397, h: 427 } }
+            },
             /* Le calage d'avant la bascule webp, gardé pour le parcours (page
                Objectifs) : demande utilisateur (28/08/2026), en vue d'illustrations
                dédiées par étape à venir dans ce dossier Normal. */
@@ -704,9 +714,9 @@
                n'ont pas de `variantes` : ils affichent leur image Normal quel que soit
                leur état physique — voir `variante()` juste sous cette table. */
             variantes: {
-                blesse: { fichier: 'Images/Animals/Blesse/Hippo_Blesse.PNG',
+                blesse: { fichier: 'Images/Animals/Blesse/Hippo_Blesse.PNG', taille: 336.5,
                           boite: { x: 73, y: 58, w: 362, h: 407 } },
-                mort:   { fichier: 'Images/Animals/Dead/Hippo_dead.PNG',
+                mort:   { fichier: 'Images/Animals/Dead/Hippo_dead.PNG', taille: 336.5,
                           boite: { x: 75, y: 59, w: 361, h: 427 } }
             },
             /* +25% (test gif) : taille scalée depuis 336.5, x/y recalculés pour garder
@@ -739,9 +749,9 @@
             sol: { cx: 160, rx: 65 },
             larme: [127, 168], zzz: [261, 105], etoiles: [[54, 102, 13], [271, 102, 10]],
             variantes: {
-                blesse: { fichier: 'Images/Animals/Blesse/Chien_Blesse.PNG',
+                blesse: { fichier: 'Images/Animals/Blesse/Chien_Blesse.PNG', taille: 336.5,
                           boite: { x: 71, y: 34, w: 346, h: 430 } },
-                mort:   { fichier: 'Images/Animals/Dead/Chien.png',
+                mort:   { fichier: 'Images/Animals/Dead/Chien.png', taille: 336.5,
                           boite: { x: 74, y: 42, w: 366, h: 460 } }
             },
             statique: {
@@ -755,7 +765,13 @@
             boite: { x: 33, y: 48, w: 439, h: 416 },
             x: -5.9, y: 53.0, taille: 336.5,   // contenu 439×416 à 33,48
             sol: { cx: 160, rx: 76 },
-            larme: [128, 212], zzz: [270, 100], etoiles: [[32, 106, 13], [292, 94, 10]]
+            larme: [128, 212], zzz: [270, 100], etoiles: [[32, 106, 13], [292, 94, 10]],
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesse/Singe_Blesse.png',
+                          boite: { x: 35, y: 49, w: 438, h: 416 } },
+                mort:   { fichier: 'Images/Animals/Dead/Singe_dead.png',
+                          boite: { x: 45, y: 37, w: 422, h: 450 } }
+            }
         },
         zola: {
             /* Recalé le 02/09/2026 : le PNG avait été réexporté sans que cette boîte
@@ -769,14 +785,33 @@
             boite: { x: 88, y: 37, w: 352, h: 434 },
             x: -13.5, y: 48.4, taille: 336.5,  // contenu 352×434 à 88,37
             sol: { cx: 160, rx: 64 },
-            larme: [120, 211], zzz: [252, 100], etoiles: [[44, 104, 13], [274, 92, 10]]
+            larme: [120, 211], zzz: [252, 100], etoiles: [[44, 104, 13], [274, 92, 10]],
+            /* ⚠ PAS DE `blesse` : il n'existe pas de `Lion_Blesse` sur le disque, et
+               une variante manquante rend l'image Normal (voir `variante()`). Zola
+               passe donc de l'image saine à l'image morte sans état intermédiaire —
+               c'est volontairement laissé tel quel plutôt que d'emprunter le blessé
+               d'une autre espèce. */
+            variantes: {
+                mort: { fichier: 'Images/Animals/Dead/Lion_dead.png',
+                        boite: { x: 74, y: 25, w: 369, h: 474 } }
+            }
         },
         kiri: {
             fichier: 'Images/Animals/Normal/Girafe.png',
             boite: { x: 70, y: 28, w: 355, h: 438 },
             x: -2.7, y: 51.7, taille: 336.5,   // contenu 355×438 à 70,28
             sol: { cx: 160, rx: 62 },
-            larme: [121, 211], zzz: [250, 88], etoiles: [[48, 96, 13], [272, 84, 10]]
+            larme: [121, 211], zzz: [250, 88], etoiles: [[48, 96, 13], [272, 84, 10]],
+            /* ⚠ CASSE DU DISQUE : `.PNG` pour la blessée, `.png` pour la morte. Les
+               deux fichiers ne viennent pas du même export et Android distingue les
+               deux là où Windows non — recopier l'un sur l'autre donnerait une image
+               introuvable, en silence. */
+            variantes: {
+                blesse: { fichier: 'Images/Animals/Blesse/Girafe_Blesse.PNG',
+                          boite: { x: 124, y: 46, w: 273, h: 428 } },
+                mort:   { fichier: 'Images/Animals/Dead/Girafe_dead.png',
+                          boite: { x: 67, y: 19, w: 374, h: 468 } }
+            }
         },
         raya: {
             fichier: 'Images/Animals/Normal/Tigre.png',
@@ -790,7 +825,13 @@
             boite: { x: 77, y: 46, w: 357, h: 418 },
             x: -7.9, y: 53.0, taille: 336.5,   // contenu 357×418 à 77,46
             sol: { cx: 160, rx: 62 },
-            larme: [120, 212], zzz: [250, 98], etoiles: [[46, 102, 13], [274, 90, 10]]
+            larme: [120, 212], zzz: [250, 98], etoiles: [[46, 102, 13], [274, 90, 10]],
+            /* Comme Zola : pas de `Renard_Blesse` sur le disque, donc pas d'état
+               blessé — Sam garde son image saine jusqu'à la mort. */
+            variantes: {
+                mort: { fichier: 'Images/Animals/Dead/Renard_dead.png',
+                        boite: { x: 74, y: 32, w: 407, h: 457 } }
+            }
         },
         nima: {
             /* Cinquième animal à avoir ses trois états physiques (01/09/2026, après
@@ -811,9 +852,9 @@
             sol: { cx: 160, rx: 57 },
             larme: [141, 201], zzz: [231, 91], etoiles: [[50, 100, 13], [278, 95, 10]],
             variantes: {
-                blesse: { fichier: 'Images/Animals/Blesse/Chat_Blesse.png',
+                blesse: { fichier: 'Images/Animals/Blesse/Chat_Blesse.png', taille: 336.5,
                           boite: { x: 83, y: 44, w: 331, h: 424 } },
-                mort:   { fichier: 'Images/Animals/Dead/Chat.png',
+                mort:   { fichier: 'Images/Animals/Dead/Chat.png', taille: 336.5,
                           boite: { x: 76, y: 44, w: 416, h: 427 } }
             },
             statique: {
@@ -830,12 +871,22 @@
        Rend toujours quelque chose d'affichable : `{ fichier, boite, x, y, taille }`.
 
        ⚠ UNE VARIANTE MANQUANTE REND L'IMAGE NORMALE, elle ne rend jamais rien.
-       Seul l'hippo a ses trois états aujourd'hui — l'éléphant, qui est pourtant
-       le compagnon par défaut, n'en a aucun. La mécanique ne peut donc pas être
-       suspendue à la présence d'un fichier : la couleur du cadre et la phrase de
-       la fenêtre d'arrivée disent l'état même quand l'image ne le dit pas. Le
-       jour où un PNG est ajouté dans `Blesser/` ou `Dead/`, il suffit de le
-       déclarer dans `variantes` — rien d'autre à toucher.
+       La mécanique ne peut pas être suspendue à la présence d'un fichier : la
+       couleur du cadre et la phrase de la fenêtre d'arrivée disent l'état même
+       quand l'image ne le dit pas. Le jour où un PNG est ajouté dans `Blesse/`
+       ou `Dead/`, il suffit de le déclarer dans `variantes` — rien d'autre à
+       toucher.
+
+       ÉTAT AU 03/09/2026 — la table a été complétée avec tout ce qui existait
+       déjà sur le disque et n'avait jamais été déclaré :
+         · trois états complets : bulle, pilou, nima, babi, titi, kiri ;
+         · mort seulement : zola et sam — il n'existe ni `Lion_Blesse` ni
+           `Renard_Blesse`, et emprunter le blessé d'une autre espèce aurait été
+           pire que l'absence ;
+         · rien du tout : raya, dont ni le blessé ni le mort n'ont été dessinés.
+       ⚠ `Images/Blesse/` contient dix-sept fichiers pour neuf compagnons : les
+       autres appartiennent à des espèces d'A_VENIR. Ne pas les brancher au
+       hasard sur un animal existant parce que le nom paraît proche.
 
        ⚠ LE CALAGE D'UNE VARIANTE EST CALCULÉ, PAS RECOPIÉ. Les `x`/`y` déclarés
        plus haut valent pour l'image Normal et pour elle seule : l'hippo mort est
@@ -896,9 +947,20 @@
         const v = (physique && physique !== 'sain' && im.variantes) ? im.variantes[physique] : null;
         if (!v) return { fichier: im.fichier, boite: im.boite, x: im.x, y: im.y, taille: im.taille };
         const b = v.boite;
-        const s = im.taille / 512;
+        /* ⚠ UNE VARIANTE PEUT DÉCLARER SA PROPRE `taille` (03/09/2026) — et les quatre
+           compagnons animés le DOIVENT. Le `taille` du parent est calé sur le WEBP, dont
+           la boîte alpha est plus serrée que celle des PNG d'état : Babi vaut 453.8,
+           Bulle 478.7. Hérité tel quel, il agrandissait les PNG de 35 % et les faisait
+           déborder du `viewBox` du portrait (6 42 308 330) — l'éléphant blessé sortait
+           du cadre de 89 px en largeur et de 38 px en hauteur. Le défaut est arrivé
+           avec la bascule webp (28/08 → 01/09), sans se voir : personne ne regardait
+           l'image blessée le jour où l'on changeait l'image saine.
+           Le repli sur `im.taille` reste juste pour les compagnons non animés, dont le
+           Normal et les états partagent le même gabarit 512. */
+        const t = v.taille || im.taille;
+        const s = t / 512;
         return {
-            fichier: v.fichier, boite: b, taille: im.taille,
+            fichier: v.fichier, boite: b, taille: t,
             x: CENTRE_X - (b.x + b.w / 2) * s,
             y: SOL_Y     - (b.y + b.h) * s
         };
