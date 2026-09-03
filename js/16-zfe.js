@@ -714,18 +714,46 @@
             if (route) {
                 const plat = (o, vide) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     .map(([k, v]) => `${k}=${v.toFixed(1)}km`).join(', ') || vide;
-                logDiag('peages', {
-                    cout: cout.toFixed(2) + '€',
-                    routeTotale: (d.kmTotalRoute || 0).toFixed(1) + 'km',
-                    ITINERAIRE:  plat(d.kmParAutoroute, '(aucune)'),
-                    parReseau:   plat(d.kmParReseau, '(aucun)'),
-                    HORS_FR:     (d.kmHorsFr || 0).toFixed(1) + 'km',
-                    euroroute:   (d.kmEuroroute || 0).toFixed(1) + 'km',
-                    EURO_DETAIL: plat(d.eurorouteDetail, '(aucun)'),
-                    nonReconnus: plat(d.refsNonReconnus, '(aucun)'),
-                    sansRef:     (d.kmSansRef || 0).toFixed(1) + 'km',
-                    refExploitable: d.refExploitable,
-                });
+                /* ⚠ LE JOURNAL DIT MAINTENANT QUEL ESTIMATEUR A CHIFFRÉ  (04/09/2026).
+                   `estimateTollFromRoute` a DEUX chemins : le principal lit les tronçons
+                   taggés `toll` par Mapbox et sort tôt ; tout le reste (`kmTotalRoute`,
+                   `kmParReseau`, `refExploitable`…) appartient au REPLI par `ref`, qui
+                   ne s'exécute pas quand le principal réussit.
+                   Or ce bloc ne journalisait QUE les champs du repli. Sur un
+                   Courbevoie→Lyon parfaitement calculé, il rendait donc :
+                     cout 40,77€ | routeTotale 0.0km | ITINERAIRE (aucune)
+                   — un coût bien réel à côté d'un relevé vide, qui se lit comme une
+                   incohérence de calcul alors que TOUT était juste. Trois relevés ont
+                   été analysés sur cette fausse piste avant qu'on s'en aperçoive.
+                   `_sectionsPayantes` remplissait pourtant `diag` correctement
+                   (`sections`, `kmPayants`, `source: 'classes'`) : c'est ici que
+                   l'information était jetée.
+                   ⚠ On journalise désormais les champs DU CHEMIN EMPRUNTÉ, et lui seul.
+                   Mélanger les deux jeux redonnerait les zéros trompeurs, et
+                   `DIAG_LOG_MAX` vaut 12 : une entrée à quinze clés chasse le reste. */
+                const journal = { cout: cout.toFixed(2) + '€', source: d.source || 'repli-ref' };
+                if (d.source === 'classes') {
+                    Object.assign(journal, {
+                        kmPayants:  (d.kmPayants || 0).toFixed(1) + 'km',
+                        sections:   (d.sections || []).join(', ') || '(aucune)',
+                        horsFrPaye: (d.kmHorsFrPayant || 0).toFixed(1) + 'km',
+                    });
+                } else {
+                    Object.assign(journal, {
+                        routeTotale: (d.kmTotalRoute || 0).toFixed(1) + 'km',
+                        ITINERAIRE:  plat(d.kmParAutoroute, '(aucune)'),
+                        parReseau:   plat(d.kmParReseau, '(aucun)'),
+                        HORS_FR:     (d.kmHorsFr || 0).toFixed(1) + 'km',
+                        euroroute:   (d.kmEuroroute || 0).toFixed(1) + 'km',
+                        EURO_DETAIL: plat(d.eurorouteDetail, '(aucun)'),
+                        nonReconnus: plat(d.refsNonReconnus, '(aucun)'),
+                        sansRef:     (d.kmSansRef || 0).toFixed(1) + 'km',
+                        // `false` doit rester visible : `undefined` serait supprimé par
+                        // JSON.stringify, et son absence se lit « champ oublié ».
+                        refExploitable: !!d.refExploitable,
+                    });
+                }
+                logDiag('peages', journal);
             }
             return cout;
         }

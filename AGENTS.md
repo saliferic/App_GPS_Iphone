@@ -402,6 +402,30 @@ Second défaut du même écran, corrigé avec : le message existant vit dans « 
 
 `Cache-Control: no-store` est désormais posé sur toute réponse. **`no-store` et non `no-cache`** : le second autorise la mise en cache avec revalidation, le premier l'interdit. Ce serveur ne sert que du développement local.
 
+### ⚠ « 40,77 € sur 0,0 km » : le journal des péages décrivait le mauvais chemin — 04/09/2026
+
+**Le faux symptôme.** Pendant trois relevés, le journal 🩺 a montré des lignes du type `cout 40.77€ | routeTotale 0.0km | ITINERAIRE (aucune) | parReseau (aucun)` — un coût de péage bien réel à côté d'un relevé entièrement vide. Ça se lit comme une incohérence de calcul. **Ça n'en était pas une : tous les prix étaient justes.**
+
+**La cause.** `estimateTollFromRoute()` (js/00) a DEUX chemins. Le principal lit les tronçons taggés `toll` par Mapbox et **sort tôt** (~L1047). Tout le reste — `kmTotalRoute`, `kmParReseau`, `kmEuroroute`, `refExploitable` — appartient au **repli par `ref`**, qui ne s'exécute pas quand le principal réussit. Or `estimateTollCost()` (js/16) ne journalisait QUE les champs du repli. Les zéros ne décrivaient pas le trajet : ils décrivaient du code qui n'avait pas tourné.
+
+`_sectionsPayantes()` remplissait pourtant `diag` correctement (`sections`, `kmPayants`, `kmHorsFrPayant`, `source: 'classes'`) — l'information existait, elle était **jetée à l'écriture du journal**.
+
+**Indice à retenir** : le champ `refExploitable` était ABSENT des lignes journalisées. `JSON.stringify` supprime les clés valant `undefined` — une clé qui manque alors que le code la pose toujours signale une variable jamais initialisée, donc une branche non exécutée. C'est ce détail qui a tranché.
+
+**Le journal nomme désormais l'estimateur** (`source: 'classes'` ou `'repli-ref'`) et ne publie **que les champs du chemin emprunté** — mélanger les deux jeux redonnerait les zéros trompeurs, et `DIAG_LOG_MAX` vaut 12.
+
+**Ce que la correction a révélé, et qui vaut d'être noté** :
+
+| Trajet | Coût | Relevé |
+|---|---|---|
+| Courbevoie→Lyon | 40,77 € | 397,7 km payants, `aprr` |
+| Paris→Bruxelles | **15,80 €** | 141,3 km, `sanef` |
+| Paris→Courbevoie | 0,00 € | 0 km |
+
+Le Paris→Bruxelles est à cinquante centimes des **16,30 € de Mappy et ViaMichelin** cités plus haut comme référence — le calibrage réarmé le 20/08/2026 tient, et le diagnostic transfrontalier qu'il justifiait peut être désarmé.
+
+**LA LEÇON : un diagnostic doit dire PAR OÙ le calcul est passé, pas seulement ce qu'il a trouvé.** Un relevé qui décrit une branche non prise est pire que pas de relevé — il envoie chercher un bug là où il n'y en a pas.
+
 ### ⚠ Diagnostiquer une chaîne asynchrone : poser un témoin AVANT le premier `await`
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.
