@@ -341,19 +341,18 @@
     function declarerMort(cle) {
         const k = cle || cleCourante();
         if (morts[k]) return false;
-        /* ⚠ UN ANIMAL SAUVÉ NE MEURT PLUS  (29/08/2026, avec la reprise en
-           compagnon depuis js/25). Depuis qu'on peut reprendre un animal déjà
-           libéré, la vie continue de descendre sur lui comme sur les autres — et
-           sans cette garde, une mauvaise conduite le tuait. Il se serait alors
-           retrouvé dans DEUX registres qui se contredisent : « SAUVÉ » sur sa
-           page, « Mort » dans la fenêtre de choix. Or « sauvé » est un état
-           définitif : c'est la promesse que fait la page qui les affiche, et
-           toute la récompense du parcours.
-           La garde est ICI et pas chez l'appelant, pour la même raison que celle
-           de `choisir()` dans js/22 : c'est l'unique porte par laquelle un animal
-           entre au registre des morts. js/12 est chargé avant, mais on garde le
-           `typeof` — un module absent ne doit pas faire mourir tout le monde. */
-        if (typeof window.compagnonEstSauve === 'function' && window.compagnonEstSauve(k)) return false;
+        /* ⚠ AUCUNE EXEMPTION, PAS MÊME POUR UN ANIMAL SAUVÉ (03/09/2026).
+           Une garde a vécu ici du 29/08 au 03/09 : `compagnonEstSauve(k)` faisait
+           rendre `false`, et un animal mené au bout de son parcours devenait
+           immortel. Le motif était d'éviter deux registres qui se contredisent —
+           « SAUVÉ » sur sa page, « Mort » dans la fenêtre de choix.
+           Retirée sur décision de l'utilisateur : « ça pousse l'utilisateur à faire
+           attention et à garder à l'esprit que rien n'est acquis ». Un parcours mené
+           au bout n'achète plus l'immortalité ; il reste inscrit à la page des
+           sauvés, ce qu'il a accompli ne s'efface pas, mais l'animal, lui, peut se
+           perdre.
+           ⚠ NE PAS LA REMETTRE « pour cohérence » en voyant la page des sauvés
+           afficher un animal mort : c'est le comportement voulu, pas un oubli. */
         morts[k] = true;
         try { localStorage.setItem(CLE_MORTS, JSON.stringify(morts)); } catch (e) { /* non bloquant */ }
         return true;

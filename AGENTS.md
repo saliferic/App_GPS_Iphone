@@ -116,7 +116,7 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
   **⚠ LA GALERIE DES TROPHÉES A ÉTÉ SUPPRIMÉE (26/08/2026)** — `renderTrophyGallery`, `refreshTrophyGalleryCount`, `toggleTrophyGallery`, `onProfilTabOpen`, la section HTML et tout le CSS `.trophy-*`. Elle montrait les huit catégories de `BADGE_CATEGORIES` : le décompte de l'ancien système, celui d'avant les parcours d'animaux. **`BADGE_CATEGORIES` reste** — la carte de rang (`renderBadgeCategoryCard`) et le classement en ligne s'en servent toujours ; c'est la vitrine qui est partie, pas les badges. Ce qui la remplace : « Animaux sauvés » (js/25). Les trois appelants de `refreshTrophyGalleryCount()` appellent désormais `rafraichirAnimauxSauves()`, **même règle** : ne repeindre que si le corps porte `.in-profil-sheet`, c'est-à-dire s'il est sous les yeux.
 - **Objectifs hebdomadaires** : baseline personnelle de km/semaine (`getKmBaseline`, `getAdaptedTemplates`), génération (`generateWeeklyGoals`), suivi (`updateWeeklyGoalsAfterTrip`), bonus de fin de semaine.
   - **`vie_soin` — la mission de RÉPARATION, et le premier gabarit conditionnel (03/09/2026).** Les six gabarits précédents demandent tous de PRÉSERVER une vie ; celui-ci demande de la REMONTER : « Remettre {nom} sur pattes ». Il ne se tire que si le compagnon actif est **déjà SAUVÉ**, **sous `VIE_SEUIL_SOIN` (80 %)** et vivant, via un prédicat `eligible()` porté par le gabarit et filtré **avant** le tirage. Un gabarit sans `eligible` passe toujours — les six historiques sont inchangés.
-    - **⚠ RÉSERVÉE AUX COMPAGNONS SAUVÉS** (`compagnonEstSauve`, demande utilisateur : « un animal qu'on a sauvé et qu'on décide de garder parce qu'on s'y est attaché »). Ce n'est pas un filtre de confort, c'est ce qui rend la mécanique cohérente — et `declarerMort()` (js/24) le disait déjà : **un animal sauvé perd de la vie comme les autres mais NE PEUT PLUS MOURIR.** L'enjeu d'un soin sur un sauvé est donc « il est amoché et tu lui dois mieux », jamais « il risque d'y passer ». Sur un animal non sauvé, la même mission entrerait en concurrence avec son parcours d'évasion — l'histoire en cours est « le libérer », pas « le soigner » — et deviendrait cruelle, puisque lui peut vraiment mourir en chemin. **Conséquence assumée : la mission est tardive et rare.** C'est la récompense de l'attachement, pas une mission de début de partie.
+    - **⚠ RÉSERVÉE AUX COMPAGNONS SAUVÉS** (`compagnonEstSauve`, demande utilisateur : « un animal qu'on a sauvé et qu'on décide de garder parce qu'on s'y est attaché »). Le critère est **l'attachement, pas la sécurité** : sur un animal non sauvé, la mission entrerait en concurrence avec son parcours d'évasion — l'histoire en cours est « le libérer », pas « le soigner ». **Elle n'est pas sans risque pour autant** : depuis le retrait de l'immortalité des sauvés (voir « La mort est possible pour TOUS » ci-dessous), le compagnon peut mourir pendant sa propre mission de soin, ce qui la fait échouer et bascule sur un animal de début. **Conséquence assumée : la mission est tardive et rare.** C'est la récompense de l'attachement, pas une mission de début de partie.
     - **⚠ NE JAMAIS DESCENDRE SOUS 3 GABARITS INCONDITIONNELS.** C'est ce qui garantit qu'on puisse toujours en tirer trois. Ils sont six ; en rendre d'autres conditionnels se paierait ici en silence par une semaine à deux missions.
     - **Sa cible n'est pas tirée au hasard** (`min = max = 100`) : la cible EST la barre pleine. C'est le **point de départ** qui varie, et il n'est pas choisi non plus — c'est l'état réel de l'animal ce lundi-là.
     - **⚠ Sa progression est LUE, jamais accumulée** (`syncVieSoin()`). La vie est déjà tenue et persistée par `VieCompagnon` ; en garder une copie incrémentée aurait fait deux vérités à maintenir d'accord. On la recopie aux deux seuls moments où quelqu'un la lit : `renderWeeklyGoalsPanel()` (qui n'écrit que si ça a bougé) et `updateWeeklyGoalsAfterTrip()`. **On ne s'abonne PAS à `VieCompagnon.onChangement`** pour ça : la notification part à chaque point GPS et sauvegarder écrirait dans `localStorage` plusieurs fois par seconde — exactement ce que le `DELAI_ECRITURE_MS` de js/24 existe pour éviter.
@@ -1062,6 +1062,46 @@ Cas visé : téléphone en panne, on emprunte celui d'un proche et on veut y ret
 - **Le projet gratuit se met en pause après ~1 semaine sans requête.** Réveil manuel depuis le dashboard. Symptôme côté app : « Classement injoignable », les points continuent de s'accumuler en local et repartent au réveil.
 - **Le SDK vient d'un CDN** (`dist/umd/` explicitement — la racine du paquet sert de l'ESM, qui ne définirait aucun global). CDN bloqué ou hors ligne = `_clPret()` rend `null` et le classement affiche « indisponible ». **Le reste de l'app doit continuer de fonctionner** : ce n'est pas une fonction vitale d'un GPS.
 - **Le lien profil local ↔ compte est explicite depuis le 23/08/2026** — il ne l'était pas, et ça se voyait tout de suite. Le cumul est stocké par profil local, la session Supabase est globale à l'appareil : sans lien, la règle de fait était « le profil actif au moment de l'envoi ». Les points de `Steve` remontaient donc dans la ligne du compte `Saliferic`, et changer de profil local sans se déconnecter écrasait le score d'un compte avec celui d'un autre conducteur. Chaque état local porte désormais `compte: <user_id>`, posé par `clLierProfil()` à chaque connexion réussie ; `clPousser()` refuse d'envoyer quand ça ne correspond pas, et la modale affiche l'avertissement au lieu d'un compteur faux. ⚠ `compte` **survit au changement de semaine** alors que les points repartent de zéro : c'est un lien d'identité, pas un compteur. Un compte ne représente qu'un profil local à la fois — lier délie l'éventuel précédent.
+
+---
+## ☠️ La mort est possible pour TOUS, y compris les sauvés (03/09/2026)
+
+**Renversement d'une règle du 29/08.** « Sauvé » n'achète plus l'immortalité. Décision de
+l'utilisateur : *« ça pousse l'utilisateur à faire attention et à garder à l'esprit que rien
+n'est acquis »*.
+
+Deux gardes ont été retirées, et il faut les connaître toutes les deux — remettre l'une sans
+l'autre laisserait un état incohérent :
+
+1. **`declarerMort()` (js/24)** rendait `false` pour un `compagnonEstSauve()`. C'est l'unique
+   porte du registre des morts.
+2. **`showArrivalSummary()` (js/12)** rabattait l'état de `'mort'` à `'blesse'` avant même
+   d'appeler `declarerMort()`. Sans elle, la scène de deuil ne se serait jamais jouée.
+
+**Le prix, connu et accepté** : la page « Animaux sauvés » (js/25) affiche toujours comme
+sauvé un animal que la fenêtre de choix montre mort. C'était précisément le motif de la garde
+d'origine. Les deux écrans disent désormais deux moments différents — **ce qu'il a accompli**,
+et **ce qu'il est devenu**. ⚠ **Ne pas « corriger » ça en remettant la garde** : c'est le
+comportement voulu. Le jour où l'on voudra que la page des sauvés raconte aussi la perte,
+c'est js/25 qu'il faudra reprendre, pas js/24.
+
+**⚠ Et surtout : on ne laisse JAMAIS l'app sur un compagnon mort.** `replierSurCompagnonVivant()`
+(js/12), appelé par `ouvrirChoixApresDeuil()` **avant** l'ouverture de la grille, bascule sur
+un animal jouable. La grille s'ouvre bien derrière, mais **rien n'oblige à y choisir** : sans
+cette bascule, la refermer laissait le compagnon courant sur un animal que `choisir()` refuse
+— jauge à zéro, portrait de cadavre sur l'accueil et le marqueur, aucune sortie sans rouvrir
+la grille.
+- **Les deux « animaux de début » ne sont pas nommés en dur** : ce sont les **deux premiers du
+  catalogue**, donc exactement ceux qu'ouvre `OUVERTS_AU_DEPART` (js/23). Les écrire ici aurait
+  fait un troisième endroit à corriger le jour où l'on réordonne la troupe — ce qui est arrivé
+  le 03/09 même, quand le chien et le chat ont pris les deux premiers rangs.
+- **Repli élargi** au premier vivant venu si ces deux-là sont morts aussi ; si **tout** est
+  mort, on ne force rien — la grille dit l'impasse mieux qu'un `choisir()` qui échouerait en
+  silence.
+
+Le reste du parcours de deuil **existait déjà** et n'a pas bougé : portrait de l'animal mort,
+« Choisis un autre animal pour continuer. », bouton « Choisir un autre animal », grille ouverte
+400 ms après la fermeture.
 
 ---
 ## 🎨 Les trois palettes — Crépuscule / Canopée / Abysse (03/09/2026)

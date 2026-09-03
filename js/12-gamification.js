@@ -55,15 +55,15 @@
 
                ⚠ RÉSERVÉE AUX COMPAGNONS SAUVÉS (demande utilisateur, 03/09/2026) —
                « un animal qu'on a sauvé et qu'on décide de garder parce qu'on s'y
-               est attaché ». Ce n'est pas un filtre de confort, c'est ce qui rend la
-               mécanique cohérente, et `declarerMort()` (js/24) le dit déjà : un
-               animal sauvé perd de la vie comme les autres MAIS NE PEUT PLUS MOURIR.
-               L'enjeu d'un soin sur un sauvé est donc « il est amoché et tu lui dois
-               mieux », jamais « il risque d'y passer ».
-               Sur un animal NON sauvé, la même mission entrerait en concurrence avec
-               son propre parcours d'évasion — l'histoire en cours est « le libérer »,
-               pas « le soigner » — et elle deviendrait cruelle, puisque lui peut
-               vraiment mourir en chemin.
+               est attaché ». Le critère est l'ATTACHEMENT, pas la sécurité : sur un
+               animal non sauvé, la mission entrerait en concurrence avec son propre
+               parcours d'évasion — l'histoire en cours est « le libérer », pas « le
+               soigner ».
+               ⚠ ET ELLE N'EST PAS SANS RISQUE. Le même jour, la garde qui rendait
+               les sauvés immortels a été retirée (voir `declarerMort`, js/24) : un
+               compagnon peut mourir PENDANT sa mission de soin, ce qui la fait
+               échouer et bascule sur un animal de début. C'est voulu — « rien n'est
+               acquis » — et ça donne à la mission sa tension.
                Conséquence assumée : la mission est TARDIVE et rare. C'est la
                récompense de l'attachement, pas une mission de début de partie.
 
@@ -1359,20 +1359,19 @@
                pire, un `poser()` de débogage le montrerait ressuscité. Le registre fait
                foi, la jauge ne fait que l'alimenter. */
             const dejaMort = !!(window.VieCompagnon && VieCompagnon.estMort && VieCompagnon.estMort(cle));
-            /* ⚠ UN ANIMAL SAUVÉ NE PEUT PAS MOURIR — et ça se décide ICI AUSSI, pas
-               seulement dans `declarerMort()` (js/24). Depuis qu'on peut reprendre un
-               animal libéré comme compagnon (js/25), sa vie redescend comme celle des
-               autres. Le registre des morts refuse bien de l'inscrire, mais cette
-               ligne-ci ne lisait que la jauge : à zéro, `etat` valait 'mort', et
-               l'arrivée jouait toute la scène du deuil — portrait de cadavre, puis
-               réouverture de la fenêtre de choix — pour un animal qui, lui, restait
-               vivant dans tous les registres. Deux écrans, deux vérités opposées.
-               Il tombe donc au pire à 'blesse' : la jauge continue de dire la vérité
-               sur la conduite, sans jamais franchir le pas qui lui est interdit. */
-            const estSauve = typeof window.compagnonEstSauve === 'function'
-                             && window.compagnonEstSauve(cle);
+            /* ⚠ UN ANIMAL SAUVÉ PEUT MOURIR COMME LES AUTRES (03/09/2026, décision
+               utilisateur : « ça pousse l'utilisateur à faire attention et à garder à
+               l'esprit que rien n'est acquis »).
+               C'est un RENVERSEMENT de la règle du 27/08 : « sauvé » était jusque-là
+               un état définitif, et deux gardes — celle-ci et celle de `declarerMort()`
+               (js/24) — rabattaient l'état à 'blesse' pour ne jamais franchir le pas.
+               Le motif d'alors reste vrai et devient le prix à payer : la page
+               « Animaux sauvés » (js/25) continuera d'afficher comme sauvé un animal
+               que la grille de choix montre mort. Les deux écrans disent maintenant
+               deux moments différents — ce qu'il a accompli, et ce qu'il est devenu —
+               au lieu de deux vérités contradictoires. À trancher le jour où l'on
+               voudra que la page des sauvés raconte aussi la perte. */
             let etat = dejaMort ? 'mort' : etatPhysiqueVie(vie);
-            if (etat === 'mort' && !dejaMort && estSauve) etat = 'blesse';
 
             /* ⚠ LA MORT EST DÉCLARÉE ICI, ET NULLE PART AILLEURS. C'est le seul endroit
                de l'app qui constate la fin d'un trajet en connaissant la vie finale :
@@ -1460,9 +1459,40 @@
            n'existe pas (planche d'expérimentation, module absent). Un deuil resté en
            attente rouvrirait la grille à la fin du trajet SUIVANT, sur un compagnon en
            pleine forme. */
+        /* ⚠ ON NE LAISSE JAMAIS L'APP SUR UN COMPAGNON MORT (03/09/2026, demande
+           utilisateur : « l'utilisateur bascule automatiquement sur un des 2 animaux
+           standard de début »). La grille s'ouvre bien juste après, mais rien n'oblige
+           à y choisir : sans cette bascule, la refermer laissait le compagnon courant
+           sur un animal que `choisir()` refuse désormais — jauge à zéro, portrait de
+           cadavre sur l'accueil et le marqueur, et aucune sortie sans rouvrir la grille.
+
+           ⚠ LES DEUX « ANIMAUX DE DÉBUT » NE SONT PAS NOMMÉS EN DUR. Ce sont les deux
+           PREMIERS du catalogue, c'est-à-dire exactement ceux qu'ouvre
+           `OUVERTS_AU_DEPART` (js/23). Les écrire ici aurait fait un troisième endroit
+           à corriger le jour où l'on réordonne la troupe — ce qui vient d'arriver le
+           03/09, où le chien et le chat ont pris les deux premiers rangs.
+
+           Repli élargi si ces deux-là sont morts aussi : le premier vivant venu. Et si
+           TOUT est mort, on ne force rien — la grille dira l'impasse mieux qu'un choix
+           arbitraire qui échouerait en silence. */
+        function replierSurCompagnonVivant() {
+            if (!window.Compagnon || typeof Compagnon.catalogue !== 'function') return;
+            const estMort = (cle) => !!(window.VieCompagnon && VieCompagnon.estMort
+                                        && VieCompagnon.estMort(cle));
+            const troupe = tenterSansBruit(() => Compagnon.catalogue(), 'deuil/catalogue') || [];
+            const jouables = troupe.filter(c => c.debloque);
+            const repli = jouables.slice(0, 2).find(c => !estMort(c.cle))
+                       || jouables.find(c => !estMort(c.cle));
+            if (repli) tenterSansBruit(() => Compagnon.choisir(repli.cle), 'deuil/repli');
+        }
+
         function ouvrirChoixApresDeuil() {
             if (!_deuilEnAttente) return;
             _deuilEnAttente = false;
+            /* AVANT la grille, et sans attendre les 400 ms : le compagnon courant doit
+               être valide dès la fermeture de la fenêtre d'arrivée, pas seulement une
+               fois la grille peinte. */
+            replierSurCompagnonVivant();
             setTimeout(() => {
                 if (typeof window.openCompagnonPicker === 'function') {
                     tenterSansBruit(() => window.openCompagnonPicker(), 'deuil/choix');
