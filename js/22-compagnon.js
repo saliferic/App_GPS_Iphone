@@ -940,6 +940,71 @@
     }
 
     const COMPAGNONS = {
+        /* Chien et chat en tête de troupe (demande utilisateur, 03/09/2026) : les
+           gens aiment en général les chiens et les chats — ce sont donc les deux
+           premiers animaux JOUABLES. Le débloquage se lit sur le RANG dans cet
+           objet (`23-choix-compagnon.js`, `i < ouverts`), pas sur une liste
+           séparée : les mettre en tête les rend ouverts dès le premier lancement.
+           Effet de bord accepté : Babi et Bulle, ouverts d'entrée jusqu'ici,
+           reculent en 3ᵉ et 4ᵉ rang et se débloquent désormais après un sauvetage
+           chacun — aucun autre compagnon ne bouge. */
+        pilou: {
+            nom: 'Pilou',
+            espece: 'chien',
+            accent: '#D9A15B',
+            /* Le seul de la troupe qui ne CONSTATE pas — il est content, et il le
+               dit. Pas de recul, pas de chiffre retenu, pas de raccourci : Pilou
+               est là, tout de suite, pour le trajet qui vient. Pas d'entorse à la
+               règle « jamais de reproche » pour autant, elle vaut pour tous : sa
+               marque à lui, c'est l'absence totale de recul, jamais le reproche
+               lui-même. */
+            phrases: {
+                accueil:        () => 'Salut !',
+                accueil_soir:   () => 'Bonsoir !',
+                destination_ok: () => "Parfait, j'arrive !",
+                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Toujours partant.`,
+                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
+                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
+                clairiere:      (v) => v.pousses === 0
+                                        ? "Rien n'a poussé au bord de l'eau cette semaine. Ça viendra."
+                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
+                trajet_doux:    () => 'Trajet nickel. On refait ça quand tu veux !',
+                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
+                defi_valide:    (v) => `Un de fait ! Il t'en reste ${v.reste}.`
+            },
+            decor: 'chien',
+            dessin:    (e, p, s) => dessinerImage('pilou', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('pilou', e, p, s)
+        },
+        nima: {
+            nom: 'Nima',
+            espece: 'chatte',
+            genre: 'f',
+            accent: '#7EC8C0',
+            /* « Elle vient si elle veut, et c'est déjà beaucoup » — la seule de la
+               troupe qui ne s'engage jamais complètement. Même règle que les
+               autres, jamais de reproche, mais sa réserve est sa marque : elle
+               constate en une phrase courte, et n'en dit jamais plus qu'il ne
+               faut. */
+            decor: 'nima',
+            phrases: {
+                accueil:        () => 'Tiens.',
+                accueil_soir:   () => 'Bonsoir.',
+                destination_ok: () => 'Si tu veux.',
+                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Pas mal.`,
+                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
+                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
+                clairiere:      (v) => v.pousses === 0
+                                        ? "Rien n'a bougé cette semaine. Ça ne me dérange pas."
+                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
+                trajet_doux:    () => 'Trajet correct. Je ne dirai pas mieux.',
+                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
+                defi_valide:    (v) => `Un de fait. Il t'en reste ${v.reste}.`
+            },
+            dessin:    (e, p, s) => dessinerImage('nima', e, p, s),
+            interieur: (e, p, s) => dessinImageInterieur('nima', e, p, s)
+        },
+
         babi: {
             nom: 'Babi',
             espece: 'éléphanteau',
@@ -992,43 +1057,6 @@
             decor: 'fleuve',
             dessin:    (e, p, s) => dessinerImage('bulle', e, p, s),
             interieur: (e, p, s) => dessinImageInterieur('bulle', e, p, s)
-        },
-
-        /* Placé ici (3ᵉ rang, avant titi/zola/kiri/raya/sam) plutôt qu'en fin de
-           troupe : le débloquage se lit sur le RANG dans cet objet
-           (`23-choix-compagnon.js`, `i < ouverts`), pas sur une liste séparée.
-           Sorti d'A_VENIR le 30/08/2026 avec ses quatre états d'image complets,
-           il fallait bien un rang — celui-ci le rend sélectionnable après UN
-           seul sauvetage plutôt que six, pour qu'on puisse le tester tout de
-           suite. Effet de bord accepté : titi et les quatre après lui reculent
-           chacun d'un cran (demande utilisateur du 30/08/2026). */
-        pilou: {
-            nom: 'Pilou',
-            espece: 'chien',
-            accent: '#D9A15B',
-            /* Le seul de la troupe qui ne CONSTATE pas — il est content, et il le
-               dit. Pas de recul, pas de chiffre retenu, pas de raccourci : Pilou
-               est là, tout de suite, pour le trajet qui vient. Pas d'entorse à la
-               règle « jamais de reproche » pour autant, elle vaut pour tous : sa
-               marque à lui, c'est l'absence totale de recul, jamais le reproche
-               lui-même. */
-            phrases: {
-                accueil:        () => 'Salut !',
-                accueil_soir:   () => 'Bonsoir !',
-                destination_ok: () => "Parfait, j'arrive !",
-                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Toujours partant.`,
-                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
-                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                clairiere:      (v) => v.pousses === 0
-                                        ? "Rien n'a poussé au bord de l'eau cette semaine. Ça viendra."
-                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
-                trajet_doux:    () => 'Trajet nickel. On refait ça quand tu veux !',
-                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de fait ! Il t'en reste ${v.reste}.`
-            },
-            decor: 'chien',
-            dessin:    (e, p, s) => dessinerImage('pilou', e, p, s),
-            interieur: (e, p, s) => dessinImageInterieur('pilou', e, p, s)
         },
 
         titi: {
@@ -1159,37 +1187,6 @@
             },
             dessin:    (e, p, s) => dessinerImage('sam', e, p, s),
             interieur: (e, p, s) => dessinImageInterieur('sam', e, p, s)
-        },
-        /* Sortie d'A_VENIR le 01/09/2026 avec ses quatre états d'image complets —
-           même geste que Pilou le 30/08/2026 (voir sa note). Rang 9, à la suite de
-           Sam : aucun autre compagnon ne recule. */
-        nima: {
-            nom: 'Nima',
-            espece: 'chatte',
-            genre: 'f',
-            accent: '#7EC8C0',
-            /* « Elle vient si elle veut, et c'est déjà beaucoup » — la seule de la
-               troupe qui ne s'engage jamais complètement. Même règle que les
-               autres, jamais de reproche, mais sa réserve est sa marque : elle
-               constate en une phrase courte, et n'en dit jamais plus qu'il ne
-               faut. */
-            decor: 'nima',
-            phrases: {
-                accueil:        () => 'Tiens.',
-                accueil_soir:   () => 'Bonsoir.',
-                destination_ok: () => 'Si tu veux.',
-                objectifs:      (v) => `${v.km} km par semaine depuis ${v.sem} semaines. Pas mal.`,
-                carnet_cale:    (v) => `Tu roules ${v.km} km par semaine. J'ai calé tes défis là-dessus.`,
-                carnet_observe: (v) => `Je te regarde rouler (${v.sem}/${v.total} semaines). Encore ${v.reste} et je saurai.`,
-                clairiere:      (v) => v.pousses === 0
-                                        ? "Rien n'a bougé cette semaine. Ça ne me dérange pas."
-                                        : `${v.pousses} roseau${v.pousses > 1 ? 'x' : ''} sur ${v.total} cette semaine`,
-                trajet_doux:    () => 'Trajet correct. Je ne dirai pas mieux.',
-                trajet_brusque: (v) => `${v.freinages} freinages. ${v.ecart} de plus que d'habitude.`,
-                defi_valide:    (v) => `Un de fait. Il t'en reste ${v.reste}.`
-            },
-            dessin:    (e, p, s) => dessinerImage('nima', e, p, s),
-            interieur: (e, p, s) => dessinImageInterieur('nima', e, p, s)
         }
     };
 
