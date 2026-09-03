@@ -1648,7 +1648,18 @@
                saisie de mot de passe. Elles étaient trois : `stats-section` est partie
                avec la ligne « Mes statistiques » (26/08/2026). */
             'classement-section',
-            'trip-history-section'
+            'trip-history-section',
+            /* Deux oublis rattrapés le 03/09/2026 (signalés par l'utilisateur : « ils
+               n'ont pas leur place ici »). Chaque ligne ajoutée à la page Profil doit
+               être ajoutée ICI aussi — c'est le pas de côté facile, et il ne se voit
+               qu'en ouvrant la création de compte, écran qu'on ne retraverse plus une
+               fois son profil créé.
+               `co2-panel-section` parle du profil ACTIF, même raison que les deux
+               au-dessus. `theme-section`, elle, est un réglage global — mais la laisser
+               permettait de repeindre tout l'écran au milieu d'une saisie de mot de
+               passe, ce qui n'est ni utile ni rassurant. */
+            'co2-panel-section',
+            'theme-section'
         ];
         function showCreateProfileInline() {
             // Le bouton "+" est un voisin du menu déroulant DANS la même ligne : un clic
