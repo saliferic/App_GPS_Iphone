@@ -475,46 +475,75 @@
         // Problème CORS : carbu.com et Overpass bloquent les requêtes depuis file:// (origin: null)
         // Solution : Mapbox Search API (même token, CORS garanti) pour localiser les stations,
         // + tentative Overpass via POST (certains serveurs acceptent null origin en POST)
+        /* ═══ REPLI MAPBOX — NE PART QUE SI OVERPASS N'A RIEN RENDU  (03/09/2026) ═══
+           Remplace une branche qui N'A JAMAIS PU FONCTIONNER. L'ancienne interrogeait
+           `geocoding/v5/mapbox.places/gas_station.json` : dans cette URL, le segment
+           avant `.json` est le TEXTE CHERCHÉ, pas une catégorie — l'app demandait donc
+           des lieux NOMMÉS « gas_station ». Mesuré le 03/09/2026 : 200 avec
+           `features: []`, un zéro parfaitement silencieux. Et ce n'était pas la chaîne
+           qui était en cause : « Shell » rendait zéro aussi, tandis que « Bruxelles »
+           sans `types` rendait 3. Le géocodage Mapbox NE SERT PAS DE POI ; l'API v6 le
+           dit en refusant le type (422, « Type "poi" is not a known type »). La
+           recherche par catégorie vit dans un autre produit, la Search Box API.
+
+           ⚠ ET SURTOUT : ELLE PARTAIT À CHAQUE SCAN, en parallèle d'Overpass,
+           `sampleCount + 1` fois — 2 appels pour une bulle, ~9 pour un Paris-Bruxelles,
+           tous facturés, tous vides. Le commentaire d'origine (« CORS garanti »)
+           décrivait pourtant la bonne intention : un FILET pour le jour où les miroirs
+           Overpass tombent ensemble (30/08/2026) ou sont bloqués CORS en `file://`.
+           Un filet ne se paie pas quand on ne tombe pas. Cette version ne part donc que
+           si Overpass n'a RIEN rendu — coût nominal : zéro appel.
+
+           ⚠ `bbox` ET NON `proximity`. Mesuré sur la même bulle bruxelloise :
+           `proximity` ramène « ma bouteille de gaz » et « Fédération Belge des
+           Négociants en… » ; `bbox` ramène Esso Groot-Bijgaarden, Dats24 Anderlecht,
+           TotalEnergies, LUKOIL. Les bbox sont déjà produites par buildRouteSegments.
+           ⚠ PLAFOND DUR DE 25 PAR APPEL (`limit=50` → 400, « Limit must be in range
+           [1,25] »). C'est un filet, pas une source : Overpass rend 342 stations là où
+           celle-ci en rend 25 par tronçon. Ne pas la promouvoir en source principale.
+
+           Les horaires ne sont PAS repris : Mapbox les donne en `open_hours.periods`,
+           là où getStationOpeningStatus() attend le XML du flux français. Les mapper
+           demanderait un second parseur pour un repli qui ne sert presque jamais. */
+        async function _fetchStationsBEMapbox(segments, allStations) {
+            let ajoutees = 0;
+            await Promise.all(segments.map(async seg => {
+                const bbox = `${seg.minLng.toFixed(4)},${seg.minLat.toFixed(4)},${seg.maxLng.toFixed(4)},${seg.maxLat.toFixed(4)}`;
+                const url  = 'https://api.mapbox.com/search/searchbox/v1/category/gas_station'
+                           + `?bbox=${bbox}&limit=25&language=fr&access_token=${MAPBOX_TOKEN}`;
+                try {
+                    const res = await fetchResilient(url, {}, { timeoutMs: 8000, retries: 0 });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    (data?.features || []).forEach(f => {
+                        const p = f.properties || {};
+                        const lng = p.coordinates?.longitude ?? f.geometry?.coordinates?.[0];
+                        const lat = p.coordinates?.latitude  ?? f.geometry?.coordinates?.[1];
+                        if (typeof lng !== 'number' || typeof lat !== 'number') return;
+                        const id = `mb_${lng.toFixed(5)}_${lat.toFixed(5)}`;
+                        if (allStations[id]) return;
+                        allStations[id] = {
+                            _country: 'be',
+                            latitude:  String(lat),
+                            longitude: String(lng),
+                            // `brand` est un TABLEAU quand il est là (["Esso", "Esso - Stazione…"]).
+                            nom:     p.name || (Array.isArray(p.brand) ? p.brand[0] : p.brand) || 'Station',
+                            adresse: p.address || '',
+                            ville:   p.context?.place?.name || '',
+                            cp:      p.context?.postcode?.name || '',
+                            prix:    [],
+                        };
+                        ajoutees++;
+                    });
+                } catch (e) { if (DEBUG) console.warn('[GasAPI/BE] repli Mapbox :', e.message); }
+            }));
+            return ajoutees;
+        }
+
         async function fetchStationsBE(routeCoords) {
-            const line       = turf.lineString(routeCoords);
-            const totalKm    = turf.length(line, { units: 'kilometers' });
-            const sampleCount = Math.max(1, Math.ceil(totalKm / 40));
             const allStations = {};
 
-            // === Source 1 : Mapbox Search API — stations essence le long du trajet ===
-            // Retourne les coordonnées et noms, pas les prix — mais CORS garanti
-            const mapboxSearchPromises = [];
-            for (let i = 0; i <= sampleCount; i++) {
-                const km = Math.min(i * (totalKm / sampleCount), totalKm);
-                const [lng, lat] = turf.along(line, km, { units: 'kilometers' }).geometry.coordinates;
-                const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/gas_station.json?proximity=${lng.toFixed(5)},${lat.toFixed(5)}&types=poi&access_token=${MAPBOX_TOKEN}&limit=10&language=fr`;
-                mapboxSearchPromises.push(
-                    fetchResilient(url, {}, { timeoutMs: 8000, retries: 0 })
-                        .then(r => r.json())
-                        .then(data => {
-                            (data?.features || []).forEach(f => {
-                                const [fLng, fLat] = f.geometry.coordinates;
-                                const id = `mb_${fLng.toFixed(5)}_${fLat.toFixed(5)}`;
-                                if (!allStations[id]) allStations[id] = {
-                                    _country: 'be',
-                                    latitude:  String(fLat),
-                                    longitude: String(fLng),
-                                    nom:     f.text ?? f.place_name?.split(',')[0] ?? 'Station',
-                                    adresse: f.place_name ?? '',
-                                    ville:   f.context?.find(c => c.id?.startsWith('place'))?.text ?? '',
-                                    cp:      f.context?.find(c => c.id?.startsWith('postcode'))?.text ?? '',
-                                    prix: [],
-                                    // Pas de prix via Mapbox — on essaiera Overpass
-                                };
-                            });
-                        })
-                        .catch(() => {})
-                );
-            }
-            await Promise.all(mapboxSearchPromises);
-            const _beMapbox = Object.keys(allStations).length;
-
-            // === Source 2 : Overpass — le hedging commun, pas une boucle à soi ===
+            // === Source principale : Overpass — le hedging commun, pas une boucle à soi ===
             /* ⚠ CE FETCHER AVAIT SA PROPRE BOUCLE DE MIROIRS  (corrigé le 03/09/2026).
                Il était le SEUL consommateur Overpass du projet à ne pas passer par
                `_fetchOverpassHedged` (js/19) — js/09, js/10, js/19 et js/27 y passent
@@ -599,6 +628,15 @@
                 });
             });
             await Promise.all(overpassPromises);
+
+            /* Le filet ne se déploie que si le sol se dérobe : Overpass muet — miroirs
+               tous en échec, ou tous bloqués CORS en `file://`. Dans le cas nominal,
+               ZÉRO appel Mapbox facturé. Voir _fetchStationsBEMapbox() ci-dessus. */
+            let _beMapbox = 0;
+            if (Object.keys(allStations).length === 0) {
+                console.warn('[GasAPI/BE] Overpass muet — repli Mapbox');
+                _beMapbox = await _fetchStationsBEMapbox(segments, allStations);
+            }
 
             const stations = Object.values(allStations);
             const withPrices = stations.filter(s => s._sp95 || s._gazole || s._sp98 || s._e10);

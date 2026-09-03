@@ -285,6 +285,19 @@ Application web mobile-first (type Waze/Google Maps) qui transforme les bons com
 
 **La leçon de méthode.** Le premier relevé 🩺 utile de la soirée a coûté une ligne de `logDiag` et a désigné le coupable en un coup. Les quatre relevés précédents, sans elle, ne montraient que `scanOuvre` puis `fitScan` — muets sur les sources, donc indistinguables entre « la branche n'a pas tourné » et « elle a tourné et rendu 346 ». **Devant un écran vide sans erreur, instrumenter AVANT de corriger.**
 
+### ⚠ Le repli Mapbox : un filet ne se paie pas quand on ne tombe pas — 03/09/2026
+
+**La branche d'origine n'a jamais pu fonctionner.** `fetchStationsBE` interrogeait `geocoding/v5/mapbox.places/gas_station.json`. Dans cette URL, **le segment avant `.json` est le texte cherché**, pas une catégorie : l'app demandait des lieux *nommés* « gas_station ». Mesuré : **200 avec `features: []`**. Et ce n'était pas la chaîne qui était en cause — « Shell » rendait zéro aussi, « Bruxelles » sans `types` rendait 3. **Le géocodage Mapbox ne sert pas de POI** ; la v6 le dit en refusant le type (**422**, « Type "poi" is not a known type »). La recherche par catégorie vit dans un autre produit, la **Search Box API**.
+
+**Le vrai grief n'était pas qu'elle ne marchait pas, mais qu'elle partait quand même.** À chaque scan, en parallèle d'Overpass, `sampleCount + 1` fois — 2 appels pour une bulle, ~9 pour un Paris-Bruxelles — tous facturés, tous vides. Le commentaire d'origine (« CORS garanti ») décrivait pourtant la bonne intention : un **filet** pour le jour où les miroirs tombent ensemble (30/08) ou sont bloqués CORS en `file://`.
+
+**La règle qui en sort : un repli ne s'appelle que lorsque la source principale a échoué.** `_fetchStationsBEMapbox()` ne part que si Overpass rend zéro. Vérifié dans la page : cas nominal **309 stations, 0 appel Search Box** ; miroirs forcés en échec **25 stations, 1 appel**.
+
+**Deux détails d'API qui coûtent une mesure chacun :**
+- **`bbox`, jamais `proximity`.** Sur la même bulle bruxelloise, `proximity` ramène « ma bouteille de gaz » et « Fédération Belge des Négociants en… » ; `bbox` ramène Esso Groot-Bijgaarden, Dats24 Anderlecht, TotalEnergies, LUKOIL. Les bbox sont déjà produites par `buildRouteSegments`.
+- **Plafond dur de 25 par appel** (`limit=50` → **400**, « Limit must be in range [1,25] »). C'est un filet, pas une source : Overpass rend 342 stations là où celle-ci en rend 25 par tronçon. **Ne pas la promouvoir en source principale.**
+- `brand` est un **tableau** quand il est présent (`["Esso", "Esso - Stazione di Servizio"]`). Les horaires ne sont pas repris : Mapbox les donne en `open_hours.periods`, là où `getStationOpeningStatus()` attend le XML du flux français.
+
 ### ⚠ La Belgique n'aura pas de prix, et les boîtes pays se chevauchent
 
 - **Aucun prix belge, et ce n'est pas un bug.** Il n'existe pas d'équivalent du flux data.gouv temps réel : la Belgique publie des **prix maximum nationaux** (contrat-programme SPF Économie), pas un relevé par station. Les tags OSM `fuel:*:price` sont l'unique source possible, et ils sont vides — mesuré sur les 37 stations du centre de Bruxelles : **zéro tag `*price*`**. `parseGasStations` tolère donc explicitement une fiche BE sans prix, là où une fiche FR sans prix est rejetée.
