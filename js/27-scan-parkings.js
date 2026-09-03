@@ -278,8 +278,60 @@
                course à lui seul (voir _fetchOverpassHedged, js/19). C'est exactement la
                panne du 01/09/2026 : une instance à couverture suisse rendait 0 en 0,3 s
                et gagnait contre le miroir qui, lui, avait les 121 parkings. */
-            const data = await _fetchOverpassHedged(query, { exigerResultat: true });
+            /* ⚠ LE FILET NE CHANGE PAS L'INVARIANT CI-DESSUS. Overpass reste la
+               source ; Mapbox n'est essayé QUE si tous les miroirs ont échoué, et s'il
+               ne rend rien lui non plus, ON RELANCE L'ERREUR D'ORIGINE. C'est
+               indispensable : c'est elle qui fait afficher « Recherche impossible »,
+               journaliser la cause et NE RIEN mettre en cache. Rendre `[]` ici
+               ressusciterait exactement le bug que le pavé du dessus décrit — un échec
+               réseau maquillé en « aucun parking », mis en cache pour deux minutes.
+               Panne de référence, journal de l'APK du 01/09/2026 : les cinq miroirs
+               tombés ensemble (502, 502, 406, timeout, timeout). */
+            let data;
+            try {
+                data = await _fetchOverpassHedged(query, { exigerResultat: true });
+            } catch (e) {
+                console.warn('[Parkings] Overpass muet — repli Mapbox :', e.message || e);
+                const secours = await _pkFetchMapbox(lng, lat, dLng, dLat).catch(() => []);
+                if (secours.length) {
+                    tenterSansBruit(() => logDiag('pkRepli', {
+                        n: secours.length, cause: String(e.message || e).slice(0, 110),
+                    }));
+                    return secours;
+                }
+                throw e;   // ⚠ l'erreur d'origine, pas celle du repli
+            }
             return data?.elements || [];
+        }
+
+        /* Traduit les fiches Search Box en ÉLÉMENTS OVERPASS, pour que `_pkParse` ne
+           change pas d'une ligne : c'est lui qui filtre l'accès, la distance et bâtit
+           l'adresse, et il a été corrigé plusieurs fois — le dupliquer serait le pire
+           choix possible.
+           ⚠ Mapbox ne donne NI capacité NI tarif : `capacity` et `fee` restent absents,
+           donc `null` après parsing, et les filtres Gratuit/Payant ne proposeront rien.
+           C'est honnête — un filet rend moins qu'une source, il ne doit pas inventer. */
+        async function _pkFetchMapbox(lng, lat, dLng, dLat) {
+            /* Les mêmes demi-côtés que la requête Overpass juste au-dessus : le filet
+               doit couvrir EXACTEMENT la même zone, sinon il rendrait un cercle
+               différent de celui dessiné sur la carte. _pkParse retaille ensuite au
+               vrai rayon, comme pour la source principale. */
+            const f = await rechercheCategorieMapbox('parking', {
+                minLng: lng - dLng, minLat: lat - dLat,
+                maxLng: lng + dLng, maxLat: lat + dLat,
+            });
+            return f.map(x => {
+                const c = ficheMapboxCommune(x);
+                return {
+                    type: 'mapbox', id: c.id, lat: c.lat, lon: c.lng,
+                    tags: {
+                        name: c.nom || 'Parking',
+                        'addr:street':   c.rue,
+                        'addr:city':     c.ville,
+                        'addr:postcode': c.cp,
+                    },
+                };
+            });
         }
 
         function _pkParse(elements, anchor, radiusKm) {

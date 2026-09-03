@@ -82,6 +82,69 @@
            deux nœuds par carte dans des boucles tenues à une seule écriture DOM. Les
            guillemets sont échappés en plus du strict nécessaire, pour que la fonction reste
            correcte le jour où une valeur atterrit dans un attribut. */
+        /* ═══ RECHERCHE PAR CATÉGORIE MAPBOX — LE FILET QUAND OVERPASS TOMBE ═══
+                                                                     (04/09/2026)
+           POURQUOI ELLE EXISTE. Le 30/08 puis le 01/09/2026, les CINQ miroirs Overpass
+           sont tombés ensemble. Journal de l'APK, ce jour-là :
+             private.coffee 502 | kumi.systems 502 | overpass-api.de 406
+             maps.mail.ru timeout | openstreetmap.ru timeout
+           `_fetchOverpassHedged` n'avait plus rien à proposer : la feuille parkings
+           affichait « Recherche impossible », les bornes une liste vide. Mapbox, lui,
+           répondait — c'est le seul service que l'app joigne encore dans ces moments-là.
+
+           ⚠ CE N'EST PAS UNE SOURCE, C'EST UN FILET. Deux raisons de ne jamais la
+           promouvoir :
+             · PLAFOND DUR DE 25 RÉSULTATS par appel (`limit=50` → 400, « Limit must be
+               in range [1,25] »). Overpass rend 296 parkings sur la même bbox bruxelloise.
+             · ELLE EST FACTURÉE, Overpass non. Un filet ne se paie que lorsqu'on tombe :
+               les appelants ne doivent l'invoquer QUE sur échec avéré, jamais en parallèle.
+           Même règle que `_fetchStationsBEMapbox` (js/17), et pour les mêmes raisons.
+
+           ⚠ `bbox` ET NON `proximity` : mesuré à Bruxelles, `proximity` ramène « ma
+           bouteille de gaz » sur une recherche de stations. La bbox reste dans l'ordre
+           Mapbox — minLng, minLat, maxLng, maxLat — soit l'INVERSE de l'ordre Overpass.
+           C'est la confusion la plus facile à faire ici.
+
+           ⚠ CATÉGORIES VÉRIFIÉES le 04/09/2026 sur Paris-Est : `gas_station` (25),
+           `parking` (25), `charging_station` (25). ⚠ `ev_charging_station` rend **0** —
+           le nom qui paraît le plus logique est le mauvais. Ne pas en inventer d'autres
+           sans les avoir essayées. */
+        async function rechercheCategorieMapbox(categorie, bbox, opts) {
+            const url = 'https://api.mapbox.com/search/searchbox/v1/category/'
+                      + encodeURIComponent(categorie)
+                      + `?bbox=${bbox.minLng.toFixed(4)},${bbox.minLat.toFixed(4)}`
+                      + `,${bbox.maxLng.toFixed(4)},${bbox.maxLat.toFixed(4)}`
+                      + `&limit=25&language=fr&access_token=${MAPBOX_TOKEN}`;
+            const res = await fetchResilient(url, {}, {
+                timeoutMs: (opts && opts.timeoutMs) || 8000, retries: 0,
+            });
+            if (!res.ok) throw new Error(`Mapbox/${categorie} → ${res.status}`);
+            const data = await res.json();
+            return (data?.features || []).filter(f => {
+                const p = f && f.properties;
+                return p && Number.isFinite(p.coordinates?.longitude)
+                         && Number.isFinite(p.coordinates?.latitude);
+            });
+        }
+
+        /* Les champs communs à toute fiche Search Box, extraits une fois pour toutes :
+           les trois adaptateurs (stations js/17, parkings js/27, bornes js/19) en avaient
+           besoin des mêmes, et `brand` est un TABLEAU quand il est présent
+           (["Esso", "Esso - Stazione di Servizio"]) — le piège se paie une fois. */
+        function ficheMapboxCommune(f) {
+            const p = f.properties || {};
+            const marque = Array.isArray(p.brand) ? p.brand[0] : p.brand;
+            return {
+                lng:  p.coordinates.longitude,
+                lat:  p.coordinates.latitude,
+                nom:  p.name || marque || null,
+                rue:  p.address || '',
+                ville: p.context?.place?.name || '',
+                cp:    p.context?.postcode?.name || '',
+                id:    p.mapbox_id || `${p.coordinates.longitude},${p.coordinates.latitude}`,
+            };
+        }
+
         function echapperHtml(txt) {
             return String(txt == null ? '' : txt)
                 .replace(/&/g, '&amp;')

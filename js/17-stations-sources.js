@@ -506,37 +506,40 @@
            là où getStationOpeningStatus() attend le XML du flux français. Les mapper
            demanderait un second parseur pour un repli qui ne sert presque jamais. */
         async function _fetchStationsBEMapbox(segments, allStations) {
+            /* ⚠ UNE SEULE DÉFINITION DE LA REQUÊTE SEARCH BOX DANS LE PROJET (04/09/2026).
+               Cette fonction avait sa propre construction d'URL, recopiée le 03/09 ; les
+               replis parkings (js/27) et bornes (js/19) l'auraient recopiée deux fois de
+               plus. Le projet a déjà payé ce motif — trois copies de l'échappement HTML,
+               deux boucles de miroirs Overpass. Tout passe désormais par
+               `rechercheCategorieMapbox()` et `ficheMapboxCommune()`
+               (js/00-helpers-partages), qui portent le plafond de 25, l'ordre de bbox et
+               le piège du `brand` en tableau. */
             let ajoutees = 0;
             await Promise.all(segments.map(async seg => {
-                const bbox = `${seg.minLng.toFixed(4)},${seg.minLat.toFixed(4)},${seg.maxLng.toFixed(4)},${seg.maxLat.toFixed(4)}`;
-                const url  = 'https://api.mapbox.com/search/searchbox/v1/category/gas_station'
-                           + `?bbox=${bbox}&limit=25&language=fr&access_token=${MAPBOX_TOKEN}`;
+                let fiches;
                 try {
-                    const res = await fetchResilient(url, {}, { timeoutMs: 8000, retries: 0 });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    (data?.features || []).forEach(f => {
-                        const p = f.properties || {};
-                        const lng = p.coordinates?.longitude ?? f.geometry?.coordinates?.[0];
-                        const lat = p.coordinates?.latitude  ?? f.geometry?.coordinates?.[1];
-                        if (typeof lng !== 'number' || typeof lat !== 'number') return;
-                        const id = `mb_${lng.toFixed(5)}_${lat.toFixed(5)}`;
-                        if (allStations[id]) return;
-                        allStations[id] = {
-                            // Même règle que la source Overpass : le pays vient de la POSITION.
-                            _country: paysDuPoint(lng, lat) || 'be',
-                            latitude:  String(lat),
-                            longitude: String(lng),
-                            // `brand` est un TABLEAU quand il est là (["Esso", "Esso - Stazione…"]).
-                            nom:     p.name || (Array.isArray(p.brand) ? p.brand[0] : p.brand) || 'Station',
-                            adresse: p.address || '',
-                            ville:   p.context?.place?.name || '',
-                            cp:      p.context?.postcode?.name || '',
-                            prix:    [],
-                        };
-                        ajoutees++;
-                    });
-                } catch (e) { if (DEBUG) console.warn('[GasAPI/BE] repli Mapbox :', e.message); }
+                    fiches = await rechercheCategorieMapbox('gas_station', seg);
+                } catch (e) {
+                    if (DEBUG) console.warn('[GasAPI/BE] repli Mapbox :', e.message);
+                    return;
+                }
+                fiches.forEach(x => {
+                    const c = ficheMapboxCommune(x);
+                    const id = `mb_${c.lng.toFixed(5)}_${c.lat.toFixed(5)}`;
+                    if (allStations[id]) return;
+                    allStations[id] = {
+                        // Même règle que la source Overpass : le pays vient de la POSITION.
+                        _country: paysDuPoint(c.lng, c.lat) || 'be',
+                        latitude:  String(c.lat),
+                        longitude: String(c.lng),
+                        nom:     c.nom || 'Station',
+                        adresse: c.rue,
+                        ville:   c.ville,
+                        cp:      c.cp,
+                        prix:    [],
+                    };
+                    ajoutees++;
+                });
             }));
             return ajoutees;
         }

@@ -426,6 +426,28 @@ Le Paris→Bruxelles est à cinquante centimes des **16,30 € de Mappy et ViaMi
 
 **LA LEÇON : un diagnostic doit dire PAR OÙ le calcul est passé, pas seulement ce qu'il a trouvé.** Un relevé qui décrit une branche non prise est pire que pas de relevé — il envoie chercher un bug là où il n'y en a pas.
 
+### ⚠ Un filet Mapbox pour les parkings et les bornes — 04/09/2026
+
+**Pourquoi.** Les 30/08 et 01/09/2026, les CINQ miroirs Overpass sont tombés ensemble. Journal de l'APK : `private.coffee 502 | kumi.systems 502 | overpass-api.de 406 | maps.mail.ru timeout | openstreetmap.ru timeout`. La feuille parkings affichait « Recherche impossible », les bornes une liste vide. **Mapbox répondait** — c'est le seul service que l'app joigne encore dans ces moments-là.
+
+**`rechercheCategorieMapbox()` (js/00-helpers-partages)** est le point d'entrée UNIQUE de la Search Box. Catégories vérifiées le 04/09/2026 : `gas_station`, `parking`, `charging_station` (25 chacune sur Paris-Est). **⚠ `ev_charging_station` rend 0** — le nom qui paraît le plus logique est le mauvais.
+
+**⚠ C'EST UN FILET, PAS UNE SOURCE.** Deux raisons de ne jamais le promouvoir : plafond dur de **25 résultats** par appel (Overpass en rend 80 à 296 sur la même bbox), et **il est facturé** alors qu'Overpass ne l'est pas. Les appelants ne l'invoquent donc QUE sur échec avéré, jamais en parallèle.
+
+**⚠ L'INVARIANT DE js/27 EST PRÉSERVÉ, ET C'EST LE POINT DÉLICAT.** `_pkFetchRaw` ne rattrapait volontairement aucune erreur, pour qu'un échec réseau ne soit jamais confondu avec un vrai « zéro parking » (sans quoi `runParkingScan` met la contre-vérité en cache deux minutes). Le repli respecte ça : si Mapbox ne rend rien lui non plus, **l'erreur d'ORIGINE est relancée** — pas celle du repli, et surtout pas `[]`. Vérifié explicitement.
+
+**⚠ Côté bornes, le repli sort avec `power: null` et tous les connecteurs à faux.** Mapbox ne donne ni puissance ni type de prise. Elles s'affichent, mais le tri par puissance les met en fin de liste et le filtre par connecteur les écarte. C'est délibéré : mieux vaut une borne sans caractéristiques qu'un écran vide, et **hors de question d'inventer un connecteur qui déciderait d'un détour**. L'échec Overpass reste journalisé par `logAppError` AVANT le repli — sinon une panne des cinq miroirs deviendrait invisible, et c'est précisément elle qu'on documente.
+
+**Mesuré dans la page :**
+
+| | Nominal | Miroirs tombés | Miroirs + Mapbox tombés |
+|---|---|---|---|
+| Parkings | 80 | **25** (19 après filtrage du rayon) | **erreur d'origine relancée** |
+| Bornes | 178 | **25**, `power: null` | liste vide, échec journalisé |
+| Stations BE | 309, **0 appel Search Box** | 25, 1 appel | — |
+
+**Une seule définition dans le projet.** `_fetchStationsBEMapbox` (js/17) avait sa propre construction d'URL, recopiée le 03/09 ; les deux replis l'auraient recopiée deux fois de plus. Le projet a déjà payé ce motif — trois copies de l'échappement HTML, deux boucles de miroirs Overpass. `grep -c "searchbox/v1/category" js/*.js` doit rendre **1**, et seulement dans `00-helpers-partages.js`.
+
 ### ⚠ Diagnostiquer une chaîne asynchrone : poser un témoin AVANT le premier `await`
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.

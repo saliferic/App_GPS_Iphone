@@ -446,6 +446,40 @@
                    (Profil → 🩺) est le seul endroit où on peut le constater depuis le
                    téléphone. */
                 logAppError('EV/Overpass', e);
+                /* ⚠ FILET MAPBOX — APRÈS la journalisation, jamais à sa place (04/09/2026).
+                   L'échec Overpass doit rester visible au journal même quand le repli
+                   sauve l'affichage : sinon une panne des cinq miroirs deviendrait
+                   invisible, et c'est précisément elle qu'on cherche à documenter.
+                   Panne de référence, APK du 01/09/2026 : 502, 502, 406, timeout, timeout.
+                   ⚠ Mapbox ne donne NI puissance NI type de connecteur. Les bornes du
+                   repli sortent donc avec `power: null` et `connectors` tous à faux :
+                   elles s'affichent, mais le tri par puissance les met en fin de liste
+                   et le filtre par connecteur les écarte — voir _renderGasScan (js/11).
+                   C'est voulu : mieux vaut une borne sans caractéristiques qu'un écran
+                   vide, et hors de question d'INVENTER un connecteur qui déciderait
+                   d'un détour. */
+                try {
+                    const f = await rechercheCategorieMapbox('charging_station', seg);
+                    const bornes = f.map(x => {
+                        const c = ficheMapboxCommune(x);
+                        return {
+                            _type: 'mapbox',
+                            latitude: c.lat, longitude: c.lng,
+                            name: c.nom || 'Borne de recharge',
+                            addr: [c.rue, [c.cp, c.ville].filter(Boolean).join(' ')]
+                                    .filter(Boolean).join(', '),
+                            power: null, nb_pdc: 1,
+                            connectors: { type2: false, ccs: false, chademo: false },
+                        };
+                    });
+                    if (bornes.length) {
+                        console.warn(`[EV] repli Mapbox — ${bornes.length} bornes`);
+                        tenterSansBruit(() => logDiag('evRepli', { n: bornes.length }));
+                        return bornes;
+                    }
+                } catch (e2) {
+                    console.warn('[EV] repli Mapbox échoué :', e2.message || e2);
+                }
                 return [];
             }
         }
