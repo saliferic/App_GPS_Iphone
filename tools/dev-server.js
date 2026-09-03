@@ -30,7 +30,23 @@ const serveur = http.createServer((req, res) => {
     if (!abs.startsWith(RACINE)) { res.writeHead(403); res.end(); return; }
     fs.readFile(abs, (err, data) => {
         if (err) { res.writeHead(404); res.end('introuvable'); return; }
-        res.writeHead(200, { 'Content-Type': TYPES[path.extname(abs).toLowerCase()] || 'application/octet-stream' });
+        /* ⚠ `no-store` — SANS LUI, CHROME RESSERT UN .js MODIFIÉ  (04/09/2026).
+           Ce serveur ne posait AUCUN en-tête de cache : ni Cache-Control, ni ETag, ni
+           Last-Modified. Sans consigne, le navigateur applique son cache HEURISTIQUE et
+           peut resservir un fichier déjà téléchargé sans même revalider.
+           Ce qu'il a coûté : une source espagnole tout juste réparée, testée sur le
+           téléphone, qui ne rendait toujours rien — et le journal 🩺 sans la ligne
+           `gasES` qu'on venait pourtant d'ajouter. Vingt minutes à chercher un bug dans
+           du code que la page n'avait jamais chargé. Le symptôme trompe doublement :
+           l'app se comporte comme AVANT la correction, ce qui se lit « ma correction est
+           fausse » et non « ma correction n'est pas là ».
+           `no-store` et non `no-cache` : le second autorise la mise en cache avec
+           revalidation, le premier l'interdit. Ce serveur ne sert QUE du développement
+           local, il n'a aucune raison de laisser quoi que ce soit en cache. */
+        res.writeHead(200, {
+            'Content-Type': TYPES[path.extname(abs).toLowerCase()] || 'application/octet-stream',
+            'Cache-Control': 'no-store, must-revalidate',
+        });
         res.end(data);
     });
 });

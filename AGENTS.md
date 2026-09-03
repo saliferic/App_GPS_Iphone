@@ -392,6 +392,16 @@ Second défaut du même écran, corrigé avec : le message existant vit dans « 
 
 **Laissé en l'état volontairement** : le corriger change ce que l'utilisateur VOIT à la préparation (moins de stations, complétées ensuite par la phase 2 en navigation). C'est un arbitrage produit, pas une correction technique — à trancher avec lui, pas à glisser dans un lot de performance.
 
+### ⚠ Le serveur de dev resservait un fichier modifié — 04/09/2026
+
+`tools/dev-server.js` ne posait **aucun en-tête de cache** : ni `Cache-Control`, ni `ETag`, ni `Last-Modified`. Sans consigne, Chrome applique son cache **heuristique** et peut resservir un `.js` déjà téléchargé sans même revalider.
+
+**Ce que ça a coûté** : une source espagnole tout juste réparée, testée dans le navigateur, qui ne rendait toujours rien — et un journal 🩺 sans la ligne `gasES` qu'on venait pourtant d'ajouter. Vingt minutes à chercher un défaut dans du code que la page n'avait jamais chargé.
+
+**Le symptôme trompe doublement** : l'app se comporte exactement comme AVANT la correction, ce qui se lit « ma correction est fausse » et non « ma correction n'est pas là ». Le seul indice sûr était l'absence d'un témoin *nouvellement ajouté* — un témoin qui manque alors qu'il devrait partir inconditionnellement signale du code périmé, pas une branche non prise.
+
+`Cache-Control: no-store` est désormais posé sur toute réponse. **`no-store` et non `no-cache`** : le second autorise la mise en cache avec revalidation, le premier l'interdit. Ce serveur ne sert que du développement local.
+
 ### ⚠ Diagnostiquer une chaîne asynchrone : poser un témoin AVANT le premier `await`
 
 Leçon de méthode du 21/08/2026, quatre allers-retours perdus dessus. Tous les points de mesure d'un relevé Overpass étaient placés **après** l'appel réseau, qui met 10 à 30 s. Un journal exporté deux secondes après l'action ne contenait donc aucune ligne — ce qui se lit « la fonction n'est jamais appelée » alors qu'elle tournait encore. **Un journal vide ne distingue pas « ça ne marche pas » de « ça n'a pas encore répondu ».** Devant une chaîne asynchrone muette : poser un témoin synchrone avant le premier `await`, et journaliser le **délai écoulé** (`ms`) et non seulement le résultat. ⚠ `DIAG_LOG_MAX` vaut **12** : tout point de mesure ajouté chasse `peages` et `fit` du journal, et un point qui se répète (réarmement à chaque tronçon) doit ne journaliser que les **changements réels**.
