@@ -362,6 +362,7 @@
                 document.getElementById('preview-fuel-cost').innerText  = fuelCost.toFixed(2) + ' €';
                 document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = '~' + (fuelCost + tollCost).toFixed(2) + ' €';
+                affinerPeageHere(_baseRouteForGas.osrmData, fuelCost);   // prix exact HERE (js/16)
                 const statusEl = document.getElementById('modal-status');
                 if (statusEl) { statusEl.innerText = '✅ Itinéraire sans arrêt station.'; statusEl.style.color = '#28a745'; }
             }
@@ -583,6 +584,9 @@
                 document.getElementById('preview-fuel-cost').innerText  = fuelCost.toFixed(2) + ' €';
                 document.getElementById('preview-toll-cost').innerText  = avoidTolls ? 'Évités' : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = '~' + (fuelCost + tollCost).toFixed(2) + ' €';
+                /* Le détour par la station change le prix du péage : la route a d'AUTRES
+                   points de passage, que `_peageHerePoints()` transmet en `via`. */
+                affinerPeageHere(osrmData, fuelCost);
 
                 if (statusEl) { statusEl.innerText = `✅ Itinéraire via ⛽ ${station.name} calculé.`; statusEl.style.color = '#ffa500'; }
 

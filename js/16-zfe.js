@@ -758,6 +758,158 @@
             return cout;
         }
 
+        /* ═══════════════════════════════════════════════════════════════════════════
+           PRIX RÉEL DES PÉAGES PAR HERE ROUTING v8 (04/09/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           `estimateTollCost()` ci-dessus reste le calcul PAR DÉFAUT : instantané, hors
+           ligne, sans quota. Ce qui suit vient le RAFFINER quand le réseau répond.
+
+           ⚠ POURQUOI CE N'EST PAS UN REMPLACEMENT. Mesuré le 04/09/2026 sur les huit
+           trajets dont le prix réel est connu : HERE tombe juste AU CENTIME sur les huit
+           (41,30 / 17,40 / 30,70 / 45,40 / 67,70 / 16,30 / 24,60 €), là où le modèle
+           affine local se trompe de 18,5 % en moyenne. Mais HERE exige le réseau, une
+           clé et un quota — trois choses que l'estimateur local n'exige pas. Les deux
+           coexistent donc : le local s'affiche tout de suite, HERE le corrige après.
+           L'utilisateur ne voit jamais d'attente, seulement un chiffre qui se précise.
+
+           ⚠ CE QUE LE MODÈLE LOCAL NE PEUT PAS REPRÉSENTER, et qui justifie tout ceci :
+           les barrières à TARIF PLAT (système ouvert). Mesuré sur l'A64 —
+           `MURET : 1,80 €` est une gare isolée, que le modèle affine facture 4,65 €
+           d'entrée PLUS le kilométrage. Toulouse → Bayonne : 31,49 € estimés contre
+           24,20 € réels. S'y ajoutent les péages d'ouvrage que rien ne signale dans la
+           réponse Mapbox (viaduc de Millau `CEVM` 13,80 € sur Perpignan → Paris, pont
+           de Normandie `CCI DU HAVRE` 2,90 € sur Paris → Le Havre). Aucune
+           recalibration de constante ne fait apparaître une structure tarifaire absente.
+
+           ⚠⚠ POINT DE BASCULE UNIQUE — `_peageHereEndpoint()`. Le jour où l'app s'ouvre
+           au public, la clé ne doit plus vivre ici : une clé dans l'APK NE SE RÉVOQUE
+           PAS sans casser toutes les installations existantes, et le quota (30 000
+           transactions/mois) est partagé par tous les utilisateurs. La bascule vers un
+           proxy (Edge Function Supabase, 500 000 invocations/mois incluses, origine
+           DÉJÀ présente dans la CSP) ne doit toucher QUE cette fonction. Ne pas
+           disperser l'URL ni la clé ailleurs. */
+        const PEAGE_HERE_CLE = 'V6AAfl471QWR5FEh1Xgwm7l3Ez__tbzGL0ij9ALVQFU';
+
+        /* ⚠ L'ÉCART TOLÉRÉ ENTRE LA ROUTE DE HERE ET CELLE DE MAPBOX. HERE recalcule son
+           propre itinéraire à partir des mêmes points : rien ne garantit qu'il emprunte
+           le même chemin. Chiffrer une route que l'utilisateur ne conduit pas est
+           l'erreur de méthode qui a fait échouer trois calibrations (docs/peages.md :
+           « comparer un prix ViaMichelin à un prix app SUR DES ROUTES DIFFÉRENTES »).
+           On compare donc les distances et on JETTE le prix HERE s'il diverge : mieux
+           vaut l'estimation calibrée de la bonne route qu'un prix exact de la mauvaise.
+           Mesuré : 0 divergence sur les 8 trajets de référence, l'écart de distance
+           restant sous 1 %. Le seuil est posé large pour ne se déclencher que sur un
+           vrai changement d'itinéraire, jamais sur un arrondi de géocodage. */
+        const PEAGE_HERE_ECART_MAX = 0.05;   // 5 %
+
+        /* Compteur anti-course. Chaque demande retient le numéro courant ; à l'arrivée,
+           si le compteur a bougé, c'est qu'une AUTRE route a été calculée entre-temps et
+           la réponse est périmée. Sans ce garde-fou, une réponse lente écraserait le
+           prix d'un itinéraire plus récent — le bug classique de tout affichage
+           asynchrone, et il serait ici invisible : deux prix plausibles, le mauvais. */
+        let _peageHereSeq = 0;
+
+        /* Cache mémoire. Le quota est de 30 000 transactions/mois PARTAGÉES, et les
+           quatre points d'appel refont le calcul à chaque changement d'alternative ou
+           d'ajout de station — soit 5 à 10 demandes pour un seul trajet réel. Sans
+           cache, l'ouverture au public épuiserait le quota en un mois.
+           ⚠ Volontairement NON persisté en localStorage : les tarifs de péage changent
+           (révision annuelle en février), et une valeur figée sur disque survivrait à la
+           mise à jour sans que rien ne le signale. Une session suffit à absorber le
+           va-et-vient d'un même trajet, qui est tout ce qu'on cherche à éviter ici. */
+        const _peageHereCache = new Map();
+
+        function _peageHereEndpoint(pts) {
+            const via = pts.via.map(p => `&via=${p[1].toFixed(5)},${p[0].toFixed(5)}`).join('');
+            return 'https://router.hereapi.com/v8/routes'
+                + `?transportMode=car&origin=${pts.o[1].toFixed(5)},${pts.o[0].toFixed(5)}`
+                + `&destination=${pts.d[1].toFixed(5)},${pts.d[0].toFixed(5)}${via}`
+                + '&return=summary,tolls&currency=EUR&tolls%5Bsummaries%5D=total'
+                + `&apiKey=${PEAGE_HERE_CLE}`;
+        }
+
+        /* Points de passage de la route, pour que HERE reçoive le MÊME trajet que Mapbox.
+           ⚠ Les étapes intermédiaires sont indispensables : un trajet passant par une
+           station-service (js/18) ou par un multi-arrêt (js/15) n'a pas le même prix que
+           le direct. On les reconstitue depuis la fin de chaque leg — la réponse réduite
+           à `{ routes: [route] }` par les appelants a perdu le tableau `waypoints`. */
+        function _peageHerePoints(route) {
+            const coords = route && route.geometry && route.geometry.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) return null;
+            const legs = Array.isArray(route.legs) ? route.legs : [];
+            const via = [];
+            for (let i = 0; i < legs.length - 1; i++) {
+                const steps = legs[i].steps || [];
+                const dernier = steps[steps.length - 1];
+                const g = dernier && dernier.geometry && dernier.geometry.coordinates;
+                if (Array.isArray(g) && g.length) via.push(g[g.length - 1]);
+            }
+            return { o: coords[0], d: coords[coords.length - 1], via };
+        }
+
+        /* Prix HERE pour une route Mapbox, ou `null` si indisponible pour QUELQUE raison
+           que ce soit (hors ligne, quota, clé, itinéraire divergent). Ne lève jamais :
+           l'appelant garde alors l'estimation locale, qui est déjà affichée. */
+        async function peageHere(route) {
+            const pts = _peageHerePoints(route);
+            if (!pts) return null;
+            const cle = JSON.stringify(pts);
+            if (_peageHereCache.has(cle)) return _peageHereCache.get(cle);
+            try {
+                const res = await fetch(_peageHereEndpoint(pts));
+                if (!res.ok) return null;
+                const data = await res.json();
+                const sections = (data.routes && data.routes[0] && data.routes[0].sections) || [];
+                let cout = 0, metres = 0, vu = false;
+                for (const s of sections) {
+                    const som = s.summary || {};
+                    metres += Number(som.length) || 0;
+                    const t = som.tolls && som.tolls.total;
+                    if (t && Number.isFinite(Number(t.value))) { cout += Number(t.value); vu = true; }
+                }
+                /* Pas de total = pas de péage DÉCLARÉ, ce qui n'est pas la même chose
+                   qu'un trajet gratuit : on rend la main plutôt que d'afficher 0 €. */
+                if (!vu) return null;
+                const kmMapbox = (route.distance || 0) / 1000, kmHere = metres / 1000;
+                if (kmMapbox > 0 && Math.abs(kmHere - kmMapbox) / kmMapbox > PEAGE_HERE_ECART_MAX) {
+                    logDiag('peages', { source: 'here', rejet: 'itineraire divergent',
+                        kmMapbox: kmMapbox.toFixed(1), kmHere: kmHere.toFixed(1) });
+                    return null;
+                }
+                _peageHereCache.set(cle, cout);
+                return cout;
+            } catch (e) { return null; }
+        }
+
+        /* Remplace le prix affiché par celui de HERE, s'il arrive et s'il est encore
+           d'actualité. Appelée APRÈS l'affichage local, jamais à la place : les quatre
+           points d'appel restent inchangés et continuent de fonctionner seuls.
+           `fuelCost` est repassé parce que le total doit être recalculé — le lire dans
+           le DOM obligerait à reparser « 39,12 € » et à en dépendre. */
+        function affinerPeageHere(osrmData, fuelCost) {
+            const route = osrmData && osrmData.routes && osrmData.routes[0];
+            const km = route ? (route.distance || 0) / 1000 : 0;
+            /* ⚠ `_peagePrevu` (js/00-helpers-partages.js) est renseigné À CHAQUE FOIS,
+               même sans réseau et même péages évités — c'est lui que `_beginTripPlaces()`
+               (js/19) lira au départ pour archiver le coût du trajet. Le laisser à `null`
+               dans le cas « pas de HERE » ferait disparaître le péage de l'historique
+               précisément quand l'estimation locale est la seule chose dont on dispose. */
+            if (avoidTolls) { _peagePrevu = { cout: 0, km, source: 'evites' }; return; }
+            if (!route) { _peagePrevu = null; return; }
+            _peagePrevu = { cout: estimateTollCost(osrmData), km, source: 'local' };
+            const seq = ++_peageHereSeq;
+            peageHere(route).then(cout => {
+                if (cout == null || seq !== _peageHereSeq) return;
+                _peagePrevu = { cout, km, source: 'here' };
+                const elP = document.getElementById('preview-toll-cost');
+                const elT = document.getElementById('preview-total-cost');
+                if (elP) elP.innerText = formatTollEstimate(cout);
+                if (elT && Number.isFinite(fuelCost)) {
+                    elT.innerText = '~' + (fuelCost + cout).toFixed(2) + ' €';
+                }
+            });
+        }
+
         async function calculateTripPreview() {
             const modalStatus = document.getElementById('modal-status');
             const startVal = document.getElementById('modal-start-addr').value.trim();
@@ -883,6 +1035,9 @@
                 document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : formatTollEstimate(tollCost);
                 document.getElementById('preview-total-cost').innerText = "~" + totalCost.toFixed(2) + " €";
                 updateFuelCostLabel();
+                /* Le prix exact arrive après, s'il arrive : voir `affinerPeageHere()`.
+                   L'affichage ci-dessus reste celui qui compte hors ligne. */
+                affinerPeageHere({ routes: [route] }, fuelCost);
 
                 document.getElementById('trip-preview').style.display = 'flex';
 

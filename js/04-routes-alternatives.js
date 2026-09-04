@@ -86,6 +86,10 @@
             document.getElementById('preview-toll-cost').innerText = avoidTolls ? "Évités" : formatTollEstimate(tollCost);
             document.getElementById('preview-total-cost').innerText = "~" + totalCost.toFixed(2) + " €";
             updateFuelCostLabel();
+            /* Prix exact HERE en arrière-plan (js/16). Le compteur anti-course qu'il
+               porte est indispensable ICI en particulier : changer d'alternative deux
+               fois de suite lance deux demandes, et la première peut revenir en dernier. */
+            affinerPeageHere(selectedOsrmData, fuelCost);
 
             // Mettre à jour modalPendingRoute pour pointer sur la route choisie.
             // ⚠ `traffic` est REPORTÉ : les alternatives viennent de la même réponse, donc

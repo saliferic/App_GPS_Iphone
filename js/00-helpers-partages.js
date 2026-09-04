@@ -53,6 +53,24 @@
            plus d'un fichier. */
         let _profilOuvertParLeLancement = false;
 
+        /* Péage de l'itinéraire ACTUELLEMENT AFFICHÉ dans l'aperçu de trajet, retenu pour
+           être archivé dans l'historique à l'arrivée : `{ cout, km, source }` ou `null`.
+
+           Déclaré ICI parce qu'il est ÉCRIT par 16 (`affinerPeageHere`, appelé aussi
+           depuis 04 et 18) et LU par 19 (`_beginTripPlaces`, au départ du trajet) — deux
+           fichiers, donc la règle ci-dessus s'applique.
+
+           ⚠ POURQUOI RETENIR AU DÉPART ET NON À L'ARRIVÉE. Le péage se calcule sur
+           l'itinéraire PLANIFIÉ, qui n'existe plus quand `stopCourse()` archive le trajet :
+           à ce moment-là on ne dispose que de la distance réellement parcourue. Sans cette
+           mémoire, l'historique ne pourrait porter que le carburant.
+           `km` accompagne `cout` pour une raison précise : comparée à la distance
+           réellement parcourue, elle dit si l'itinéraire a été suivi. Un trajet
+           interrompu à mi-chemin n'a pas payé le péage prévu, et l'archiver comme s'il
+           l'avait payé fabriquerait une dépense qui n'a jamais eu lieu.
+           `source` vaut 'here' (prix réel), 'local' (estimation) ou 'evites'. */
+        let _peagePrevu = null;
+
         /* ÉCHAPPEMENT DU TEXTE VENU DU RÉSEAU — à utiliser dans TOUT gabarit `innerHTML`
            qui interpole un nom, une adresse ou un libellé issu d'un flux tiers.
 

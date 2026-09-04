@@ -27,6 +27,17 @@
            donc `stopCourse()` la lit dans l'état courant, pas ici. */
         let _tripPlacesMeta = null;
 
+        /* Péage retenu AU DÉPART du trajet, pour l'archiver à l'arrivée. Copie de
+           `_peagePrevu` (js/00-helpers-partages.js) figée à l'instant du départ : la
+           laisser vivre jusqu'à l'arrivée l'exposerait à être réécrite par un aperçu de
+           trajet consulté PENDANT la conduite, et on archiverait alors le péage d'un
+           trajet qu'on n'a pas fait.
+           ⚠ `null` en mode LIBRE, et c'est délibéré : sans itinéraire planifié, rien ne
+           dit si une autoroute payante a été empruntée. Deviner à partir du tracé serait
+           possible mais invérifiable — mieux vaut un « inconnu » assumé qu'un chiffre
+           qu'on ne saurait jamais confirmer. */
+        let _tripPeageMeta = null;
+
         /* `originCoords` est le point de départ RÉEL de l'itinéraire calculé
            (`precomputedRoute.startCoords`), passé par l'appelant. Il prime sur tout repli,
            et c'est important : quand l'utilisateur saisit un départ autre que sa position
@@ -35,6 +46,10 @@
            départ qui ne correspond pas aux coordonnées enregistrées à côté d'elle, et le
            bouton « Y aller » de l'historique emmènerait ailleurs que ce qui est écrit. */
         function _beginTripPlaces(freeTrip, originCoords) {
+            /* Un trajet libre n'a pas d'itinéraire planifié : le péage éventuellement
+               affiché dans l'aperçu concerne un AUTRE trajet, celui qu'on regardait
+               avant de partir en roue libre. Le reprendre serait facturer au hasard. */
+            _tripPeageMeta = freeTrip ? null : (_peagePrevu ? { ..._peagePrevu } : null);
             _tripPlacesMeta = tenterSansBruit(() => {
                 const saisi = document.getElementById('modal-start-addr')?.value.trim();
                 /* `startAddrText` est le géocodage inverse de la position GPS, rempli par
@@ -1563,8 +1578,41 @@
             // Sauvegarder le trajet dans l'historique statistiques — jamais pour une simulation :
             // elle ne roule nulle part, elle n'a rien à archiver comme trajet réel.
             if (!isSimulationMode) {
+                /* ═══ COÛT DU TRAJET, FIGÉ ICI ET JAMAIS RECALCULÉ ═══════════════════
+                   ⚠ LE COÛT SE FIGE, IL NE SE DÉDUIT PAS APRÈS COUP. `calcEnergyCost()`
+                   lit `cfg.fuelPrice`, qui est le prix DU JOUR : rejouer un trajet de
+                   février avec le prix de septembre rendrait un chiffre faux présenté
+                   comme exact. Et le péage exige l'itinéraire, qui n'existe plus ici.
+                   C'est aussi ce qui rend l'historique juste quand on CHANGE de véhicule
+                   en cours d'année : chaque trajet porte le prix du jour où il a été
+                   fait, donc aucune configuration datée n'est nécessaire.
+                   Une simulation « et si je consommais X » se recalcule, elle, depuis
+                   `distKm` — mais c'est une autre question, et un autre chiffre. */
+                const _coutCfg = tenterSansBruit(() => loadVehicleConfig(), 'historique/coutCfg');
+                const _coutCarburant = _coutCfg
+                    ? tenterSansBruit(() => calcEnergyCost(finalDist, _coutCfg), 'historique/coutCarburant')
+                    : null;
+
+                /* Le péage prévu n'a été payé que si l'itinéraire a été suivi. Un trajet
+                   interrompu à mi-chemin, ou dérouté, n'a pas franchi les mêmes barrières.
+                   La distance est le seul témoin dont on dispose à l'arrivée : au-delà de
+                   10 % d'écart, on archive le montant mais on le marque `devie`, pour que
+                   les cumuls puissent l'écarter sans avoir à le deviner. */
+                let _coutPeage = null, _peageStatut = 'inconnu';
+                if (_tripPeageMeta) {
+                    const prevu = Number(_tripPeageMeta.km) || 0;
+                    const ecart = prevu > 0 ? Math.abs(finalDist - prevu) / prevu : 1;
+                    _coutPeage   = Number(_tripPeageMeta.cout) || 0;
+                    _peageStatut = _tripPeageMeta.source === 'evites' ? 'evites'
+                                 : ecart > 0.10 ? 'devie'
+                                 : _tripPeageMeta.source === 'here' ? 'reel' : 'estime';
+                }
+
                 saveTripToHistory({
                     distKm: finalDist,
+                    coutCarburant: _coutCarburant,
+                    coutPeage: _coutPeage,
+                    peageStatut: _peageStatut,
                     score: finalScore,
                     hasSpeeded: drivers.length > 0 ? drivers[0].hasSpeeded : false,
                     durationMin: finalDurationHours * 60,
@@ -1576,6 +1624,7 @@
                 });
             }
             _tripPlacesMeta = null;
+            _tripPeageMeta  = null;
             stopEcoMotionTracking();
             _routeMaxspeedAnnotations = []; // reset pour éviter données périmées au prochain trajet
             document.getElementById('eco-score-bar').classList.remove('visible');

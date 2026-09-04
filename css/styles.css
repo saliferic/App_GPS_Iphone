@@ -3851,6 +3851,19 @@
         }
 
         .trip-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        /* Coût du mois, sous les tuiles. Hors de la grille à 4 colonnes : voir
+           `_buildMonthTiles()` (js/13) — il lui faut la largeur d'une phrase. */
+        .trip-cout-resume {
+            margin-top: 8px; padding: 8px 10px;
+            background: rgba(10,14,23,0.5); border: 1px solid rgba(0,140,255,0.1);
+            border-radius: 12px;
+            font-size: 11px; font-weight: 600; color: #4a5568; text-align: center;
+        }
+        .trip-cout-resume b { font-size: 14px; font-weight: 800; color: #c9d1d9; }
+        /* Le périmètre du cumul passe à la ligne : il doit rester lisible sans concurrencer
+           le montant, mais surtout rester VISIBLE — c'est lui qui empêche de lire un total
+           partiel comme un total complet. */
+        .trip-cout-portee { display: block; margin-top: 3px; font-size: 9px; font-weight: 700; color: #4a5568; }
         .trip-tile {
             text-align: center; padding: 9px 4px;
             background: rgba(10,14,23,0.5); border: 1px solid rgba(0,140,255,0.1);

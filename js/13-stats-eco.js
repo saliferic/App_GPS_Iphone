@@ -153,6 +153,68 @@
             try { return JSON.parse(localStorage.getItem('gps_trip_history') || '[]'); } catch(e) { return []; }
         }
 
+        /* ═══════════════════════════════════════════════════════════════════════════
+           COÛT D'UN TRAJET ARCHIVÉ (04/09/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           Lit UNIQUEMENT ce que le trajet porte : `coutCarburant` et `coutPeage` sont
+           figés à l'arrivée par `stopCourse()` (js/19).
+
+           ⚠ NE JAMAIS RECALCULER ICI depuis `distKm`. Ce serait pourtant facile, et faux :
+           `calcEnergyCost()` lit le prix du carburant DU JOUR, donc un trajet de février
+           serait chiffré au prix de septembre — un chiffre inventé, affiché avec le même
+           aplomb qu'un chiffre mesuré. C'est aussi ce qui permet de changer de véhicule
+           en cours d'année sans fausser l'historique.
+
+           `complet` est le champ qui compte pour les cumuls : il distingue « ce trajet a
+           coûté 0 € » de « on ne sait pas ce qu'il a coûté ». Les trajets archivés AVANT
+           le 04/09/2026 n'ont aucun de ces champs et retournent donc `complet: false` —
+           il n'existe aucun moyen de les chiffrer après coup. */
+        function coutTrajet(t) {
+            const carb = Number(t && t.coutCarburant);
+            const peage = Number(t && t.coutPeage);
+            const aCarb = Number.isFinite(carb);
+            /* Un péage `devie` est archivé mais PAS compté : l'itinéraire n'ayant pas été
+               suivi, le montant prévu n'a pas été payé. On préfère un cumul qui s'annonce
+               incomplet à un cumul qui gonfle d'un péage imaginaire. */
+            const statut = (t && t.peageStatut) || 'inconnu';
+            const aPeage = Number.isFinite(peage) && statut !== 'devie' && statut !== 'inconnu';
+            return {
+                carburant: aCarb ? carb : null,
+                peage:     aPeage ? peage : null,
+                statut,
+                total:     aCarb ? carb + (aPeage ? peage : 0) : null,
+                /* Le carburant suffit à rendre un trajet « chiffré » : un trajet sans
+                   péage en a légitimement zéro, et exiger les deux exclurait du cumul
+                   tous les trajets urbains, c'est-à-dire la majorité. */
+                complet:   aCarb,
+            };
+        }
+
+        /* Cumul sur une liste de trajets, avec SON PÉRIMÈTRE.
+           ⚠ `chiffres` et `total` vont toujours ensemble à l'affichage. Un cumul qui
+           additionne silencieusement les seuls trajets qui ont la donnée SOUS-ESTIME la
+           dépense réelle tout en paraissant faire autorité — et rien à l'écran ne permet
+           de s'en apercevoir. C'est exactement la faute décrite dans docs/peages.md
+           (« Rien à l'écran ne disait que ces deux lignes n'avaient pas le même
+           statut »), qui avait conduit l'utilisateur à croire l'app plus précise qu'elle
+           ne l'était. Ne jamais afficher `total` sans dire sur combien il porte. */
+        function cumulCouts(trips) {
+            let carburant = 0, peage = 0, chiffres = 0;
+            for (const t of (trips || [])) {
+                const c = coutTrajet(t);
+                if (!c.complet) continue;
+                chiffres++;
+                carburant += c.carburant;
+                if (c.peage != null) peage += c.peage;
+            }
+            return { carburant, peage, total: carburant + peage,
+                     chiffres, sansDonnee: (trips || []).length - chiffres };
+        }
+
+        function formatEuros(v) {
+            return Number.isFinite(v) ? v.toFixed(2).replace('.', ',') + ' €' : '—';
+        }
+
         function filterTripsByPeriod(history, period) {
             const now = Date.now();
             const ms = period === 'week' ? 7 * 86400000 : period === 'month' ? 30 * 86400000 : Infinity;
@@ -419,7 +481,45 @@
             tile(String(trips.length), trips.length > 1 ? 'trajets' : 'trajet');
             tile(ecoMoy === null ? '—' : String(ecoMoy), 'éco moy.');
             tile(dureeTotal > 0 ? formatTripDuration(dureeTotal) : '—', 'conduite');
-            return wrap;
+
+            /* ⚠ LE COÛT N'EST PAS UNE CINQUIÈME TUILE. `.trip-tiles` est une grille à
+               `repeat(4, 1fr)` (css/styles.css) : une cinquième tuile partirait seule sur
+               une deuxième ligne. Et surtout, ce chiffre a besoin d'une phrase que ne peut
+               pas porter une tuile — celle qui dit sur COMBIEN de trajets il porte. */
+            const bloc = document.createElement('div');
+            bloc.appendChild(wrap);
+
+            const cum = cumulCouts(trips);
+            const ligne = document.createElement('div');
+            ligne.className = 'trip-cout-resume';
+            if (cum.chiffres === 0) {
+                ligne.textContent = trips.length
+                    ? 'Coût — aucun trajet chiffré ce mois-ci.'
+                    : 'Coût — aucun trajet.';
+            } else {
+                const fort = document.createElement('b');
+                fort.textContent = formatEuros(cum.total);
+                ligne.appendChild(document.createTextNode('Coût du mois — '));
+                ligne.appendChild(fort);
+                ligne.appendChild(document.createTextNode(
+                    ` (carburant ${formatEuros(cum.carburant)} · péages ${formatEuros(cum.peage)})`));
+
+                /* ⚠ LE PÉRIMÈTRE N'EST PAS FACULTATIF. Sans lui, un cumul portant sur 8
+                   trajets sur 40 s'afficherait comme LE coût du mois, sous-estimant la
+                   dépense réelle tout en paraissant faire autorité — et rien à l'écran ne
+                   permettrait de s'en apercevoir. Les trajets d'avant le 04/09/2026 n'ont
+                   aucun coût archivé et ne peuvent pas en recevoir un après coup, donc ce
+                   décalage est la situation NORMALE pendant les premiers mois. */
+                if (cum.sansDonnee > 0) {
+                    const note = document.createElement('span');
+                    note.className = 'trip-cout-portee';
+                    note.textContent = `sur ${cum.chiffres} trajet${cum.chiffres > 1 ? 's' : ''} chiffré${cum.chiffres > 1 ? 's' : ''}`
+                        + ` — ${cum.sansDonnee} sans donnée`;
+                    ligne.appendChild(note);
+                }
+            }
+            bloc.appendChild(ligne);
+            return bloc;
         }
 
         function _buildCalendarGrid(trips) {
@@ -622,7 +722,12 @@
 
             const resume = document.createElement('div');
             resume.className = 'trip-row-summary';
-            resume.textContent = `${formatTripDistance(t.distKm)} · ${formatTripDuration(t.durationMin)}`;
+            /* Le coût ne s'ajoute QUE s'il existe. Un « · — » sur chaque trajet d'avant
+               le 04/09/2026 alourdirait toutes les lignes anciennes pour ne rien dire ;
+               son absence se lit d'elle-même, et le détail l'explique si on l'ouvre. */
+            const _c = coutTrajet(t);
+            resume.textContent = `${formatTripDistance(t.distKm)} · ${formatTripDuration(t.durationMin)}`
+                + (_c.total != null ? ` · ${formatEuros(_c.total)}` : '');
             gauche.appendChild(resume);
 
             const droite = document.createElement('div');
@@ -777,6 +882,22 @@
             const brusques = (Number(t.hardBrakings) || 0) + (Number(t.hardAccels) || 0);
             cell('Freinages / accél.', `${Number(t.hardBrakings) || 0} / ${Number(t.hardAccels) || 0}`,
                  brusques > 0 ? '#FFB35C' : '#6FE3A0');
+
+            /* Coût — voir `coutTrajet()`. Le libellé du péage DIT SON STATUT, il ne se
+               contente pas d'un montant : « estimé » et « réel » n'ont pas la même valeur,
+               et « dévié » explique pourquoi un montant archivé n'entre pas dans le cumul.
+               C'est la correction directe du reproche fondateur de docs/peages.md — deux
+               chiffres de statuts différents affichés côte à côte sans que rien ne le dise. */
+            const c = coutTrajet(t);
+            cell('Carburant', formatEuros(c.carburant));
+            const libellePeage =
+                  c.statut === 'evites'  ? 'Évités'
+                : c.statut === 'reel'    ? formatEuros(c.peage)
+                : c.statut === 'estime'  ? formatEuros(c.peage) + ' (estimé)'
+                : c.statut === 'devie'   ? formatEuros(Number(t.coutPeage)) + ' (itinéraire non suivi)'
+                : 'Inconnu';
+            cell('Péages', libellePeage, c.statut === 'devie' ? '#FFB35C' : null);
+            if (c.total != null) cell('Coût du trajet', formatEuros(c.total));
         }
 
         /* `_thYear`/`_thMonth`/`_thSelDay` ne sont PAS réinitialisés ici : le mois et le

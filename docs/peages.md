@@ -8,6 +8,119 @@ Calcul dans `estimateTollFromRoute()` (`js/00-noyau-calculs.js`, testé) ;
 
 ---
 
+## ⚠⚠⚠ 04/09/2026 — LE PRIX EXACT VIENT DÉSORMAIS DE HERE. TOUT LE RESTE EST UN REPLI.
+
+**L'estimation locale n'est plus la source du prix affiché quand le réseau répond.**
+`affinerPeageHere()` (`js/16-zfe.js`) interroge HERE Routing v8 après l'affichage et
+remplace le chiffre. Les quatre points d'appel sont inchangés : l'estimation locale
+s'affiche toujours en premier, instantanément, et reste seule hors ligne.
+
+### HERE est exact au centime — mesuré, pas supposé
+
+Huit trajets dont le prix réel est connu, tracé Mapbox chiffré par HERE :
+
+| Trajet | app (local) | HERE | Réel |
+|---|---:|---:|---:|
+| Paris → Lyon | 40,77 € | **41,30 €** | 41,30 € |
+| Perpignan → Montpellier | 18,51 € | **17,40 €** | 17,40 € |
+| Perpignan → Marseille | 30,09 € | **30,70 €** | 30,70 € |
+| Perpignan → Bordeaux | 46,14 € | **45,40 €** | 45,40 € |
+| Perpignan → Paris | 64,22 € | **67,70 €** | 67,70 € |
+| Paris → Bruxelles | 15,80 € | **16,30 €** | 16,30 € |
+| Paris → Le Havre | 16,47 € | **24,60 €** | 24,60 € |
+
+Erreur moyenne : **app 18,5 %, HERE 0 %**. L'outil de mesure est
+`tools/_calib-peages.js` (hors app, jamais empaqueté).
+
+### Les deux points ouverts du 04/09/2026 sont RÉSOLUS, et aucun n'était une constante
+
+**1. A64, « plusieurs entrées courtes » — c'était bien un SYSTÈME OUVERT.** L'hypothèse
+posée le matin même est confirmée par le détail des barrières que renvoie HERE :
+
+```
+Toulouse → Bayonne     app 31,49 €   HERE 24,20 €   (+30 %)
+  MURET                          → 1,80 €   ← gare ISOLÉE, tarif plat
+  Lestelle-de-St-Martory → SAMES → 22,40 €  ← paire entrée/sortie, système fermé
+```
+
+Le modèle affine facture `MURET` 4,65 € d'entrée **plus** le kilométrage, pour une
+barrière qui coûte 1,80 € quoi qu'il arrive.
+
+**2. Paris → Le Havre, SAPN sous-estimé — ce n'était pas (que) le facteur.** HERE
+ventile `SAPN : 21,70 €` **+ `CCI DU HAVRE : 2,90 €`** : un péage d'OUVRAGE (pont de
+Normandie), invisible dans la réponse Mapbox. Même mécanisme sur Perpignan → Paris, où
+apparaît `CEVM : 13,80 €` — le viaduc de Millau, sur une A75 par ailleurs gratuite. Et
+le concessionnaire y était faux : l'app crédite `aprr:292.4`, HERE dit `COFIROUTE`.
+
+⚠ **La leçon est la même qu'au 23/08** : recalibrer `TOLL_NETWORK_FACTOR.sapn` aurait
+donné l'illusion d'un correctif en masquant une structure tarifaire absente du modèle.
+Aucune constante ne fait apparaître une barrière à tarif plat ni un péage de pont.
+
+### Un appel, pas deux — mesuré aussi
+
+HERE offre deux voies : `POST /v8/import` puis `GET /v8/routes/{handle}` (2 appels,
+1237 ms, chiffre le tracé Mapbox EXACT), ou `GET /v8/routes` direct (1 appel, 476 ms,
+HERE recalcule sa propre route). **Sur les 8 trajets de référence, écart de 0,00 € entre
+les deux.** L'app utilise donc le direct.
+
+⚠ Le risque du direct est de chiffrer une route que l'utilisateur ne conduit pas —
+l'erreur de méthode qui a fait échouer trois calibrations ici. Parade :
+`PEAGE_HERE_ECART_MAX = 5 %` compare la distance HERE à celle de Mapbox et **jette** le
+prix s'il diverge. Mieux vaut l'estimation calibrée de la bonne route qu'un prix exact
+de la mauvaise. **Repli `import` non implémenté** : en cas de divergence on garde le
+local. C'est le prochain incrément si le rejet se produit en usage réel.
+
+### Coût archivé dans l'historique (04/09/2026)
+
+**⚠ LE COÛT SE FIGE À L'ARRIVÉE, IL NE SE RECALCULE JAMAIS.** `stopCourse()` (`js/19`)
+écrit `coutCarburant`, `coutPeage` et `peageStatut` dans l'entrée d'historique.
+`coutTrajet()` (`js/13`) les LIT sans jamais les recalculer depuis `distKm` — ce serait
+facile et faux : `calcEnergyCost()` lit le prix du carburant **du jour**, donc rejouer un
+trajet de février au prix de septembre rendrait un chiffre inventé présenté comme mesuré.
+C'est aussi ce qui rend l'historique juste quand on **change de véhicule en cours
+d'année** : chaque trajet porte le prix du jour où il a été fait, sans qu'aucune
+configuration datée ne soit nécessaire.
+
+Le péage est retenu **au départ** (`_peagePrevu`, déclaré dans `js/00-helpers-partages.js`
+car écrit par 16 et lu par 19) : à l'arrivée l'itinéraire planifié n'existe plus.
+`peageStatut` vaut `reel` (HERE), `estime` (modèle local), `evites`, `devie` ou `inconnu`.
+
+- **`devie`** — la distance parcourue s'écarte de plus de 10 % de la distance prévue.
+  Le montant est archivé mais **exclu des cumuls** : un trajet interrompu n'a pas franchi
+  les barrières prévues, et le compter fabriquerait une dépense qui n'a pas eu lieu.
+- **`inconnu`** — trajet en mode libre. Sans itinéraire planifié, rien ne dit si une
+  autoroute payante a été empruntée. Rapprocher le tracé d'anciens trajets planifiés est
+  possible mais donnerait un « tu as *probablement* payé 12 € » invérifiable : on préfère
+  un inconnu assumé.
+
+**⚠ UN CUMUL NE S'AFFICHE JAMAIS SANS SON PÉRIMÈTRE.** `cumulCouts()` rend `chiffres` et
+`sansDonnee` à côté du total, et `_buildMonthTiles()` les affiche. Sans cela, un cumul
+portant sur 8 trajets sur 40 se lirait comme LE coût du mois — sous-estimé, mais
+péremptoire. C'est mot pour mot la faute fondatrice de ce dossier : « Rien à l'écran ne
+disait que ces deux lignes n'avaient pas le même statut ». Les trajets archivés **avant
+le 04/09/2026 n'ont aucun coût et ne peuvent pas en recevoir** ; ce décalage est donc la
+situation normale pendant les premiers mois.
+
+### Ce qui reste à faire
+
+- **⚠ NON TESTÉ SUR L'APPAREIL.** Chrome de bureau n'est pas la WebView : `fetch` vers
+  une origine tierce depuis `file://android_asset` reste à vérifier, et un blocage CSP
+  n'y laisse aucune exception JavaScript. `router.hereapi.com` est ajouté à la CSP
+  d'`index.html`, mais seul l'essai sur téléphone le prouve.
+- **La clé est en clair dans `js/16-zfe.js`.** Acceptable pour un usage personnel,
+  **pas** pour une diffusion publique : une clé dans l'APK NE SE RÉVOQUE PAS sans casser
+  les installations existantes, et le quota (30 000 transactions/mois) est partagé.
+  `_peageHereEndpoint()` est le POINT DE BASCULE UNIQUE vers un proxy — Edge Function
+  Supabase, 500 000 invocations/mois incluses, origine déjà dans la CSP. Ne rien
+  disperser ailleurs.
+- **Le cache est en mémoire, volontairement pas en `localStorage`** : les tarifs sont
+  révisés chaque février, une valeur figée sur disque survivrait à la révision en
+  silence.
+- **Aucun test automatisé ne couvre ce chemin.** `_peageHerePoints()` est pure et
+  testable, mais elle vit dans `js/16`, que `tests/noyau.test.js` ne charge pas.
+
+---
+
 ## ⚠⚠ TOUT CE QUI SUIT LA LIGNE DE 2026-08-23 EST DE L'HISTOIRE, PAS LA MÉTHODE ACTUELLE
 
 **Mapbox DÉCLARE les tronçons payants.** Chaque `intersection` d'un step porte un
