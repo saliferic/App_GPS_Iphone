@@ -443,12 +443,42 @@
            minuscule : un itinéraire fictif d'environ 600 m droit devant, dans l'axe du véhicule,
            demandé uniquement pour ses annotations. Ce tracé n'est jamais affiché, ni utilisé
            pour le guidage, ni pour le calcul de points : c'est une sonde, pas un itinéraire. */
-        const PROBE_LENGTH_KM = 0.6;        // longueur du corridor sondé devant le véhicule
-        const PROBE_REFRESH_METERS = 300;   // on re-sonde après cette distance parcourue...
+        /* ── LONGUEUR DU CORRIDOR : PROPORTIONNELLE À LA VITESSE ────────────────
+           Longueur FIXE de 600 m au départ, et c'était le mauvais réglage aux deux bouts.
+           À 130 km/h, 600 m se traversent en 17 s : la sonde était rejouée à chaque
+           échéance du plancher de temps, soit trois appels Directions par minute pendant
+           toute la conduite libre — pour lire une donnée (`maxspeed`) qui ne bouge PAS,
+           elle. À 30 km/h en ville, les mêmes 600 m couvraient plus d'une minute, mais la
+           sonde était de toute façon invalidée au premier virage.
+           On demande donc un corridor qui représente une DURÉE de trajet constante :
+           long sur voie rapide — où le cap tenu droit devant décrit fidèlement la route
+           à venir — et court en ville, où la ligne droite ne prédit rien.
+           ⚠ Ne pas allonger à vitesse LENTE en espérant économiser davantage : au-delà
+           de quelques centaines de mètres, la cible « tout droit » tombe sur une autre
+           rue, et Mapbox renvoie l'itinéraire qui y mène — des annotations qui ne sont
+           plus celles de la route foulée. Le garde-fou reste PROBE_CORRIDOR_M, qui les
+           jette dès qu'on s'écarte, mais mieux vaut ne pas les fabriquer. */
+        const PROBE_LENGTH_KM = 0.6;        // plancher : longueur du corridor à basse vitesse
+        const PROBE_LENGTH_MAX_KM = 3;      // plafond : au-delà, la ligne droite ne prédit plus rien
+        const PROBE_LOOKAHEAD_S = 75;       // durée de route qu'on cherche à couvrir d'avance
+        const PROBE_REFRESH_METERS = 300;   // plancher de la distance qui re-sonde (voir _probeSeuilMetres)
         const PROBE_REFRESH_MS = 20000;     // ...et jamais plus souvent que ça
         const PROBE_CORRIDOR_M = 40;        // au-delà, on a quitté le corridor sondé
-        const PROBE_TAIL_KM = 0.15;         // marge de fin : on re-sonde avant d'atteindre le bout
+        const PROBE_TAIL_KM = 0.3;          // marge de fin : on re-sonde avant d'atteindre le bout
         const PROBE_MIN_SPEED_KMH = 5;      // à l'arrêt, la sonde en place reste valable
+
+        // Longueur à demander pour la prochaine sonde, bornée aux deux extrémités.
+        function _probeLongueurKm(speedKmh) {
+            const brut = (speedKmh || 0) / 3600 * PROBE_LOOKAHEAD_S;
+            return Math.min(PROBE_LENGTH_MAX_KM, Math.max(PROBE_LENGTH_KM, brut));
+        }
+        /* Distance parcourue qui re-sonde « par précaution », indépendamment du corridor.
+           Elle doit suivre la longueur réellement obtenue : figée à 300 m, elle redéclenchait
+           une sonde tous les 300 m alors que le corridor en couvrait 2 500 — c'est-à-dire
+           qu'elle annulait à elle seule tout le bénéfice de l'allongement. */
+        function _probeSeuilMetres() {
+            return Math.max(PROBE_REFRESH_METERS, _probeLengthKm * 1000 * 0.75);
+        }
 
         let _probeAnnotations = [];  // [{distKm, speed}] le long de _probeLine
         let _probeLine = null;       // turf lineString du corridor sondé
@@ -486,11 +516,12 @@
             return _probeAnnotations[idx].speed;   // null si le tronçon n'est pas annoté
         }
 
-        async function fetchLocalMaxspeedProbe(lng, lat, bearingDeg) {
+        async function fetchLocalMaxspeedProbe(lng, lat, bearingDeg, longueurKm) {
             if (!navigator.onLine || _probeFetching) return;
             _probeFetching = true;
             try {
-                const ahead = turf.destination(turf.point([lng, lat]), PROBE_LENGTH_KM, bearingDeg, { units: 'kilometers' });
+                const portee = longueurKm || PROBE_LENGTH_KM;
+                const ahead = turf.destination(turf.point([lng, lat]), portee, bearingDeg, { units: 'kilometers' });
                 const [alng, alat] = ahead.geometry.coordinates;
                 const coordStr = `${lng.toFixed(6)},${lat.toFixed(6)};${alng.toFixed(6)},${alat.toFixed(6)}`;
                 // Même forme d'appel que l'itinéraire principal (profil et annotations identiques),
@@ -563,12 +594,12 @@
             const outOfCorridor = (loc === null);
             const nearEnd = (loc !== null) && (loc > _probeLengthKm - PROBE_TAIL_KM);
             const movedEnough = !_probeCoords ||
-                turf.distance(turf.point(_probeCoords), turf.point([lng, lat]), { units: 'kilometers' }) * 1000 > PROBE_REFRESH_METERS;
+                turf.distance(turf.point(_probeCoords), turf.point([lng, lat]), { units: 'kilometers' }) * 1000 > _probeSeuilMetres();
             if (!outOfCorridor && !nearEnd && !movedEnough) return;
 
             _probeFetchTime = now;
             _probeCoords = [lng, lat];
-            fetchLocalMaxspeedProbe(lng, lat, lastKnownBearing || 0);
+            fetchLocalMaxspeedProbe(lng, lat, lastKnownBearing || 0, _probeLongueurKm(speed));
         }
 
         // Met à jour le badge de limite de vitesse (au-dessus du badge de vitesse actuelle).

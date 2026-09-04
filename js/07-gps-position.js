@@ -599,8 +599,17 @@
         // === WIDGET MÉTÉO (Open-Meteo, sans clé API) ===
         let _weatherLastFetch  = 0;
         let _weatherLastCoords = null;
+        /* Vrai tant qu'une requête météo est en vol. Sans ce drapeau, chaque fix GPS
+           qui repassait les seuils relançait une requête PENDANT que la précédente
+           répondait encore — `_weatherLastFetch` n'étant écrit qu'après succès. */
+        let _weatherInFlight = false;
         const WEATHER_INTERVAL_MS = 5 * 60 * 1000; // 5 min
-        const WEATHER_MIN_MOVE_KM = 0.5;
+        /* 5 km et non 500 m. Le seuil de distance existe pour attraper le changement de
+           MASSE D'AIR, pas le changement de rue : la température et le code WMO rendus
+           par Open-Meteo sont identiques d'un bout à l'autre d'une agglomération. À
+           500 m, un Paris–Lyon tirait une requête toutes les 16 s à 110 km/h, soit
+           ~1 000 appels pour un widget qui affiche deux caractères. */
+        const WEATHER_MIN_MOVE_KM = 5;
 
         // Codes WMO — deux variantes : jour (is_day=1) et nuit (is_day=0)
         const WMO_DAY = {
@@ -632,6 +641,16 @@
         };
 
         async function fetchWeather(lat, lng) {
+            if (_weatherInFlight) return;
+            _weatherInFlight = true;
+            /* ⚠ L'HORODATAGE EST POSÉ AVANT LA REQUÊTE, PAS APRÈS SON SUCCÈS. Écrit
+               seulement en cas de succès, il laissait `elapsed` au-dessus de
+               WEATHER_INTERVAL_MS indéfiniment dès qu'Open-Meteo répondait mal
+               (`!res.ok`, coupure réseau) : maybeUpdateWeather relançait alors une
+               requête à CHAQUE fix GPS, soit une par seconde pendant tout le trajet.
+               Une panne du service se transformait ainsi en martèlement. */
+            _weatherLastFetch  = Date.now();
+            _weatherLastCoords = [lng, lat];
             try {
                 const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=temperature_2m,weathercode,is_day&timezone=auto`;
                 const res = await fetch(url);
@@ -648,10 +667,8 @@
                 document.getElementById('weather-temp').textContent = temp + '°';
                 document.getElementById('weather-desc').textContent = isDay ? label : 'NUIT · ' + label;
                 document.getElementById('weather-widget').classList.add('loaded');
-
-                _weatherLastFetch  = Date.now();
-                _weatherLastCoords = [lng, lat];
             } catch(e) { /* silencieux */ }
+            finally { _weatherInFlight = false; }
         }
 
         function maybeUpdateWeather(lat, lng) {
