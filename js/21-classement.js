@@ -378,6 +378,26 @@
                 if (/already registered|already exists|duplicate/i.test(m)) {
                     return { ok: false, msg: 'Ce pseudo est déjà pris.' };
                 }
+                /* ⚠ CAS DORMANT AU 04/09/2026 — IL NE PEUT PAS SE DÉCLENCHER AUJOURD'HUI,
+                   et ce n'est pas un oubli. « Leaked Password Protection » (Supabase
+                   compare le mot de passe à HaveIBeenPwned et refuse ceux qui ont fuité)
+                   est réservée AU PLAN PRO ; le projet est sur le plan gratuit, la
+                   vérification ne tourne donc jamais. Mesuré ce jour-là : un compte créé
+                   avec `azerty01` — présent 77 729 fois dans les fuites — passe sans
+                   broncher. Le Security Advisor signale malgré tout la faiblesse, sans
+                   tenir compte du plan.
+                   Le cas reste ici parce qu'il devient actif SANS AUCUNE MODIFICATION le
+                   jour où le projet passe en Pro, ou si l'on interroge nous-mêmes l'API
+                   publique de HaveIBeenPwned (gratuite, sans clé, par k-anonymat) —
+                   piste écartée le 04/09/2026, l'app ne protégeant qu'un classement de
+                   jeu. Sans ce cas, le repli ci-dessous afficherait le texte ANGLAIS BRUT
+                   de Supabase à un utilisateur francophone, sur le seul écran où il est
+                   déjà en train d'échouer.
+                   Le motif est large à dessein : le libellé exact vient d'un service
+                   tiers et peut changer sans prévenir. */
+                if (/pwned|leaked|compromised|weak|easy to guess/i.test(m)) {
+                    return { ok: false, msg: 'Ce mot de passe a fuité sur Internet — choisis-en un autre.' };
+                }
                 return { ok: false, msg: 'Inscription impossible : ' + (m || 'erreur inconnue') };
             }
         }

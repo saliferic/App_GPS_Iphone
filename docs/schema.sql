@@ -16,6 +16,16 @@
    Ordre de création : extensions → tables → trigger → vue → RLS.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ⚠ NE PAS DÉPLACER `citext` DANS UN SCHÉMA `extensions`, malgré l'avertissement
+   « Extension in Public » du Security Advisor de Supabase (relevé le 04/09/2026).
+   La recommandation est générique et son bénéfice ici est cosmétique, alors que
+   le déplacement CASSE l'inscription : `creer_profil()` déclare `p citext` avec
+   un `search_path` épinglé à `'public', 'pg_temp'` (voir plus bas, où ce
+   `search_path` est une protection délibérée). Sortir le type de ce chemin rend
+   la fonction introuvable au moment de la création de profil — panne SILENCIEUSE
+   jusqu'au premier compte créé, puisque rien ne s'exécute avant.
+   `profils.pseudo` est de ce type : c'est un point de passage obligé, pas un
+   détail d'implémentation. */
 create extension if not exists citext;
 
 /* ── Identité ──────────────────────────────────────────────────────────────
@@ -121,6 +131,29 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
     after insert on auth.users
     for each row execute function public.creer_profil();
+
+/* ── Fermeture de l'accès RPC à `creer_profil()` (04/09/2026) ──────────────────
+   Le Security Advisor de Supabase lève deux avertissements sur cette fonction :
+   « Public Can Execute SECURITY DEFINER Function » et sa jumelle pour les
+   comptes identifiés. PostgREST expose en effet toute fonction du schéma
+   `public` en RPC (`/rest/v1/rpc/creer_profil`), et Supabase pose par défaut le
+   `grant execute` à `anon` et `authenticated`.
+
+   ⚠ CE N'ÉTAIT PAS EXPLOITABLE, et il faut le savoir avant de juger ce `revoke`
+   plus important qu'il n'est : la fonction est `returns trigger`, or PostgreSQL
+   REFUSE d'exécuter une fonction trigger hors contexte de trigger (« trigger
+   functions can only be called as triggers »). `new` n'existerait même pas. On
+   retire donc un droit qui ne servait à rien plutôt qu'on ne colmate une faille.
+
+   Le `security definer` reste NÉCESSAIRE — le trigger doit écrire dans
+   `public.profils` quel que soit l'appelant — et le `set search_path` ci-dessus
+   est la vraie protection de cette fonction.
+
+   ⚠ Le trigger continue de fonctionner : PostgreSQL vérifie le droit `EXECUTE`
+   À LA CRÉATION DU TRIGGER, pas à chaque déclenchement. Vérifier malgré tout par
+   une inscription réelle après avoir passé cette commande — c'est le genre de
+   règle qu'on croit connaître et qui se contrôle en trente secondes. */
+revoke execute on function public.creer_profil() from anon, authenticated, public;
 
 /* ── Vue du classement ─────────────────────────────────────────────────────
    ⚠ `security_invoker = true` est la SEULE chose qui protège le classement.
