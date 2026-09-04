@@ -173,6 +173,208 @@
             }
         }
 
+        /* ═══════════════════════════════════════════════════════════════════════════
+           ZONE OVERPASS PRÉCHARGÉE — LA LIMITE SANS ATTENDRE  (04/09/2026)
+           ═══════════════════════════════════════════════════════════════════════════
+           ⚠ CE QUI CLOCHAIT, ET CE QUI NE CLOCHAIT PAS. Relevé utilisateur : rue Jules
+           Ferry à Courbevoie, panneau 30 apparu plusieurs CENTAINES DE MÈTRES trop tard,
+           en conduite libre. Vérification faite sur OSM le jour même : le tronçon porte
+           `maxspeed=30` ET `zone:maxspeed=FR:30`. La donnée était donc juste, présente et
+           correctement taguée — l'app ne l'avait simplement PAS ENCORE DEMANDÉE.
+           `SPEED_LIMIT_REFETCH_MS` vaut 25 s ; à 30 km/h cela fait 208 m. Le symptôme est
+           le plafond lui-même, au mètre près. Ni Mapbox, ni OSM, ni le fournisseur n'y
+           sont pour quoi que ce soit.
+
+           ⚠⚠ POURQUOI ÉLARGIR PLUTÔT QU'ACCÉLÉRER. Baisser le délai était la correction
+           évidente et c'était la mauvaise : le commentaire de `SPEED_LIMIT_REFETCH_MS`
+           explique que 25 s a REMPLACÉ 12 s parce qu'Overpass est partagé avec le scan
+           parkings et le relevé des bornes, et qu'interroger plus souvent qu'il ne répond
+           revient à occuper la file en permanence.
+           Mesure du 04/09/2026 qui débloque la situation — la latence d'Overpass est
+           dominée par la FILE D'ATTENTE, pas par le volume :
+
+               rayon  500 m → 13 602 ms, 129 Ko, 176 tronçons
+               rayon 1000 m →  1 525 ms, 485 Ko, 691 tronçons
+
+           Le rayon quatre fois plus grand est revenu NEUF FOIS plus vite. Demander
+           beaucoup d'un coup ne coûte donc quasiment rien de plus que demander peu, et
+           une requête par kilomètre remplace cinq requêtes ponctuelles tout en répondant
+           instantanément. C'est le rare cas où l'on gagne sur les deux tableaux : moins
+           de créneaux consommés sur le serveur partagé, ET plus de réactivité.
+
+           ⚠ NE REMPLACE RIEN. L'annotation Mapbox de l'itinéraire reste prioritaire (elle
+           est locale et gratuite), et `fetchSpeedLimitNearby()` reste le repli tant que la
+           zone n'est pas chargée — la première requête d'un trajet met toujours plusieurs
+           secondes, et un écran muet pendant ce temps serait une régression. */
+        let _zoneVitesse = null;        // { centre:[lng,lat], voies:[…], ts }
+        let _zoneVitesseEnCours = false;
+        let _zoneVitesseDerniere = 0;
+        const ZONE_VITESSE_RAYON_M = 1000;
+        /* On redemande avant d'atteindre le bord, pas en l'atteignant : sinon on roule à
+           découvert le temps que la requête revienne, ce qui recrée exactement le trou
+           qu'on cherche à supprimer. 300 m à 50 km/h laissent ~20 s de marge. */
+        const ZONE_VITESSE_MARGE_M = 300;
+        /* Plancher entre deux chargements de zone. À 130 km/h on traverse la marge en
+           8 s ; sans ce plancher, une voie rapide relancerait la requête en boucle — or
+           sur voie rapide c'est l'annotation Mapbox qui répond, pas cette zone. */
+        const ZONE_VITESSE_MIN_MS = 10000;
+        /* Les limites de vitesse ne changent pas dans la journée. Ce TTL n'existe que
+           pour ne pas garder indéfiniment une zone en mémoire au fil d'un long trajet. */
+        const ZONE_VITESSE_TTL_MS = 20 * 60 * 1000;
+        /* Distance maximale entre la position et une voie pour la considérer FOULÉE.
+           25 m et non 50 comme la requête ponctuelle : ici on dispose de la GÉOMÉTRIE
+           réelle, donc de la vraie distance à l'axe, là où `around:50` ne savait que
+           « ce tronçon passe quelque part dans les parages ». C'est ce qui permet de
+           cesser de confondre une rue à 30 avec le boulevard parallèle. */
+        const ZONE_VITESSE_SNAP_M = 25;
+
+        function _zoneVitesseDistanceM(a, b) {
+            const R = 6371000, rad = Math.PI / 180;
+            const dLat = (b[1] - a[1]) * rad, dLng = (b[0] - a[0]) * rad;
+            const x = dLng * Math.cos((a[1] + b[1]) / 2 * rad);
+            return Math.sqrt(dLat * dLat + x * x) * R;
+        }
+
+        /* Charge (ou recharge) la zone autour de la position. Ne lève jamais : un échec
+           laisse `_zoneVitesse` tel quel et la cascade existante reprend la main. */
+        async function _chargerZoneVitesse(lng, lat) {
+            if (_zoneVitesseEnCours || !navigator.onLine) return;
+            const now = Date.now();
+            if (now - _zoneVitesseDerniere < ZONE_VITESSE_MIN_MS) return;
+            _zoneVitesseEnCours = true;
+            _zoneVitesseDerniere = now;
+            try {
+                /* ⚠ ÉGALITÉS EXACTES, PAS DE REGEX — règle d'AGENTS.md (« TOUTE REQUÊTE
+                   OVERPASS ») : `["highway"~"^(a|b)$"]` oblige Overpass à parcourir tous
+                   les objets portant la clé, et sur `highway` c'est chaque route de
+                   l'emprise. Un groupe d'égalités tape dans l'index clé/valeur.
+                   ⚠ MESURE DU 04/09/2026 — LE GAIN N'EST PAS OBSERVABLE À CE RAYON, et il
+                   faut le dire plutôt que de laisser croire à une optimisation vérifiée :
+                     regex    : 1148 / 9166 / 10025 ms
+                     égalités : 3735 / 8939 / 10746 ms
+                   La variance de la file d'attente (1,1 s à 10,7 s pour une requête
+                   IDENTIQUE) écrase l'effet. On suit la convention — elle ne coûte rien et
+                   vaut sans doute sur de plus grandes emprises — sans prétendre l'avoir
+                   confirmée ici. Résultats identiques dans les deux formes : 1078 voies. */
+                const classes = ['motorway','motorway_link','trunk','trunk_link','primary',
+                    'primary_link','secondary','secondary_link','tertiary','tertiary_link',
+                    'unclassified','residential','living_street','service'];
+                const autour = `(around:${ZONE_VITESSE_RAYON_M},${lat},${lng})`;
+                const q = `[out:json][timeout:25];(`
+                    + classes.map(c => `way${autour}["highway"="${c}"];`).join('')
+                    + `);out tags geom;`;
+                /* Même hedging que les autres consommateurs Overpass — voir le commentaire
+                   de `fetchSpeedLimitNearby()` : ne jamais revenir à un serveur unique. */
+                const data = await _fetchOverpassHedged(q, { timeoutMs: 25000, hedgeMs: 4000 });
+                const els = (data && data.elements) || [];
+                if (!els.length) return;
+                const voies = [];
+                for (const e of els) {
+                    const g = e.geometry;
+                    if (!Array.isArray(g) || g.length < 2) continue;
+                    /* La bbox est calculée UNE FOIS ici, et c'est ce qui rend la recherche
+                       tenable : sans elle, chaque fix GPS testerait la distance exacte à
+                       près de 700 polylignes, plusieurs fois par seconde. */
+                    let minLng = 180, minLat = 90, maxLng = -180, maxLat = -90;
+                    const pts = new Array(g.length);
+                    for (let i = 0; i < g.length; i++) {
+                        const lo = g[i].lon, la = g[i].lat;
+                        pts[i] = [lo, la];
+                        if (lo < minLng) minLng = lo; if (lo > maxLng) maxLng = lo;
+                        if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+                    }
+                    voies.push({ tags: e.tags || {}, pts, bbox: [minLng, minLat, maxLng, maxLat] });
+                }
+                _zoneVitesse = { centre: [lng, lat], voies, ts: Date.now() };
+            } catch (e) {
+                /* Silencieux à dessein : la zone est un CONFORT, son échec ne doit pas
+                   perturber une conduite. Le repli ponctuel continue de fonctionner. */
+            } finally {
+                _zoneVitesseEnCours = false;
+            }
+        }
+
+        /* Distance point → polyligne, en mètres, en projetant sur chaque segment.
+           Écrite à la main plutôt qu'avec `turf.pointToLineDistance` : celle-ci construit
+           un objet GeoJSON par appel, et on l'appellerait des centaines de fois par fix. */
+        function _distanceAVoieM(lng, lat, pts) {
+            const rad = Math.PI / 180, R = 6371000;
+            const cosLat = Math.cos(lat * rad);
+            const px = lng * rad * cosLat * R, py = lat * rad * R;
+            let best = Infinity;
+            for (let i = 0; i < pts.length - 1; i++) {
+                const ax = pts[i][0] * rad * cosLat * R,     ay = pts[i][1] * rad * R;
+                const bx = pts[i + 1][0] * rad * cosLat * R, by = pts[i + 1][1] * rad * R;
+                const dx = bx - ax, dy = by - ay;
+                const len2 = dx * dx + dy * dy;
+                let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+                t = t < 0 ? 0 : t > 1 ? 1 : t;
+                const cx = ax + t * dx - px, cy = ay + t * dy - py;
+                const d = Math.sqrt(cx * cx + cy * cy);
+                if (d < best) best = d;
+            }
+            return best;
+        }
+
+        /* Limite lue dans la zone, sans réseau. `null` si la zone n'est pas chargée, si la
+           position en est sortie, ou si aucune voie n'est assez proche. */
+        function _limiteDansZone(lng, lat) {
+            if (!_zoneVitesse) return null;
+            if (Date.now() - _zoneVitesse.ts > ZONE_VITESSE_TTL_MS) return null;
+            if (_zoneVitesseDistanceM(_zoneVitesse.centre, [lng, lat]) > ZONE_VITESSE_RAYON_M) return null;
+
+            const degLng = ZONE_VITESSE_SNAP_M / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+            const degLat = ZONE_VITESSE_SNAP_M / 110540;
+            const candidats = [];
+            for (const v of _zoneVitesse.voies) {
+                const b = v.bbox;
+                if (lng < b[0] - degLng || lng > b[2] + degLng
+                 || lat < b[1] - degLat || lat > b[3] + degLat) continue;
+                const d = _distanceAVoieM(lng, lat, v.pts);
+                if (d <= ZONE_VITESSE_SNAP_M) candidats.push({ v, d });
+            }
+            if (!candidats.length) return null;
+
+            /* ⚠ ON CLASSE PAR DISTANCE, PAS PAR RANG DE VOIE — et c'est l'inverse de
+               `fetchSpeedLimitNearby()`. Ce n'était pas un caprice là-bas : avec
+               `around:50` et sans géométrie, on ignorait la vraie distance à chaque axe,
+               et privilégier le plus haut rang était la moins mauvaise heuristique. Ici on
+               connaît la distance réelle à l'axe, donc la voie FOULÉE est simplement la
+               plus proche. Le rang ne sert plus qu'à départager deux voies à égalité — un
+               échangeur, une contre-allée collée au boulevard. */
+            const rang = ['motorway','motorway_link','trunk','trunk_link','primary','primary_link',
+                          'secondary','secondary_link','tertiary','tertiary_link','unclassified',
+                          'residential','living_street','service'];
+            candidats.sort((a, b) => {
+                if (Math.abs(a.d - b.d) > 5) return a.d - b.d;
+                const ia = rang.indexOf(a.v.tags.highway), ib = rang.indexOf(b.v.tags.highway);
+                return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+            });
+
+            const meilleur = candidats[0].v;
+            if (meilleur.tags.maxspeed) {
+                const p = parseMaxspeedTag(meilleur.tags.maxspeed);
+                if (p !== null) return { kmh: p, source: 'overpass-tag', tags: meilleur.tags, dist: candidats[0].d };
+            }
+            const memeClasse = candidats.find(c => c.v.tags.maxspeed
+                && c.v.tags.highway === meilleur.tags.highway);
+            if (memeClasse) {
+                const p = parseMaxspeedTag(memeClasse.v.tags.maxspeed);
+                if (p !== null) return { kmh: p, source: 'overpass-same-class', tags: memeClasse.v.tags, dist: candidats[0].d };
+            }
+            const inParis = isInsideParis(lng, lat);
+            const t = meilleur.tags;
+            const isHighCapacity = ['motorway','motorway_link','trunk','trunk_link','primary','primary_link'].includes(t.highway);
+            const isUrban = !isHighCapacity && (inParis
+                || t['maxspeed:type'] === 'FR:urban' || t['source:maxspeed'] === 'FR:urban'
+                || t['zone:traffic'] === 'urban'
+                || (t['lit'] === 'yes' && t['sidewalk'] && t['sidewalk'] !== 'no'));
+            const inf = inferSpeedFromHighwayTag(t.highway, isUrban, inParis);
+            return inf !== null
+                ? { kmh: inf, source: 'overpass-inference', tags: t, dist: candidats[0].d }
+                : null;
+        }
+
         // Déclenche (si nécessaire) une mise à jour de la limite de vitesse.
         // Mapbox annotations en priorité — Overpass uniquement si annotations absentes.
         function maybeRefreshSpeedLimit(lng, lat) {
@@ -187,6 +389,29 @@
                 const _d = getRouteDistanceAlongKm(lng, lat);
                 if (_d !== null && getMapboxSpeedLimitAtDist(_d) !== null && !_mapboxLimitWasBorrowed) return;
             }
+            /* ═══ ZONE PRÉCHARGÉE — LA RÉPONSE IMMÉDIATE, AVANT TOUT RÉSEAU ═══
+               Voir le bloc `_chargerZoneVitesse()`. Lecture purement locale : si la zone
+               couvre la position, la limite est connue AU FIX GPS, sans les 25 s du repli
+               ponctuel qui ont valu le décalage de la rue Jules Ferry.
+               ⚠ On (re)charge la zone AVANT de lire, et non après : la recharge se
+               déclenche à 300 m du bord, donc la zone courante répond encore pendant que
+               la suivante arrive. Inverser l'ordre rouvrirait un trou à chaque bordure. */
+            if (!_zoneVitesse
+                || Date.now() - _zoneVitesse.ts > ZONE_VITESSE_TTL_MS
+                || _zoneVitesseDistanceM(_zoneVitesse.centre, [lng, lat])
+                     > ZONE_VITESSE_RAYON_M - ZONE_VITESSE_MARGE_M) {
+                _chargerZoneVitesse(lng, lat);
+            }
+            const _zl = _limiteDansZone(lng, lat);
+            if (_zl) {
+                currentSpeedLimitKmh = _zl.kmh;
+                currentSpeedLimitTs  = Date.now();
+                _overpassSource      = _zl.source;
+                _speedLimitDebug     = { tags: _zl.tags, highway: _zl.tags.highway,
+                                         zone: true, distM: Math.round(_zl.dist), ts: Date.now() };
+                return;
+            }
+
             // Fallback Overpass uniquement si annotations absentes ou tronçon inconnu
             const now = Date.now();
             const currentSpeed = (drivers.length > 0) ? (drivers[0].actualSpeed || 0) : 0;
