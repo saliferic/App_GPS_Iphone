@@ -670,7 +670,7 @@
         }
 
         function compagnonCourant() {
-            return (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : 'babi';
+            return (window.Compagnon && Compagnon.cle) ? Compagnon.cle() : 'pilou';
         }
 
         /* La fiche d'un animal : ce qu'il a acquis (`etapes`), et de quoi ne pas
@@ -1598,8 +1598,9 @@
         let editingFavIndex = null;       // null = création, number = édition du favori à cet index
 
         /* Le "+" de la ligne "Adresses enregistrées" s'efface pendant que le formulaire
-           est ouvert (même logique que le "+" du sélecteur de profil), sinon le filet
-           séparateur resterait seul contre la corbeille. */
+           est ouvert (même logique que le "+" du sélecteur de profil). `sep` n'a plus
+           d'élément à masquer depuis le 04/09/2026 (trash externe retiré) : le
+           null-guard suffit, pas besoin de retirer l'appel. */
         function _setFavAddBtnVisible(visible) {
             const add = document.getElementById('btn-add-fav');
             const sep = document.getElementById('btn-add-fav-sep');
@@ -1761,7 +1762,7 @@
            recherche en navigation. Une seule fonction pour les deux, sinon la liste ouverte
            en roulant resterait figée sur l'état du chargement de la page. */
         function renderFavoritesDropdown() {
-            const vide = favorites.length === 0 ? '📋 Mes adresses (aucune)' : '📋 Choisir un contact...';
+            const vide = favorites.length === 0 ? 'Mes adresses (aucune)' : 'Choisir un contact...';
             ['fav-dropdown', 'nav-fav-dropdown'].forEach(id => {
                 const dropdown = document.getElementById(id);
                 if (!dropdown) return;
@@ -1780,6 +1781,8 @@
                     dropdown.appendChild(opt);
                 });
             });
+            _syncFavDropdownLabel();
+            _renderFavDropdownMenu();
         }
 
         /* Le contact sélectionné est affiché en RÉÉCRIVANT le libellé de l'option vide, puis
@@ -1797,8 +1800,107 @@
             if (!placeholder) return;
             placeholder.textContent = name
                 ? `📍 ${name}`
-                : (favorites.length === 0 ? '📋 Mes adresses (aucune)' : '📋 Choisir un contact...');
+                : (favorites.length === 0 ? 'Mes adresses (aucune)' : 'Choisir un contact...');
             dropdown.value = '';
+            _syncFavDropdownLabel();
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           MENU DÉROULANT PERSONNALISÉ D'ADRESSES ENREGISTRÉES — suppression PAR LIGNE
+           (04/09/2026, demande utilisateur). Calque exact de celui du sélecteur de
+           profil (js/13, `_renderProfileDropdownMenu` et voisines) : le `<select>`
+           natif `#fav-dropdown` reste la source de vérité, masqué mais toujours écrit
+           par renderFavoritesDropdown() et lu par loadFavoriteAddress(). Un <option>
+           natif est du texte pur — impossible d'y poser un bouton — d'où ce calque.
+           Scopé au panneau Itinéraire : `#nav-fav-dropdown` (recherche pendant la
+           navigation) reste un `<select>` natif ordinaire, sans bouton de suppression
+           à côté — rien n'y change. */
+        function _syncFavDropdownLabel() {
+            const select = document.getElementById('fav-dropdown');
+            const label  = document.getElementById('fav-dropdown-trigger-label');
+            if (!select || !label) return;
+            const opt = select.options[select.selectedIndex];
+            label.textContent = opt ? opt.textContent : 'Mes adresses (aucune)';
+        }
+
+        function _renderFavDropdownMenu() {
+            const menu = document.getElementById('fav-dropdown-menu');
+            if (!menu) return;
+            menu.innerHTML = '';
+            if (favorites.length === 0) {
+                const vide = document.createElement('div');
+                vide.className = 'addr-suggestion';
+                vide.style.cursor = 'default';
+                vide.textContent = 'Mes adresses (aucune)';
+                menu.appendChild(vide);
+                return;
+            }
+            favorites.forEach((fav, index) => {
+                const row = document.createElement('div');
+                row.className = 'profile-menu-row' + (index === activeFavIndex ? ' active' : '');
+
+                const name = document.createElement('span');
+                name.className = 'profile-menu-name';
+                name.textContent = fav.name;
+                name.onclick = () => {
+                    document.getElementById('fav-dropdown').value = String(index);
+                    loadFavoriteAddress(String(index));
+                    closeFavDropdownMenu();
+                };
+
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'profile-menu-delete';
+                del.title = `Supprimer « ${fav.name} »`;
+                del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+                // stopPropagation : sinon ce clic remonterait jusqu'à l'écouteur « clic
+                // extérieur » et refermerait le menu juste avant que confirm() s'ouvre.
+                del.onclick = (e) => { e.stopPropagation(); deleteFavoriteByIndex(index); };
+
+                row.appendChild(name);
+                row.appendChild(del);
+                menu.appendChild(row);
+            });
+        }
+
+        function toggleFavDropdownMenu() {
+            const menu = document.getElementById('fav-dropdown-menu');
+            if (!menu) return;
+            if (menu.style.display === 'block') { closeFavDropdownMenu(); return; }
+            _renderFavDropdownMenu();
+            menu.style.display = 'block';
+            const chevron = document.getElementById('fav-dropdown-chevron');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            document.addEventListener('click', _onFavDropdownOutsideClick);
+        }
+        function closeFavDropdownMenu() {
+            const menu = document.getElementById('fav-dropdown-menu');
+            if (menu) menu.style.display = 'none';
+            const chevron = document.getElementById('fav-dropdown-chevron');
+            if (chevron) chevron.style.transform = '';
+            document.removeEventListener('click', _onFavDropdownOutsideClick);
+        }
+        function _onFavDropdownOutsideClick(e) {
+            const row = document.getElementById('fav-select-row');
+            if (row && !row.contains(e.target)) closeFavDropdownMenu();
+        }
+
+        /* Seule fonction de suppression, appelée depuis l'icône 🗑 de chaque ligne du
+           menu déroulant. N'exige plus de sélection préalable (contrairement à l'ancien
+           bouton externe `deleteSelectedFavorite`, retiré le même jour) : l'index vient
+           directement de la ligne cliquée. `renderFavoritesDropdown()` referme la boucle
+           en redessinant le `<select>` ET le menu, qui reste ouvert avec la ligne en
+           moins. */
+        function deleteFavoriteByIndex(index) {
+            const fav = favorites[index];
+            if (!fav) return;
+            if (!confirm(`Supprimer « ${fav.name} » des adresses enregistrées ?`)) return;
+            favorites.splice(index, 1);
+            localStorage.setItem('gps_favorites', JSON.stringify(favorites));
+            if (activeFavIndex === index) updateFavPhoneUI('');
+            renderFavoritesDropdown();
+            const statusBox = document.getElementById('status');
+            if (statusBox) { statusBox.innerText = `🗑️ Favori supprimé : ${fav.name}`; statusBox.style.color = '#ff6b6b'; }
         }
 
         async function loadFavoriteAddress(index) {
@@ -1856,20 +1958,6 @@
             setFavDropdownLabel(fav.prenom || fav.name);
         }
 
-        function deleteSelectedFavorite() {
-            // Comme editSelectedFavorite : c'est activeFavIndex qui désigne le contact affiché.
-            const index = activeFavIndex;
-            const statusBox = document.getElementById('status');
-            if (index === null || index === undefined || index === "" || !favorites[index]) {
-                statusBox.innerText = "Sélectionnez d'abord un favori dans la liste."; statusBox.style.color = "#ff6b6b"; return;
-            }
-            const removedName = favorites[index].name;
-            favorites.splice(index, 1);
-            localStorage.setItem('gps_favorites', JSON.stringify(favorites));
-            renderFavoritesDropdown();
-            updateFavPhoneUI(''); // plus aucun contact actif : masque Modifier, remet le libellé
-            statusBox.innerText = `🗑️ Favori supprimé : ${removedName}`; statusBox.style.color = "#ff6b6b";
-        }
         loadFavoritesFromStorage();
 
         // ═══════════════════════════════════════════════════════════

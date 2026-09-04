@@ -51,13 +51,26 @@
             cle: 'abysse', classe: 'pal-abysse',
             nom: 'Abysse', sous: 'Bleu nuit — la plus lisible au volant',
             apercu: { fond: '#101C33', ciel: '#172642', encre: '#EFF6FF', encre2: '#7B93B5', action: '#FFB35C' }
+        },
+        /* ⚠ PALETTE D'ESSAI (04/09/2026) — voir le commentaire du bloc `pal-cyber`
+           dans theme-crepuscule.css. À retirer ICI et là-bas ensemble si elle
+           n'est pas retenue après essai sur l'app réelle. */
+        {
+            cle: 'cyber', classe: 'pal-cyber',
+            nom: 'Cyber Nuit', sous: 'Cyan / magenta — à l’essai',
+            apercu: { fond: '#0A0E17', ciel: '#0F1526', encre: '#EAF2FF', encre2: '#7891BE', action: '#4DE8E0' }
         }
     ];
 
     const CLASSES = THEMES.map(t => t.classe).filter(Boolean);
 
+    /* Abysse est le thème de base du projet (04/09/2026) : un stockage vide ou
+       illisible doit retomber dessus, pas sur Crépuscule qui n'est plus que
+       « le premier de la liste » historique. */
+    const THEME_DEFAUT = 'abysse';
+
     function definitionDe(cle) {
-        return THEMES.find(t => t.cle === cle) || THEMES[0];
+        return THEMES.find(t => t.cle === cle) || definitionDe(THEME_DEFAUT) || THEMES[0];
     }
 
     /* La source de vérité est le STOCKAGE, pas la classe posée sur <body> : lire
@@ -68,7 +81,7 @@
     function themeCourant() {
         let brut = null;
         try { brut = localStorage.getItem(CLE_STOCKAGE); } catch (e) { /* stockage illisible */ }
-        return definitionDe(brut).cle;
+        return definitionDe(brut || THEME_DEFAUT).cle;
     }
 
     function appliquerTheme(cle) {

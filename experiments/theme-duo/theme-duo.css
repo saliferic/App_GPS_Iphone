@@ -1,0 +1,170 @@
+/* ============================================================================
+   THÈME « DUO » — plat, contour noir, couleurs franches (façon Duolingo)
+   ============================================================================
+
+   Reprend l'option « 1b » de l'artboard Claude Design « Interface Boutons
+   Colorés » (2026-09-04) : plaques pleines à bordure noire épaisse et ombre
+   portée plate (pas de flou), au lieu des dégradés bleutés translucides du
+   thème d'origine.
+
+   Surcouche, même parti pris que theme-neo et theme-cartoon : chaque règle est
+   préfixée `body.theme-duo`, inerte tant que <body> ne porte pas la classe.
+   `styles.css` et `theme-crepuscule.css` restent intacts.
+
+   Chargé APRÈS eux dans <head> : il gagne par la cascade à spécificité égale,
+   et par spécificité (`body.theme-duo #ui-panel` = 1,1,1) sur les règles en
+   `#ui-panel` d'origine.
+
+   ⚠ Périmètre volontairement limité à l'onglet ITINÉRAIRE — c'est ce qui a été
+   demandé à tester, pas une refonte de l'app entière (contrairement à la
+   « Projection du style Wii » de la même page Claude Design, non reprise ici).
+   ============================================================================ */
+
+body.theme-duo {
+    /* Les deux teintes de l'artboard, converties d'OKLCH en sRGB (le canevas
+       Design calcule en OKLCH, cette app en sRGB : les valeurs ci-dessous sont
+       le rendu, pas une approximation à l'oeil). */
+    --duo-home:      #0096E1;   /* oklch(0.62 0.19 230) — Go home */
+    --duo-home-d:    #0072A8;   /* oklch(0.42 0.19 230) — son ombre 3D */
+    --duo-work:      #9964E5;   /* oklch(0.62 0.19 300) — Go work */
+    --duo-work-d:    #6D3FAE;   /* oklch(0.42 0.19 300) — son ombre 3D */
+    --duo-go:        #43C251;   /* oklch(0.72 0.19 145) — CTA Démarrer */
+    --duo-go-d:      #2E9A3A;   /* oklch(0.5  0.19 145) — son ombre 3D */
+
+    --duo-ink:       #1A1A1A;   /* bordures + texte, jamais de bleu/violet en texte */
+    --duo-surface:   #FFFFFF;
+    --duo-field:     #F7F7F7;
+    --duo-dim:       #4B4B4B;
+    --duo-mute:      #7A7A7A;
+
+    --duo-r-panel:   26px;
+    --duo-r-field:   999px;   /* pilule, comme les champs de l'artboard */
+    --duo-r-card:    16px;
+    --duo-border:    2px;
+
+    background: #FAFAFA;
+}
+
+/* ---------------------------------------------------------------------------
+   1. LE PANNEAU — feuille blanche, contour noir net (pas de dégradé navy)
+   --------------------------------------------------------------------------- */
+body.theme-duo #ui-panel {
+    background: var(--duo-surface);
+    border: var(--duo-border) solid var(--duo-ink);
+    border-radius: var(--duo-r-panel) var(--duo-r-panel) 0 0;
+    box-shadow: 0 -6px 0 rgba(26, 26, 26, 0.06);
+}
+/* `#ui-panel-title` (un id) l'emporte en spécificité sur `.itin-title` seul,
+   y compris face à `body.theme-crepuscule .itin-title` — il faut reprendre
+   l'id ici aussi, sans quoi la couleur claire d'origine reste invisible sur
+   le fond blanc de ce thème. */
+body.theme-duo .itin-title,
+body.theme-duo #ui-panel-title { color: var(--duo-ink); font-weight: 800; }
+body.theme-duo #compagnon-bulle { color: var(--duo-dim); }
+
+/* ---------------------------------------------------------------------------
+   2. CHAMPS — pilule blanche/grise à contour noir (au lieu du filet bleu 10%)
+   --------------------------------------------------------------------------- */
+body.theme-duo .itin-input-row,
+body.theme-duo .itin-select-row,
+body.theme-duo .fav-select,
+body.theme-duo .input-with-btn input {
+    background: var(--duo-field);
+    border: var(--duo-border) solid var(--duo-ink);
+    border-radius: var(--duo-r-field);
+}
+body.theme-duo .itin-input-row input,
+body.theme-duo .itin-select-row select {
+    color: var(--duo-ink);
+    font-weight: 600;
+}
+body.theme-duo .itin-icon-leading,
+body.theme-duo .itin-select-chevron { color: var(--duo-mute); }
+body.theme-duo label { color: var(--duo-dim); font-weight: 800; letter-spacing: 0.4px; }
+
+/* Boutons ronds mic / pin / clear / edit : petites pastilles plates à ombre 3D,
+   même logique que duoBtn() dans l'artboard (hue par rôle, pas de dégradé). */
+body.theme-duo .itin-icon-btn {
+    background: var(--duo-home);
+    color: white;
+    border: var(--duo-border) solid var(--duo-ink);
+    box-shadow: 0 3px 0 var(--duo-home-d);
+    border-radius: 50%;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+body.theme-duo .itin-icon-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--duo-home-d);
+}
+body.theme-duo .itin-add-btn { background: var(--duo-go); box-shadow: 0 3px 0 var(--duo-go-d); }
+body.theme-duo .itin-add-btn:active { box-shadow: 0 1px 0 var(--duo-go-d); }
+
+/* ---------------------------------------------------------------------------
+   3. GO HOME / GO WORK — les deux plaques pleines de l'artboard
+   --------------------------------------------------------------------------- */
+body.theme-duo .itin-place-btn {
+    border: var(--duo-border) solid var(--duo-ink);
+    border-radius: var(--duo-r-card);
+    box-shadow: 0 4px 0 var(--duo-home-d);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+body.theme-duo .itin-place-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 var(--duo-home-d);
+}
+body.theme-duo #btn-go-home { background: var(--duo-home); box-shadow: 0 4px 0 var(--duo-home-d); }
+body.theme-duo #btn-go-work { background: var(--duo-work); box-shadow: 0 4px 0 var(--duo-work-d); }
+body.theme-duo #btn-go-work:active { box-shadow: 0 1px 0 var(--duo-work-d); }
+
+body.theme-duo .itin-place-btn .itin-free-icon,
+body.theme-duo .itin-place-btn .itin-free-title { color: white; font-weight: 900; }
+body.theme-duo .itin-place-btn .itin-free-sub { color: rgba(255, 255, 255, 0.85); font-weight: 700; }
+body.theme-duo .itin-place-btn.has-place { border-color: var(--duo-ink); }
+
+/* ---------------------------------------------------------------------------
+   4. BASCULE RÉEL / SIMU — piste colorée par l'état, comme duoToggleTrack()
+   --------------------------------------------------------------------------- */
+body.theme-duo .itin-mode-label { color: var(--duo-mute); font-weight: 800; }
+body.theme-duo .itin-mode-label.active { color: var(--duo-ink); }
+body.theme-duo .itin-slider {
+    background: var(--duo-go);
+    border: var(--duo-border) solid var(--duo-ink);
+}
+body.theme-duo #mode-switch:checked + .itin-slider { background: var(--duo-work); }
+
+/* ---------------------------------------------------------------------------
+   5. CTA « DÉMARRER » — le vert franc de duoCta(), pas le corail d'origine
+   --------------------------------------------------------------------------- */
+body.theme-duo .itin-start-btn {
+    background: var(--duo-go);
+    border: var(--duo-border) solid var(--duo-ink);
+    border-radius: var(--duo-r-card);
+    box-shadow: 0 6px 0 var(--duo-go-d);
+    color: white;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+body.theme-duo .itin-start-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 var(--duo-go-d);
+}
+
+/* « Trajet libre » : même gabarit que Go home/work, gris neutre pour rester en
+   retrait du CTA vert et des deux plaques de lieux. */
+body.theme-duo #btn-free {
+    background: var(--duo-field);
+    border: var(--duo-border) solid var(--duo-ink);
+    border-radius: var(--duo-r-card);
+    box-shadow: 0 4px 0 #C7C7C7;
+    color: var(--duo-ink);
+}
+body.theme-duo #btn-free .itin-free-title { color: var(--duo-ink); font-weight: 900; }
+body.theme-duo #btn-free .itin-free-sub { color: var(--duo-mute); }
+
+/* ---------------------------------------------------------------------------
+   6. PIED DE PANNEAU
+   --------------------------------------------------------------------------- */
+body.theme-duo .itin-footer { border-top: var(--duo-border) solid var(--duo-ink); }
+body.theme-duo #panel-gps-status { color: var(--duo-mute); }
+body.theme-duo #panel-gps-status.connected { color: var(--duo-go); }

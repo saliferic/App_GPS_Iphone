@@ -58,6 +58,46 @@
     unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Sora (titres) et Manrope (corps) remplacent Baloo 2 et Nunito (04/09/2026,
+   demande utilisateur — même duo que la planche « Palette Itinéraire »).
+   Même mécanique et même piège évité que ci-dessus : fichiers embarqués sur
+   le disque (téléchargés depuis Google Fonts UNE FOIS, pas chargés depuis
+   fonts.googleapis.com au lancement), sinon panne silencieuse en `file://`
+   et repli sur Roboto dans l'APK. Baloo 2 et Nunito restent déclarés
+   au-dessus : les retirer romprait tout endroit qui les citerait encore. */
+@font-face {
+    font-family: 'Sora';
+    font-style: normal;
+    font-weight: 600 800;
+    font-display: swap;
+    src: url('fonts/sora-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'Sora';
+    font-style: normal;
+    font-weight: 600 800;
+    font-display: swap;
+    src: url('fonts/sora-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('fonts/manrope-latin.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+    font-family: 'Manrope';
+    font-style: normal;
+    font-weight: 400 800;
+    font-display: swap;
+    src: url('fonts/manrope-latin-ext.woff2') format('woff2');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 
 /* === 1. JETONS =============================================================
    Un seul endroit à toucher pour retendre tout le thème. Les couleurs ne
@@ -236,13 +276,66 @@ body.theme-crepuscule.pal-abysse {
     --cr-void-rgb:     6,14,32;
 }
 
+/* --- Cyber Nuit — navy quasi noir, duo cyan / magenta (TEST 04/09/2026) ---
+   ⚠ PALETTE D'ESSAI, pas encore un choix arrêté : ajoutée avec son entrée dans
+   `js/28-theme.js` pour que l'utilisateur la feuillette sur l'app RÉELLE (pas
+   une reconstitution en artifact) avant de décider de la garder. Si elle n'est
+   pas retenue, retirer ce bloc ET son entrée dans THEMES — les deux ensemble,
+   sinon un `gps_theme` resté sur 'cyber' pointerait vers une classe fantôme. */
+body.theme-crepuscule.pal-cyber {
+    --cr-sky-0: #0A0E17;
+    --cr-sky-1: #0F1526;
+    --cr-sky-2: #141B33;
+
+    --cr-ink:   #EAF2FF;
+    --cr-ink-2: #A9C0E6;
+    --cr-ink-3: #7891BE;
+    --cr-ink-4: #536B94;
+
+    /* L'ambre cède la place au cyan électrique : c'est LE ton du thème,
+       partout où l'original mettait de l'orange (focus, accents généraux). */
+    --cr-amber:   #4DE8E0;
+    --cr-amber-2: #8FF5EF;
+    /* Le violet de Babi reste un violet, mais électrique pour rester dans le
+       registre néon plutôt que de jurer avec le cyan et le magenta. */
+    --cr-violet:  #9B6BFF;
+    /* Turquoise = un cyan légèrement plus bleuté que l'ambre, pour que les
+       deux restent distincts l'un de l'autre dans les endroits qui les
+       combinent (barres de progression §7). */
+    --cr-turq:    #5FD4F5;
+    /* Éco/réussite reste vert : c'est le seul endroit où le sens (succès)
+       prime sur le duo cyan/magenta du thème. */
+    --cr-mint:    #7CFF6B;
+    --cr-rose:    #FF8FD1;
+    --cr-danger:  #FF5C6E;
+
+    /* Le bouton « C'est parti » assume le magenta : c'est la pièce la plus
+       vue de l'app, elle doit porter la signature du thème. */
+    --cr-go-1:   #FF4DA6;
+    --cr-go-2:   #B23FFF;
+    --cr-go-rgb: 255,77,166;
+
+    --cr-amber-rgb:    77,232,224;
+    --cr-amber-d-rgb:  34,184,176;
+    --cr-violet-rgb:   155,107,255;
+    --cr-mint-rgb:     124,255,107;
+    --cr-turq-rgb:     95,212,245;
+    --cr-danger-rgb:   255,92,110;
+    --cr-sky-0-rgb:    10,14,23;
+    --cr-sky-1-rgb:    15,21,38;
+    --cr-sky-2-rgb:    20,27,51;
+    --cr-nav-rgb:      16,22,43;
+    --cr-shadow-rgb:   4,6,12;
+    --cr-void-rgb:     7,10,20;
+}
+
 
 /* === 2. BASE ET TYPOGRAPHIE ================================================ */
 
 body.theme-crepuscule,
 body.theme-crepuscule html {
     background: var(--cr-sky-0);
-    font-family: 'Nunito', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Manrope', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: var(--cr-ink);
 }
 
@@ -278,13 +371,21 @@ body.theme-crepuscule #main-bottom-nav * {
 
 /* === 3. LE PANNEAU (la feuille) ============================================ */
 
+/* Liseret lumineux bleu — à L'ESSAI (04/09/2026, demande utilisateur). Sur
+   `--cr-turq` plutôt que `--cr-amber` : c'est le seul jeton qui reste bleu
+   dans LES QUATRE palettes (bleu ciel en Crépuscule/Canopée, teal en Abysse,
+   cyan en Cyber Nuit) — `--cr-amber` aurait donné un liseret orange partout
+   sauf en Cyber Nuit. Si l'essai ne convient pas, revenir à `border: 1px solid
+   var(--cr-line);` et au seul box-shadow d'origine ci-dessous.
+   Épaisseur DOUBLÉE le même jour (bordure 1px→2px, lueur 26px→52px, liseret
+   interne 1px→2px) : le premier essai passait inaperçu. */
 body.theme-crepuscule #ui-panel {
     background: linear-gradient(180deg, rgba(var(--cr-sky-2-rgb),0.94), rgba(var(--cr-sky-0-rgb),0.98));
     -webkit-backdrop-filter: blur(var(--cr-blur));
     backdrop-filter: blur(var(--cr-blur));
-    border: 1px solid var(--cr-line);
+    border: 2px solid rgba(var(--cr-turq-rgb),0.55);
     border-radius: var(--cr-r-sheet);
-    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6);
+    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6), 0 0 52px rgba(var(--cr-turq-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-turq-rgb),0.15);
     color: var(--cr-ink-2);
 }
 
@@ -300,11 +401,11 @@ body.theme-crepuscule #ui-panel {
 body.theme-crepuscule .itin-panel { border-radius: var(--cr-r-sheet); }
 
 /* Le titre : c'était 15px en capitales espacées de 3px, il devient une vraie
-   accroche. C'est le seul endroit du panneau où Baloo 2 apparaît en grand. */
+   accroche. C'est le seul endroit du panneau où Sora apparaît en grand. */
 body.theme-crepuscule .itin-title,
 body.theme-crepuscule #ui-panel-title,
 body.theme-crepuscule #profil-sheet-title {
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-family: 'Sora', 'Manrope', sans-serif;
     font-size: clamp(24px, 7vw, 28px);
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -396,15 +497,28 @@ body.theme-crepuscule .addr-suggestion:hover { background: var(--cr-surface-2); 
    Un seul bouton plein dans tout l'écran : « En route ». Tout le reste est en
    contour ou en surface. C'est ce qui fait qu'on sait où appuyer sans lire. */
 
+/* Taille relevée le 04/09/2026 (demande utilisateur) : « Démarrer » doit
+   dominer visuellement « Trajet libre », qui recule en retour (voir son
+   `#btn-free` dédié dans styles.css). Premier essai raté : le padding et la
+   taille de police avaient été montés dans styles.css, sur `.itin-start-btn`
+   SANS le préfixe `body.theme-crepuscule` — cette règle-ci, plus spécifique,
+   l'emportait sans rien changer visuellement. Le vrai réglage vit ICI. */
 body.theme-crepuscule .itin-start-btn {
     background: linear-gradient(135deg, #FFC578, #FF8F5C);
     border: none;
-    border-radius: 22px;
+    /* Même rayon que Trajet libre (`.itin-free-btn`, styles.css) — demande
+       utilisateur du 04/09/2026 : les deux boutons gardent la même géométrie
+       de coin malgré leur écart de taille. */
+    border-radius: 14px;
     color: #2A1226;
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
-    font-size: 19px;
+    font-family: 'Sora', 'Manrope', sans-serif;
+    font-size: 22px;
     font-weight: 800;
-    padding: clamp(14px, 3.4vw, 17px);
+    /* Épaisseur montée de la moitié retirée à Trajet libre (04/09/2026, demande
+       utilisateur) : 19-23px devient 22,5-27,5px — exactement ce que #btn-free
+       (styles.css) a perdu. Voir son commentaire, les deux réglages vont
+       ensemble. */
+    padding: clamp(22.5px, 5.5vw, 27.5px);
     box-shadow: 0 10px 30px rgba(var(--cr-amber-d-rgb),0.26);
 }
 body.theme-crepuscule .itin-start-btn:hover,
@@ -419,9 +533,11 @@ body.theme-crepuscule .itin-start-btn:disabled { opacity: 0.45; box-shadow: none
    repris de la variante « Wii nuit » comparée en maquette). Règle DÉDIÉE et
    postée APRÈS celle du dessus plutôt qu'une modification en place : la
    déclaration ci-dessus est partagée avec `.modal-validate-btn` (bouton
-   « Valider » du modal de confirmation de trajet), qui garde l'ambre — ce
-   n'est pas le bouton visé ici. Lueur plus marquée que l'ombre d'origine
-   (blur 40px au lieu de 30px) pour le halo vu sur la maquette. */
+   « Valider » du modal de confirmation de trajet). Ce dernier gardait l'ambre
+   à l'origine — ce n'était pas le bouton visé ici — mais porte désormais la
+   MÊME couleur que celui-ci (04/09/2026, demande utilisateur), voir sa propre
+   règle plus bas. Lueur plus marquée que l'ombre d'origine (blur 40px au lieu
+   de 30px) pour le halo vu sur la maquette. */
 body.theme-crepuscule .itin-start-btn {
     background: linear-gradient(135deg, var(--cr-go-1), var(--cr-go-2));
     color: #FFFFFF;
@@ -433,19 +549,47 @@ body.theme-crepuscule .itin-start-btn:active {
     box-shadow: 0 6px 28px rgba(var(--cr-go-rgb),0.55);
 }
 
+/* Même couleur que « Démarrer » — demande utilisateur du 04/09/2026. Avant
+   cette règle, « Lancer le trajet » gardait l'ambre d'origine (voir le
+   commentaire au-dessus de `.itin-start-btn`, qui documentait exactement
+   cette différence comme volontaire — elle ne l'est plus). */
 body.theme-crepuscule .modal-validate-btn {
-    background: linear-gradient(135deg, #FFC578, #FF8F5C);
+    background: linear-gradient(135deg, var(--cr-go-1), var(--cr-go-2));
     border: none;
-    color: #2A1226;
-    box-shadow: 0 10px 30px rgba(var(--cr-amber-d-rgb),0.26);
+    color: #FFFFFF;
+    box-shadow: 0 8px 40px rgba(var(--cr-go-rgb),0.45);
     animation: none;
 }
 body.theme-crepuscule .modal-validate-btn:hover {
-    color: #2A1226;
+    color: #FFFFFF;
     transform: none;
-    box-shadow: 0 6px 20px rgba(var(--cr-amber-d-rgb),0.34);
+    box-shadow: 0 6px 28px rgba(var(--cr-go-rgb),0.55);
 }
 body.theme-crepuscule .modal-validate-btn:disabled { opacity: 0.45; box-shadow: none; }
+
+/* Épingle « choisir sur la carte » du modal de confirmation : bleu pour Départ,
+   rose pour Arrivée — demande utilisateur du 04/09/2026. Les deux boutons
+   partagent `.btn-map` (styles.css, bleu fixe pour les deux lignes) ; ciblés
+   ici par ID pour ne différencier que ces deux-là, sans toucher aux autres
+   usages de `.btn-map` ailleurs dans l'app. */
+body.theme-crepuscule #btn-pick-modal-start {
+    color: var(--cr-amber);
+    background: rgba(var(--cr-amber-rgb),0.08);
+    border-color: rgba(var(--cr-amber-rgb),0.25);
+}
+body.theme-crepuscule #btn-pick-modal-start:hover {
+    background: rgba(var(--cr-amber-rgb),0.14);
+    border-color: rgba(var(--cr-amber-rgb),0.4);
+}
+body.theme-crepuscule #btn-pick-modal-end {
+    color: var(--cr-go-1);
+    background: rgba(var(--cr-go-rgb),0.08);
+    border-color: rgba(var(--cr-go-rgb),0.25);
+}
+body.theme-crepuscule #btn-pick-modal-end:hover {
+    background: rgba(var(--cr-go-rgb),0.14);
+    border-color: rgba(var(--cr-go-rgb),0.4);
+}
 
 /* Actions secondaires : contour seul */
 body.theme-crepuscule .itin-place-btn,
@@ -457,6 +601,14 @@ body.theme-crepuscule .nav-search-modes button {
     font-weight: 700;
 }
 body.theme-crepuscule .itin-place-btn.has-place { border-color: rgba(var(--cr-violet-rgb),0.32); }
+/* Le picto de « Go home »/« Go work » suit l'accent du thème EN PERMANENCE,
+   pas seulement une fois le lieu enregistré (`.has-place`, styles.css) : la
+   loupe de Destination est déjà dans cet accent, et les deux pictos doivent se
+   lire comme une même famille dès le premier lancement (demande utilisateur,
+   04/09/2026). Cette règle l'emporte sur le bleu fixe de `.has-place` grâce à
+   son sélecteur plus spécifique (préfixe `body.theme-crepuscule`) — voulu : un
+   lieu enregistré ne doit pas changer de couleur, seulement d'intensité. */
+body.theme-crepuscule .itin-place-btn .itin-free-icon { color: var(--cr-amber); }
 body.theme-crepuscule .itin-free-title { font-size: 14px; font-weight: 800; color: var(--cr-ink); }
 body.theme-crepuscule .itin-free-sub   { font-size: 11px; font-weight: 600; color: var(--cr-ink-3); }
 
@@ -478,8 +630,12 @@ body.theme-crepuscule .itin-mode-label.active { color: var(--cr-ink); }
 
 /* === 6. BARRE D'ONGLETS ==================================================== */
 
+/* Fond de la barre du bas passé de `--cr-nav-rgb` (#10162B en Cyber Nuit) à
+   `--cr-sky-0-rgb` — à L'ESSAI (04/09/2026, demande utilisateur), qui voulait
+   précisément #0A0E17, la valeur de `--cr-sky-0`. Revenir à `--cr-nav-rgb` si
+   l'essai ne convient pas : c'était le seul changement. */
 body.theme-crepuscule #main-bottom-nav {
-    background: rgba(var(--cr-nav-rgb),0.92);
+    background: rgba(var(--cr-sky-0-rgb),0.92);
     -webkit-backdrop-filter: blur(var(--cr-blur));
     backdrop-filter: blur(var(--cr-blur));
     border-top: 1px solid var(--cr-line);
@@ -488,6 +644,59 @@ body.theme-crepuscule #main-bottom-nav {
 body.theme-crepuscule .main-nav-tab { color: var(--cr-ink-4); }
 body.theme-crepuscule .main-nav-tab span { font-size: 10.5px; font-weight: 700; }
 body.theme-crepuscule .main-nav-tab.active { color: var(--cr-amber); }
+/* Même bleu que l'onglet actif ci-dessus, EXPRÈS (demande utilisateur, 04/09/2026) :
+   `.profil-row-dot` a remplacé les pictogrammes de chaque ligne de la page Profil. */
+body.theme-crepuscule .profil-row-dot {
+    background: var(--cr-amber);
+    box-shadow: 0 0 8px rgba(var(--cr-amber-rgb),0.9), 0 0 16px rgba(var(--cr-amber-rgb),0.45);
+}
+/* Poubelles des menus déroulants (profil ET adresses enregistrées, même classe
+   partagée) en rose plutôt qu'en rouge destructeur ou en bleu — deuxième essai
+   du 04/09/2026 après le bleu, qui se confondait trop avec les pictos.
+   `--cr-go-1` : c'est le rose/magenta exact demandé (celui du bouton
+   Démarrer/Lancer le trajet), pas `--cr-rose` qui est plus pâle.
+   `filter: drop-shadow` et non `box-shadow` : c'est un `<svg>`, pas une forme
+   pleine. */
+body.theme-crepuscule .profile-menu-delete {
+    color: var(--cr-go-1);
+    filter: drop-shadow(0 0 4px rgba(var(--cr-go-rgb),0.7));
+}
+body.theme-crepuscule .profile-menu-delete:hover {
+    color: var(--cr-go-1);
+    filter: drop-shadow(0 0 8px rgba(var(--cr-go-rgb),0.9));
+}
+/* Boutons "+" de création (contact, profil) en vert — même demande. */
+body.theme-crepuscule #btn-add-fav,
+body.theme-crepuscule #btn-show-create-profile {
+    color: var(--cr-mint);
+}
+body.theme-crepuscule #btn-add-fav:hover,
+body.theme-crepuscule #btn-show-create-profile:hover {
+    color: var(--cr-mint);
+    filter: drop-shadow(0 0 6px rgba(var(--cr-mint-rgb),0.6));
+}
+/* Croix de fermeture (`.cpx-fermer`, partagée par la plupart des modales, et
+   la croix dédiée du modal de confirmation de trajet) en rose, même jeton que
+   les poubelles ci-dessus. Recette IDENTIQUE et complète sur les deux
+   sélecteurs (couleur, fond, contour, lueur) — pas seulement `color`/
+   `border-color` — pour que le cercle se voie pareil quel que soit le fond
+   sur lequel il est posé : un contour à la même opacité restait bien visible
+   sur « Animaux sauvés » mais se noyait dans le modal de trajet, plus sombre
+   (constat utilisateur, 04/09/2026). */
+body.theme-crepuscule .cpx-fermer,
+body.theme-crepuscule #trip-modal .modal-close-x {
+    color: var(--cr-go-1);
+    background: rgba(var(--cr-go-rgb),0.10);
+    border-color: rgba(var(--cr-go-rgb),0.6);
+    box-shadow: 0 0 8px rgba(var(--cr-go-rgb),0.35);
+}
+body.theme-crepuscule .cpx-fermer:hover,
+body.theme-crepuscule #trip-modal .modal-close-x:hover {
+    color: var(--cr-go-1);
+    background: rgba(var(--cr-go-rgb),0.18);
+    border-color: rgba(var(--cr-go-rgb),0.75);
+    box-shadow: 0 0 12px rgba(var(--cr-go-rgb),0.5);
+}
 body.theme-crepuscule .main-nav-tab.active::before {
     background: var(--cr-amber);
     box-shadow: none;   /* le halo bleu d'origine coûtait un repaint permanent */
@@ -537,13 +746,17 @@ body.theme-crepuscule .carnet-hero #weekly-goals-timer-panel {
     /* ⚠ CE DÉCALAGE EST MESURÉ, PAS DEVINÉ, et ce n'est pas de l'espacement.
        L'en-tête aligne ses deux colonnes par le haut (`align-items: flex-start`), ce
        qui posait la pastille à la hauteur du chapeau « Le carnet de … ». Elle doit
-       être centrée sur la PREMIÈRE LIGNE du titre. Mesuré sur un écran de 412 px :
+       être centrée sur la PREMIÈRE LIGNE du titre. Mesuré sur un écran de 412 px,
+       avec 'Baloo 2' (titre) et 'Nunito' (chapeau), dont les métriques `line-height:
+       normal` valaient 1,6 et 1,36 — pas le 1,2 qu'on suppose d'habitude :
          · bloc du chapeau .......... 18 px (17 px de ligne + 1 px de marge basse)
          · ligne de titre 45 px, pastille 36,8 px → (45 − 36,8) / 2 = 4,1 px
-       soit 22 px. Un `calc()` sur des `em` tomberait à côté : 'Baloo 2' (titre) et
-       'Nunito' (chapeau) ont des métriques hautes, leur `line-height: normal` vaut
-       1,6 et 1,36 — pas le 1,2 qu'on suppose d'habitude. À re-mesurer si l'une des
-       deux tailles de police change. */
+       soit 22 px.
+       ⚠ MESURE PÉRIMÉE DEPUIS LE PASSAGE À SORA/MANROPE (04/09/2026) : leurs
+       métriques `line-height: normal` diffèrent de celles de Baloo 2/Nunito, donc
+       les 18 px et 45 px ci-dessus ne sont plus garantis exacts. Le calcul reste
+       juste dans son PRINCIPE (centrer sur la première ligne, pas sur tout l'en-tête)
+       mais le nombre 22px est à re-mesurer sur l'app réelle avant de le corriger. */
     margin-top: 22px;
 }
 body.theme-crepuscule .carnet-hero-text { min-width: 0; }
@@ -715,7 +928,7 @@ body.theme-crepuscule #compagnon-carte-kicker {
     font-size: 12px; font-weight: 700; color: var(--cr-ink-2);
 }
 body.theme-crepuscule #compagnon-carte-etape {
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-family: 'Sora', 'Manrope', sans-serif;
     font-size: clamp(26px, 8vw, 32px);
     font-weight: 800; letter-spacing: -0.015em; line-height: 1.05;
     margin: 2px 0 3px;
@@ -748,7 +961,7 @@ body.theme-crepuscule .profil-stat {
 }
 body.theme-crepuscule .profil-stat.eco { border-color: rgba(var(--cr-mint-rgb),0.25); }
 body.theme-crepuscule .profil-stat-val {
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-family: 'Sora', 'Manrope', sans-serif;
     font-size: 24px; font-weight: 700; line-height: 1.15;
     letter-spacing: -0.01em; color: var(--cr-ink);
     font-variant-numeric: tabular-nums;
@@ -876,13 +1089,23 @@ body.theme-crepuscule #nav-panel-overlay-body {
     box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7);
     color: var(--cr-ink-2);
 }
+/* Même liseret que le panneau Itinéraire (`#ui-panel`, § 3 plus haut) — demande
+   utilisateur du 04/09/2026, « Confirmer le trajet » SEUL parmi les modales du
+   bloc du dessus (pas `#exit-confirm-box` ni les autres, qui gardent le simple
+   contour partagé). Règle DÉDIÉE postée après, pas de modification en place :
+   sinon toutes les modales listées ci-dessus hériteraient du liseret. */
+body.theme-crepuscule #trip-modal {
+    border: 2px solid rgba(var(--cr-turq-rgb),0.55);
+    box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7), 0 0 52px rgba(var(--cr-turq-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-turq-rgb),0.15);
+}
+
 body.theme-crepuscule #exit-confirm-box h3,
 body.theme-crepuscule #stop-course-box h3,
 body.theme-crepuscule #trip-modal h3,
 body.theme-crepuscule #stats-modal-header h2,
 body.theme-crepuscule #nav-panel-overlay-title,
 body.theme-crepuscule #export-json-title {
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-family: 'Sora', 'Manrope', sans-serif;
     font-size: 21px; font-weight: 700;
     text-transform: none; letter-spacing: -0.01em;
     color: var(--cr-ink);
@@ -1024,7 +1247,7 @@ body.theme-crepuscule .cl-legende {
     pointer-events: none;
 }
 body.theme-crepuscule .cl-titre {
-    font-family: 'Baloo 2', 'Nunito', sans-serif;
+    font-family: 'Sora', 'Manrope', sans-serif;
     font-size: 17px; font-weight: 700; line-height: 1.1; color: var(--cr-ink);
 }
 body.theme-crepuscule .cl-sous { font-size: 11.5px; font-weight: 600; color: #A9F0C8; }
@@ -1143,7 +1366,7 @@ body.theme-crepuscule #parking-scan-sheet::before {
 
 /* Titre : même bascule que partout ailleurs dans le thème — capitales et
    espacement d'origine retirés, hiérarchie reprise par le poids seul (le
-   corps de la feuille reste dense, donc pas de passage à Baloo 2 en grand
+   corps de la feuille reste dense, donc pas de passage à Sora en grand
    comme les titres de page : ce serait trop lourd pour un simple en-tête
    de tiroir). */
 body.theme-crepuscule #gas-scan-title,

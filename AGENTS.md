@@ -1150,6 +1150,19 @@ Règle : styler un marqueur en **taille, couleur, `border-radius`, `pointer-even
 
 Sept animaux dessinés (Babi, Bulle, Titi, Zola, Kiri, Raya, **Sam** la renarde, arrivée le 25/08/2026), deux annoncés en silhouette grise (Nima, Pilou). Un compagnon, c'est **des dessins et des phrases, rien d'autre** : aucune règle de jeu ne vit dans ce module (la vie est calculée dans js/00, stockée et affichée par js/24).
 
+**Pilou (chien) est le compagnon de BASE de l'app depuis le 04/09/2026** (demande
+utilisateur) : un lancement sans réglage préalable — pas d'entrée `gps_compagnon` en
+stockage, ou stockage illisible — doit afficher Pilou, pas Babi. Trois replis à tenir
+synchronisés si un autre compagnon devient un jour le défaut :
+
+- `js/22-compagnon.js` — `let courant = 'pilou'` (repli initial avant lecture du stockage)
+- `js/12-gamification.js` — `compagnonCourant()` (repli si `window.Compagnon` est absent)
+- `js/24-vie-compagnon.js` — `cleCourante()` (même repli, côté jauge de vie)
+
+Le rang de Pilou en tête de `COMPAGNONS` (voir commentaire du 03/09/2026 à cet endroit)
+n'a pas changé — c'est l'affichage « nouveau lancement, rien en stockage » qui a été
+corrigé pour le rejoindre.
+
 **Ajouter un animal, c'est neuf entrées et pas une de moins** — en oublier une ne casse rien bruyamment, ça produit un compagnon à moitié là :
 
 | Où | Quoi |
@@ -1390,6 +1403,21 @@ classe en spécificité, donc les blocs `pal-` l'emportent sans `!important`.
 **Crépuscule n'a volontairement pas de classe `pal-`** : ses valeurs *sont* le bloc par
 défaut. Lui en donner une aurait signifié recopier les vingt-cinq jetons une deuxième fois,
 donc les voir diverger au premier réglage.
+
+### Le thème de BASE de l'app est Abysse, pas Crépuscule (04/09/2026)
+
+Demande utilisateur : un lancement sans réglage préalable (premier lancement, stockage vide
+ou illisible) doit peindre Abysse, pas Crépuscule. Deux repères à tenir synchronisés :
+
+- Le script d'amorçage en tête de `<body>` (`index.html`) pose `pal-abysse` quand
+  `localStorage.getItem('gps_theme')` est vide OU illisible — avant, seule une valeur non
+  vide *et différente de* `'crepuscule'` posait une classe `pal-`, donc un stockage vide
+  retombait sur Crépuscule par construction du code, pas par choix.
+- `js/28-theme.js` porte désormais une constante `THEME_DEFAUT = 'abysse'`, utilisée par
+  `definitionDe()` (repli si la clé stockée est inconnue) et par `themeCourant()` (repli si
+  le stockage est vide). Crépuscule reste dans `THEMES` et reste choisissable dans le
+  sélecteur — ce n'est que le *défaut au silence* qui a changé, pas le statut d'origine du
+  thème (toujours celui qui n'a pas de classe `pal-`, voir plus haut).
 
 ### ⚠ La règle qui coûte cher : pas de couleur translucide en clair
 

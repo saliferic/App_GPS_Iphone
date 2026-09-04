@@ -81,7 +81,7 @@
         try {
             if (window.Compagnon && typeof Compagnon.cle === 'function') return Compagnon.cle();
         } catch (e) { /* module absent : repli */ }
-        return 'babi';
+        return 'pilou';
     }
 
     /* `majVie(v, 0)` ne fait rien avancer mais BORNE la valeur : c'est le

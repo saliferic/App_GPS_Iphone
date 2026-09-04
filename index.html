@@ -105,13 +105,15 @@
      La CSP du projet ne déclare que `connect-src` : le script en clair passe.
      La table des thèmes reste dans js/28 — ici on ne fait que RELIRE le choix,
      sans le valider : une valeur inconnue pose une classe qui n'existe pas
-     dans le CSS, ce qui donne exactement Crépuscule. js/28 fera le ménage. -->
+     dans le CSS, ce qui donne exactement Abysse (le défaut du projet depuis
+     le 04/09/2026). js/28 fera le ménage. -->
 <script>
     try {
-        var _pal = localStorage.getItem('gps_theme');
-        if (_pal && _pal !== 'crepuscule') document.body.classList.add('pal-' + _pal);
-    } catch (e) { /* stockage illisible : on reste sur Crépuscule, c'est le défaut */ }
+        var _pal = localStorage.getItem('gps_theme') || 'abysse';
+        if (_pal !== 'crepuscule') document.body.classList.add('pal-' + _pal);
+    } catch (e) { document.body.classList.add('pal-abysse'); /* stockage illisible : Abysse reste le défaut */ }
 </script>
+
 
     <!-- ═══════════════════════════════════════════════════════════════════
          INTRO ANIMÉE — BLOC 2/3 (HTML)
@@ -646,7 +648,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
                 </span>
                 <select id="nav-fav-dropdown" onchange="loadFavoriteAddressForNav(this.value)">
-                    <option value="">📋 Mes adresses (aucune)</option>
+                    <option value="">Mes adresses (aucune)</option>
                 </select>
                 <span class="itin-select-chevron">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -867,14 +869,23 @@
 
         <div class="itin-section" id="itin-saved-section">
             <label>Adresses enregistrées</label>
-            <div class="itin-select-row">
+            <!-- `<select>` NATIF CONSERVÉ MAIS MASQUÉ, même mécanique que le sélecteur de
+                 profil (js/13, `#profile-dropdown`) : `renderFavoritesDropdown()` continue
+                 d'y écrire ses <option>, il reste la seule source de vérité. Le menu
+                 personnalisé ci-dessous n'ajoute qu'une présentation — celle qui permet à
+                 chaque ligne de porter sa PROPRE suppression (demande utilisateur,
+                 04/09/2026, même geste que pour les profils). -->
+            <div class="itin-select-row" id="fav-select-row" style="position:relative;">
                 <span class="itin-icon-leading">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
                 </span>
-                <select id="fav-dropdown" onchange="loadFavoriteAddress(this.value)">
+                <select id="fav-dropdown" onchange="loadFavoriteAddress(this.value)" style="display:none;">
                     <option value="">Mes adresses (aucune)</option>
                 </select>
-                <span class="itin-select-chevron">
+                <button type="button" id="fav-dropdown-trigger" class="itin-select-fake" onclick="toggleFavDropdownMenu()">
+                    <span id="fav-dropdown-trigger-label">Mes adresses (aucune)</span>
+                </button>
+                <span class="itin-select-chevron" id="fav-dropdown-chevron">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </span>
                 <button class="itin-icon-btn" id="btn-edit-fav" onclick="editSelectedFavorite()" title="Modifier ce contact" style="display:none;">
@@ -883,10 +894,11 @@
                 <button class="itin-icon-btn itin-add-btn" id="btn-add-fav" onclick="toggleCreateContactForm(true)" title="Créer un contact">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 </button>
-                <span class="itin-icon-sep" id="btn-add-fav-sep"></span>
-                <button class="itin-icon-btn" onclick="deleteSelectedFavorite()" title="Supprimer ce favori">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                </button>
+                <!-- Le trash externe qui vivait ici est retiré (04/09/2026, demande
+                     utilisateur) : chaque ligne du menu déroulant porte désormais sa propre
+                     suppression, un doublon à côté du sélecteur n'a plus sa place — même
+                     décision que pour le sélecteur de profil le 22/08/2026. -->
+                <div class="addr-suggestions" id="fav-dropdown-menu"></div>
             </div>
 
             <!-- Formulaire contact : ouvert par le bouton "+" de la ligne ci-dessus -->
@@ -1169,7 +1181,7 @@
                 <label>Profil sélectionné</label>
                 <div class="itin-select-row" id="profile-select-row" style="position:relative;">
                     <span class="itin-icon-leading">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                        <span class="profil-row-dot" aria-hidden="true"></span>
                     </span>
                     <!-- `<select>` NATIF CONSERVÉ MAIS MASQUÉ : renderProfilesDropdown()
                          (js/13) continue d'y écrire ses <option>, et selectProfile()
@@ -1236,7 +1248,7 @@
             <div class="profil-section-title" id="profil-group-title-animaux">Vos animaux</div>
             <div id="animaux-a-sauver-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openCompagnonPicker()">
-                    <span class="profil-row-ico" style="color:var(--cr-amber,#FFB35C);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16"/><path d="M4 20h16"/><path d="M7 4v16M12 4v16M17 4v16"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Animaux que vous pouvez sauver</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1256,7 +1268,7 @@
                  #trip-history-body plus bas. -->
             <div id="animaux-sauves-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('animaux')">
-                    <span class="profil-row-ico" style="color:var(--cr-mint,#6FE3A0);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5c-3.4 0-5.5-2-5.5-4.2 0-2 1.9-3.1 3-4.3 1-1.1 1.3-2.5 2.5-2.5s1.5 1.4 2.5 2.5c1.1 1.2 3 2.3 3 4.3 0 2.2-2.1 4.2-5.5 4.2Z"/><circle cx="5.6" cy="10.4" r="2.1"/><circle cx="18.4" cy="10.4" r="2.1"/><circle cx="9.4" cy="5.6" r="2.1"/><circle cx="14.6" cy="5.6" r="2.1"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Animaux sauvés</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1276,7 +1288,7 @@
                  vient du réseau et n'existe pas dans le panneau. -->
             <div id="classement-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openClassementModal()">
-                    <span class="profil-row-ico" style="color:var(--cr-turq,#7FD8E8);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21V11M16 21V7M12 21V3"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Classement des animaux sauvés</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1310,7 +1322,7 @@
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('trips')">
                     <!-- Le compteur de trajets qui vivait ici a été retiré (22/08/2026) :
                          il n'apprenait rien qu'on ne lise en ouvrant la page. -->
-                    <span class="profil-row-ico" style="color:var(--cr-mint,#6FE3A0);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v4M6 21v-4M6 7c6 0 6 10 12 10"/><circle cx="6" cy="9" r="2.3"/><circle cx="18" cy="17" r="2.3"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Historique des trajets</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1324,7 +1336,7 @@
                  révélé une fois déplacé dans la page pleine (voir openProfilSheet). -->
             <div id="co2-panel-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('co2')">
-                    <span class="profil-row-ico" style="color:var(--cr-mint,#6FE3A0);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21c0-8 4-14 14-16-1 10-7 14-14 16Z"/><path d="M5 21c2-3 4-6 6-10"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Empreinte CO2</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1341,7 +1353,7 @@
                  est inchangé : les classes portent exactement les mêmes valeurs. -->
             <div id="vehicle-panel-section" class="profil-row">
                 <button type="button" onclick="openProfilSheet('vehicle')" id="vehicle-panel-toggle" class="profil-row-btn">
-                    <span class="profil-row-ico" style="color:var(--cr-violet,#A88BFF);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14.5 4.7 9a2 2 0 0 1 1.9-1.4h10.8A2 2 0 0 1 19.3 9L21 14.5v4a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M6.5 14h.01M17.5 14h.01"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Mon véhicule</span>
                     <span id="vehicle-panel-chevron" class="profil-row-arrow">›</span>
                 </button>
@@ -1433,7 +1445,7 @@
             <!-- === AIDE À LA CONDUITE === -->
             <div id="aide-conduite-section" class="profil-row">
                 <button type="button" id="aide-conduite-toggle" class="profil-row-btn" onclick="openProfilSheet('aide')">
-                    <span class="profil-row-ico" style="color:var(--cr-ink-2,#B9A9D8);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8V3.5M9.3 14.3 5.2 18M14.7 14.3 18.8 18"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span>Aide à la conduite</span>
                     <span class="ac-arrow">›</span>
                 </button>
@@ -1515,7 +1527,7 @@
                  — « Thème » ici, « mode jour/nuit » là-bas. -->
             <div id="theme-section" class="profil-row">
                 <button type="button" class="profil-row-btn" onclick="openProfilSheet('theme')">
-                    <span class="profil-row-ico" style="color:var(--cr-amber,#FFB35C);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.5-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.1-4-7.6-9-7.6z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor" stroke="none"/><circle cx="11" cy="7.2" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.6" cy="8.6" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Thème</span>
                     <span class="profil-row-arrow">›</span>
                 </button>
@@ -1532,7 +1544,7 @@
                  `transition` inline : toggleBackupSection() lui pose un `transform`. -->
             <div id="backup-section" class="profil-row">
                 <button type="button" onclick="toggleBackupSection()" class="profil-row-btn">
-                    <span class="profil-row-ico" style="color:var(--cr-ink-2,#B9A9D8);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6"/><path d="M12 3v11M8 10.5l4 4 4-4"/></svg></span>
+                    <span class="profil-row-ico profil-row-dot" aria-hidden="true"></span>
                     <span class="profil-row-label">Sauvegarde profil</span>
                     <span id="backup-chevron" class="profil-row-arrow" style="transition:transform 0.3s ease;">▼</span>
                 </button>
@@ -1940,7 +1952,7 @@
     <div id="trip-modal-overlay" onclick="event.stopPropagation();">
         <div id="trip-modal">
             <div class="trip-modal-handle" id="trip-modal-handle">
-                <h3>Confirmer le trajet</h3>
+                <h3>Option du trajet</h3>
                 <button class="modal-close-x" onclick="closeTripModal(true)">✕</button>
             </div>
             <div class="trip-modal-body">

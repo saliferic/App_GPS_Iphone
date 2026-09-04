@@ -1297,13 +1297,15 @@
         </svg>`;
     }
 
-    let courant = 'babi';
+    /* Pilou (chien) est le compagnon de base du projet (04/09/2026) : un
+       stockage vide ou illisible doit retomber sur lui, pas sur Babi. */
+    let courant = 'pilou';
     let etatCourant = 'repos';
 
     try {
         const choisi = localStorage.getItem('gps_compagnon');
         if (choisi && COMPAGNONS[choisi]) courant = choisi;
-    } catch (e) { /* stockage indisponible : on garde Babi */ }
+    } catch (e) { /* stockage indisponible : on garde Pilou */ }
 
     /* Change de compagnon et repeint TOUT ce qui en affiche un. Rendre la main
        sans repeindre laisserait l'ancien animal sur l'accueil jusqu'au prochain
