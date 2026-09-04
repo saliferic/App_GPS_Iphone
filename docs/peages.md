@@ -186,6 +186,54 @@ externe. Priorité aux réseaux non mesurés : Sanef, Cofiroute, Escota, dont le
 
 ### Ce qui reste ouvert
 
+- **⚠ NOUVEAU CAS NON COUVERT (04/09/2026) — plusieurs entrées COURTES sur le même
+  réseau.** Toulouse → Saint-Gaudens (A64), relevé `🔬 peages` sur l'appareil :
+  `sections: "asf:30.2, asf:8.5"`, `kmPayants: 38.8km` → app **13,31 €** contre
+  **6,10 €** chez ViaMichelin, soit **+118 %**. Distances vérifiées concordantes
+  (105 km au total dans les deux outils) — l'écart est bien dans le calcul, pas
+  dans le tracé. L'utilisateur confirme qu'il s'agit réellement de DEUX passages
+  en barrière distincts (pas un artefact de `TOLL_SECTION_GAP_KM` à corriger) :
+  30,2 km puis un tronçon gratuit de plus de 25 km (la voie expresse gratuite
+  côté Muret/Carbonne), puis 8,5 km payants.
+  **Les six trajets de calibration n'ont JAMAIS testé ce cas** : ils sont tous
+  longs (155-850 km) et à une seule entrée par réseau. Ici, les deux frais fixes
+  `TOLL_ENTRY_FEE` (2 × 4,65 € = 9,30 €) dépassent à eux seuls le prix RÉEL du
+  trajet entier avant même d'ajouter le tarif au km — signe que le modèle affine,
+  calé sur des entrées longues où le frais fixe est une part marginale du total,
+  ne tient plus quand l'entrée facturée est courte.
+  **Hypothèse à vérifier, pas encore mesurée** : ce tronçon de l'A64 utilise
+  peut-être un système OUVERT (barrières à tarif plat, indépendant de la
+  distance parcourue) plutôt que le système FERMÉ (ticket entrée/sortie) que le
+  modèle affine suppose partout. Un système ouvert appellerait un calcul
+  différent (tarif fixe par barrière franchie), pas une recalibration des deux
+  constantes actuelles — recalibrer sur ce seul point casserait les six trajets
+  déjà validés, qui sont tous fermés. **Ne pas corriger sans d'autres mesures
+  réelles de trajets à entrées courtes/multiples** — c'est le geste qui a déjà
+  échoué trois fois dans ce fichier (voir le point ouvert Perpignan → Paris
+  ci-dessous, même leçon).
+
+- **⚠ DEUXIÈME RELEVÉ (04/09/2026), ÉCART EN SENS INVERSE — SAPN sous-estimé.**
+  Paris → Le Havre, relevé `🔬 peages` : `sections: "default:16.2, sapn:66.3"`,
+  `kmPayants: 82.5km` → app **16,47 €** contre **24,60 €** chez ViaMichelin
+  (distances concordantes : 195,5 km app / 197 km VM), soit **−33 %**. Deux
+  causes possibles, non séparables sur CE trajet :
+  1. `TOLL_NETWORK_FACTOR.sapn = 0.93` n'a **jamais été vérifié** (déduit d'un
+     barème publié, comme tous les facteurs sauf ASF) — l'A13 a la réputation
+     d'être un réseau cher au km, un facteur > 1 est plausible.
+  2. Les 16,2 km en réseau `default` (facteur générique 0,91) trahissent un
+     numéro d'autoroute absent de `TOLL_MOTORWAY_NETWORK` — probablement une
+     bretelle proche de Paris (A14/A115 ou similaire), à identifier.
+  **Ne pas corriger `sapn` sur ce relevé** : le mélange `default`+`sapn`
+  empêche d'isoler le facteur SAPN proprement, contrairement à la méthode qui a
+  servi à caler ASF (« le trajet qui a permis de calibrer est celui qui n'a
+  qu'un seul itinéraire possible », plus haut). Un trajet 100 % SAPN (ex. Paris
+  → Caen sans détour) donnerait une mesure exploitable pour corriger CE seul
+  facteur.
+  **Les deux relevés du 04/09/2026 tirent en sens opposés** (ASF +118 % sur
+  entrées courtes, SAPN −33 % ici) : ce n'est pas un bug unique à corriger,
+  mais deux limites distinctes du modèle affine, chacune à confirmer par
+  d'autres mesures avant tout ajustement de constante.
+
 - **Le repli par `ref` n'est plus jamais exercé en production** — aucune réponse Mapbox
   observée n'est dépourvue de `classes`. Il reste parce qu'une réponse amputée
   afficherait sinon « Aucun péage » sur un Paris-Marseille, en silence. Ses trois bugs
