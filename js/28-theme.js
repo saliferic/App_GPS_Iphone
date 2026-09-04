@@ -48,26 +48,71 @@
             apercu: { fond: '#101F19', ciel: '#162C23', encre: '#EFFFF6', encre2: '#7BAE92', action: '#FFBC63' }
         },
         {
-            cle: 'abysse', classe: 'pal-abysse',
-            nom: 'Abysse', sous: 'Bleu nuit — la plus lisible au volant',
-            apercu: { fond: '#101C33', ciel: '#172642', encre: '#EFF6FF', encre2: '#7B93B5', action: '#FFB35C' }
-        },
-        /* ⚠ PALETTE D'ESSAI (04/09/2026) — voir le commentaire du bloc `pal-cyber`
-           dans theme-crepuscule.css. À retirer ICI et là-bas ensemble si elle
-           n'est pas retenue après essai sur l'app réelle. */
-        {
             cle: 'cyber', classe: 'pal-cyber',
-            nom: 'Cyber Nuit', sous: 'Cyan / magenta — à l’essai',
+            nom: 'Cyber Nuit', sous: 'Cyan / magenta',
             apercu: { fond: '#0A0E17', ciel: '#0F1526', encre: '#EAF2FF', encre2: '#7891BE', action: '#4DE8E0' }
+        },
+        /* Douze thèmes ajoutés d'un coup (04/09/2026) : huit saisons/paysages
+           (planche « Palette Quatre Saisons ») et quatre repris du premier
+           comparatif de teintes (« Palette Itinéraire »), Cyber Nuit excepté
+           puisqu'il était déjà là. Même bloc `pal-` par thème dans
+           theme-crepuscule.css, même mécanique que Canopée/Cyber Nuit.
+           ⚠ Nocturne Cuivrée, Émeraude Profonde, Graphite Corail et Encre Prune
+           (les quatre repris de « Palette Itinéraire ») ont été retirés le
+           05/09/2026 (demande utilisateur) — ne pas les rebrancher sans qu'on
+           le redemande. */
+        {
+            cle: 'mousse-cafe', classe: 'pal-mousse-cafe',
+            nom: 'Mousse Café', sous: 'Tendance — brun torréfié',
+            apercu: { fond: '#171210', ciel: '#221A15', encre: '#F5ECE2', encre2: '#93806E', action: '#C08552' }
+        },
+        {
+            cle: 'dunes-du-soir', classe: 'pal-dunes-du-soir',
+            nom: 'Dunes du Soir', sous: 'Désert — terracotta & turquoise',
+            apercu: { fond: '#1A140F', ciel: '#241B12', encre: '#F7ECDD', encre2: '#96795C', action: '#E2703A' }
+        },
+        {
+            cle: 'sous-bois', classe: 'pal-sous-bois',
+            nom: 'Sous-Bois', sous: 'Forêt — cuivre & fougère',
+            apercu: { fond: '#0D1912', ciel: '#132419', encre: '#EAF5EC', encre2: '#6E8F76', action: '#D98A4A' }
+        },
+        {
+            cle: 'lagune-nocturne', classe: 'pal-lagune-nocturne',
+            nom: 'Lagune Nocturne', sous: 'Plage — corail & écume',
+            apercu: { fond: '#0A1C22', ciel: '#0F2830', encre: '#E7F7F7', encre2: '#5F8C8C', action: '#FF7F66' }
+        },
+        {
+            cle: 'aube-fleurie', classe: 'pal-aube-fleurie',
+            nom: 'Aube Fleurie', sous: 'Printemps — fleur de cerisier',
+            apercu: { fond: '#191620', ciel: '#221D2C', encre: '#F6F0FA', encre2: '#8F7DA3', action: '#F2879F' }
+        },
+        {
+            cle: 'sable-chaud', classe: 'pal-sable-chaud',
+            nom: 'Sable Chaud', sous: 'Été — golden hour',
+            apercu: { fond: '#0E1826', ciel: '#132134', encre: '#F2F6FC', encre2: '#6E82A3', action: '#FFC857' }
+        },
+        {
+            cle: 'givre-polaire', classe: 'pal-givre-polaire',
+            nom: 'Givre Polaire', sous: 'Hiver — cyan givre',
+            apercu: { fond: '#10161D', ciel: '#161F29', encre: '#EAF2FA', encre2: '#647A94', action: '#6FD3E8' }
+        },
+        /* Fosse Abyssale ajouté le 05/09/2026 (demande utilisateur) : un aquatique/
+           océan, absent des deux planches de comparaison précédentes. Même
+           mécanique `pal-` dans theme-crepuscule.css. Son binôme du même jour,
+           Cœur de Jungle (Amazonie), a été retiré le 05/09/2026 également —
+           l'utilisateur ne l'aimait pas. */
+        {
+            cle: 'fosse-abyssale', classe: 'pal-fosse-abyssale',
+            nom: 'Fosse Abyssale', sous: 'Océan — bioluminescence des grands fonds',
+            apercu: { fond: '#050E14', ciel: '#081620', encre: '#E4F5F7', encre2: '#5E8A93', action: '#3DF2C4' }
         }
     ];
 
     const CLASSES = THEMES.map(t => t.classe).filter(Boolean);
 
-    /* Abysse est le thème de base du projet (04/09/2026) : un stockage vide ou
-       illisible doit retomber dessus, pas sur Crépuscule qui n'est plus que
-       « le premier de la liste » historique. */
-    const THEME_DEFAUT = 'abysse';
+    /* Cyber Nuit est le thème de base du projet (04/09/2026, remplace Abysse) :
+       un stockage vide ou illisible doit retomber dessus. */
+    const THEME_DEFAUT = 'cyber';
 
     function definitionDe(cle) {
         return THEMES.find(t => t.cle === cle) || definitionDe(THEME_DEFAUT) || THEMES[0];

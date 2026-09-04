@@ -278,7 +278,6 @@
                     renderDriversUI();
                     renderCarteCompagnon();
                     renderWeeklyGoalsPanel();
-                    updateWeeklyGoalsButton();
 
                     /* Recharger les réglages carte via le chemin commun. Cet endroit posait
                        en dur deux styles d'un AUTRE compte Mapbox (`saliftravelling/…`),

@@ -1886,7 +1886,6 @@
             // Recharger badges et objectifs liés au nouveau profil actif
             renderCarteCompagnon();
             renderWeeklyGoalsPanel();
-            updateWeeklyGoalsButton();
             // Rafraîchir la galerie (re-render si ouverte, sinon juste le compteur)
             /* La page « Animaux sauvés » dépend du profil : un autre joueur n'a pas
                sauvé les mêmes bêtes. Elle ne se repeint que si elle est ouverte. */
@@ -1972,7 +1971,6 @@
             } catch (e) { logAppError('profil/premierLancement', e); }
         }, 2900);
         // Initialiser badges et objectifs APRÈS chargement des profils (activeProfileId connu)
-        updateWeeklyGoalsButton();
         renderCarteCompagnon();
 
         async function requestWakeLock(dejaRetente) {

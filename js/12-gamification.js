@@ -1,7 +1,6 @@
         // === OBJECTIFS HEBDOMADAIRES ===
         // 3 objectifs aléatoires générés chaque lundi, stockés en localStorage.
         // Progression mise à jour à chaque fin de trajet.
-        // Bonus : coffre Légendaire garanti si les 3 sont atteints avant dimanche soir.
 
         /* ⚠ AUCUNE MISSION COMPTÉE EN NOMBRE DE TRAJETS — retiré le 18/08/2026, à ne pas
            réintroduire. Quatre gabarits existaient (trips_long, trips_total, perfect_runs,
@@ -271,7 +270,7 @@
                 } catch (e) { if (DEBUG) console.warn("[loadWeeklyGoals] exception ignorée :", e); }
             }
             // Nouvelle semaine ou nouveau profil → générer de nouveaux objectifs
-            const data = { week: currentWeek, goals: generateWeeklyGoals(), bonusClaimed: false };
+            const data = { week: currentWeek, goals: generateWeeklyGoals() };
             localStorage.setItem(key, JSON.stringify(data));
             return data;
         }
@@ -343,25 +342,15 @@
             saveWeeklyGoals(data);
             /* Le parcours se met à jour ici et pas seulement à l'affichage du
                carnet : la fenêtre « Qui sauvons-nous ? » doit dire vrai même si
-               l'utilisateur ne rouvre jamais l'onglet Objectifs. */
+               l'utilisateur ne rouvre jamais l'onglet Objectifs.
+               ⚠ RIEN N'EST « ATTRIBUÉ » EN PLUS ICI DEPUIS LE RETRAIT DES BADGES
+               (27/08/2026) — et ce modèle-ci n'a plus de bonus de fin de semaine non plus
+               (04/09/2026, demande utilisateur : « il n'y a plus de bonus dans ce modèle-ci,
+               le bonus était pour l'ancien »). La récompense d'une mission bouclée est
+               l'ÉTAPE de parcours que synchroniserParcours() vient d'écrire — l'animal
+               avance vers sa liberté, il n'y a rien d'autre à décerner ni à réclamer. */
             synchroniserParcours();
-            updateWeeklyGoalsButton();
-            /* ⚠ RIEN N'EST « ATTRIBUÉ » ICI DEPUIS LE RETRAIT DES BADGES (27/08/2026).
-               La semaine complétée déclenchait `awardWeeklyBadge()`, qui posait une
-               modale « Catégorie Bronze débloquée ! » par-dessus la fenêtre d'arrivée.
-               La récompense d'une mission bouclée est désormais l'ÉTAPE de parcours que
-               `synchroniserParcours()` vient d'écrire deux lignes plus haut — l'animal
-               avance vers sa liberté, il n'y a pas de médaille à décerner en plus. */
-            if (allGoalsCompleted(data) && !data.bonusClaimed) {
-                data.bonusClaimed = true;
-                saveWeeklyGoals(data);
-                renderCarteCompagnon();
-            }
             return data;
-        }
-
-        function allGoalsCompleted(data) {
-            return data.goals.every(g => g.progress >= g.target);
         }
 
         /* ═══ SUIVI CONTINU DE LA MISSION 'vie_seuil' ═══
@@ -386,7 +375,6 @@
             if (!g || g.progress === 0) return; // pas de mission cette semaine, ou déjà ratée
             g.progress = 0;
             saveWeeklyGoals(data);
-            updateWeeklyGoalsButton();
         }
 
         (function attacherSuiviVieQuandPret() {
@@ -401,25 +389,6 @@
                 setTimeout(lancer, 0);
             }
         })();
-
-        function updateWeeklyGoalsButton() {
-            const data = loadWeeklyGoals();
-            const btn = document.getElementById('btn-weekly-goals');
-            if (allGoalsCompleted(data) && !data.bonusClaimed) {
-                btn.classList.add('has-reward');
-            } else {
-                btn.classList.remove('has-reward');
-            }
-        }
-
-        function openWeeklyGoalsModal() {
-            // Rendre le contenu dans l'onglet du panel
-            renderWeeklyGoalsPanel();
-            // Basculer vers l'onglet objectifs via switchMainTab (si pas déjà en cours)
-            if (!document.getElementById('panel-tab-objectifs').classList.contains('active')) {
-                switchMainTab('objectifs');
-            }
-        }
 
         /* Une icône par famille d'objectif : la carte se reconnaît d'un coup d'œil
            sans lire son titre. Des SVG et pas des emojis, pour la même raison que
@@ -555,25 +524,11 @@
                disparu pour autant — il est devenu la fiche d'un animal sauvé, qu'on
                ouvre en le touchant dans « Qui sauvons-nous ? » (js/23).
                `Compagnon.clairiere()` existe toujours et n'est plus appelée. */
+            /* ⚠ IL N'Y A PLUS RIEN À « RÉCUPÉRER » À LA FIN D'UNE SEMAINE (27/08/2026,
+               confirmé le 04/09/2026 — ce modèle-ci n'a pas de bonus, contrairement à
+               l'ancien). Ce qu'une mission bouclée rapporte est une ÉTAPE du parcours,
+               que renderParcoursPanel() juste au-dessus montre déjà en grand. */
             renderParcoursPanel();
-
-            /* ⚠ IL N'Y A PLUS RIEN À « RÉCUPÉRER » À LA FIN D'UNE SEMAINE (27/08/2026).
-               Ce bloc portait le bouton « RÉCUPÉRER MON BADGE » puis, une fois la
-               médaille retirée du carnet (25/08/2026), une phrase d'attente qui la
-               promettait encore. Les deux sont parties avec le système de badges : ce
-               qu'une mission bouclée rapporte est une ÉTAPE du parcours, et le bloc
-               juste au-dessus (`renderParcoursPanel()`) la montre déjà en grand.
-               L'élément est VIDÉ et non retiré du HTML : il tient la place d'un futur
-               message de fin de semaine, et le vider ici efface un bouton laissé par
-               une version précédente de l'app. */
-            const bonusEl = document.getElementById('weekly-goals-bonus-panel');
-            if (!bonusEl) return;
-            if (allGoalsCompleted(data)) {
-                bonusEl.innerHTML = '';
-            } else {
-                const remaining = data.goals.filter(g => g.progress < g.target).length;
-                bonusEl.innerHTML = `<div class="wg-remaining">Encore ${remaining} objectif${remaining > 1 ? 's' : ''} et ${nomCompagnon()} franchit une étape.</div>`;
-            }
         }
 
         /* Le prénom de l'animal en cours, pour les phrases de l'interface. Repli sur
@@ -584,16 +539,6 @@
                 if (n) return n;
             }
             return 'votre compagnon';
-        }
-
-        function closeWeeklyGoalsModal() {
-            // Fermer la modale legacy si encore ouverte
-            const legacyOverlay = document.getElementById('weekly-goals-overlay');
-            if (legacyOverlay) legacyOverlay.classList.remove('open');
-            // Revenir à l'onglet trajet si on est sur objectifs
-            if (document.getElementById('panel-tab-objectifs').classList.contains('active')) {
-                switchMainTab('trajet');
-            }
         }
 
         /* ══════════════════════════════════════════════════════════════════════
@@ -624,7 +569,10 @@
            lecteur vidéo s'appelle toujours `#badge-video-modal` (il ne sert plus
            qu'aux vidéos d'ANIMAL — cage et libération), et l'app garde plusieurs
            « badges » d'interface sans aucun rapport : `#speed-limit-badge`,
-           `#nav-waypoint-badge`, `#nav-badge-goals`, `.route-alt-badge`.
+           `#nav-waypoint-badge`, `.route-alt-badge`. (`#nav-badge-goals` — le point
+           jaune clignotant de l'onglet Objectifs — a lui aussi été retiré le
+           04/09/2026 avec le bonus hebdomadaire qu'il signalait : ce modèle-ci n'en a
+           pas, contrairement à l'ancien.)
            ══════════════════════════════════════════════════════════════════════ */
 
         // ═══════════════════════════════════════════════════════════
@@ -1060,7 +1008,6 @@
 
             const data = loadWeeklyGoals();
             data.goals.forEach(g => { g.progress = 0; });
-            data.bonusClaimed = false;
             saveWeeklyGoals(data);
 
             /* AVANT `choisir('babi')`, et l'ordre n'est pas indifférent : `choisir()`
@@ -1072,7 +1019,6 @@
 
             if (window.Compagnon && Compagnon.choisir) Compagnon.choisir('babi');
             renderWeeklyGoalsPanel();
-            updateWeeklyGoalsButton();
             if (typeof renderCarteCompagnon === 'function') renderCarteCompagnon();
             /* Le classement compte des animaux sauvés : il vient d'en perdre. */
             if (typeof clAnimauxMaj === 'function') {
@@ -1125,6 +1071,18 @@
             console.log('[Debug] Mode arrêt : compagnon affiché sur sa barre de vie. Rappuyer pour refermer.');
         }
 
+        /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST                  (04/09/2026)
+           Bascule l'affichage du groupe de boutons debug (#debug-salif-panel,
+           index.html) derrière le seul bouton « 🐛 Debug Salif ». Simple
+           `display:none` / `display:flex` posé en style inline — pas de classe
+           CSS dédiée, cohérent avec le reste de ce bloc qui est déjà en style
+           inline (voir les boutons voisins). */
+        function _debugSalifToggle() {
+            const panneau = document.getElementById('debug-salif-panel');
+            if (!panneau) return;
+            panneau.style.display = (panneau.style.display === 'none') ? 'flex' : 'none';
+        }
+
         /* ⚡ BOUTON DEBUG — À SUPPRIMER APRÈS TEST
            Force les objectifs de la SEMAINE EN COURS à des cibles atteignables en
            une session d'essai : 20 km au total, 5 km sans excès, 30 points.
@@ -1169,12 +1127,10 @@
                     adaptive: false   // cibles imposées : la baseline ne les a pas calculées
                 };
             });
-            data.bonusClaimed = false;
             saveWeeklyGoals(data);
 
             synchroniserParcours();
             renderWeeklyGoalsPanel();
-            updateWeeklyGoalsButton();
             if (typeof renderCarteCompagnon === 'function') renderCarteCompagnon();
 
             console.log('[Debug] Objectifs de la semaine forcés :', data.goals.map(g => `${g.id}: ${g.progress}/${g.target}`));
@@ -1192,16 +1148,11 @@
         function _debugFillGoals95() {
             const data = loadWeeklyGoals();
             data.goals.forEach(g => { g.progress = g.target; });
-            /* `bonusClaimed` n'est plus une récompense en attente, seulement le drapeau
-               qui empêche de recompter deux fois une semaine complétée. On le remet à
-               faux pour que le prochain trajet rejoue le passage « semaine bouclée ». */
-            data.bonusClaimed = false;
             saveWeeklyGoals(data);
 
             const etapes = synchroniserParcours();
             renderWeeklyGoalsPanel();
             renderCarteCompagnon();
-            updateWeeklyGoalsButton();
 
             console.log('[Debug] Objectifs à 100%. activeProfileId:', activeProfileId);
             console.log('[Debug] Goals:', data.goals.map(g => `${g.id}: ${g.progress}/${g.target}`));

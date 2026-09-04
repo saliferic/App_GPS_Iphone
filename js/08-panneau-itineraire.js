@@ -93,10 +93,8 @@
 
         /* Hauteur de l'état 'immersive' (Objectifs / Profil) : la carte n'a AUCUNE valeur
            informative pendant leur consultation — on n'y sélectionne rien dessus, aucun
-           cadrage n'en dépend — contrairement à Itinéraire où elle reste le repère du
-           trajet en cours de saisie. La règle 50/50 n'a donc de sens que pour ce dernier ;
-           ces deux onglets n'ont droit qu'à deux états, plein écran ou fermé, jamais un
-           entre-deux qui masquerait la moitié de leur contenu pour rien.
+           cadrage n'en dépend. Ces deux onglets n'ont droit qu'à deux états, plein écran ou
+           fermé, jamais un entre-deux qui masquerait la moitié de leur contenu pour rien.
 
            ⚠ PLEIN ÉCRAN VEUT DIRE JUSQU'EN HAUT (16/08/2026). La première version retirait
            60 px pour recopier le plafond général de `#ui-panel` — un plafond qui garde
@@ -108,6 +106,19 @@
            les deux calculs doivent rester d'accord. */
         function getImmersiveHeightPx() {
             return Math.max(SHEET_MIN_H, getViewportH() - getBottomBarsH() - getSafeTopPx());
+        }
+
+        /* Réserve de « bande de carte » laissée visible en haut pour Itinéraire en état
+           'full' (04/09/2026, demande utilisateur) : assez pour la pastille météo et un
+           aperçu de la position, pas plus — l'essentiel de l'écran doit montrer le
+           formulaire (destination, adresses enregistrées, Démarrer…) sans défiler, sur
+           n'importe quel téléphone. Contrairement à l'ancienne règle 50/50
+           (getSheetHeightPx), ce n'est qu'un PLAFOND : la hauteur réelle du panneau suit
+           son contenu (voir la branche 'full' de setPanelSnap, qui ne pose que ce
+           max-height, sans min-height). */
+        const ITIN_TOP_PEEK_PX = 130;
+        function getItinFitHeightPx() {
+            return Math.max(SHEET_MIN_H, getViewportH() - getBottomBarsH() - ITIN_TOP_PEEK_PX);
         }
 
         function syncSheetHeightVar() {
@@ -447,25 +458,31 @@
                 panel.classList.remove('panel-min', 'panel-hidden');
                 panel.style.transition = trans('max-height 0.3s ease, min-height 0.3s ease, bottom 0.3s ease');
 
-                /* 'full' = règle 50/50, voir getSheetHeightPx(). Ne sert plus qu'à
-                   Itinéraire (16/08/2026) : Objectifs et Profil sont passés à 'immersive'
-                   ci-dessus, la carte n'y ayant aucune valeur informative. Avant cette date,
-                   les trois onglets partageaient cette même branche — plus de branche
-                   `tab-secondary` : Objectifs et Profil recopiaient une hauteur relevée sur
-                   Itinéraire, mesure qui n'existait que si l'on avait déployé cet onglet au
-                   moins une fois, et retombait sinon sur 60 % de l'écran.
+                /* 'full' = Itinéraire ouvert (16/08/2026, redéfini le 04/09/2026). Objectifs
+                   et Profil sont passés à 'immersive' ci-dessus ; cette branche ne sert plus
+                   qu'à Itinéraire.
 
-                   ⚠ min ET max height : la hauteur est FIXE, pas plafonnée. Un onglet au
-                   contenu court (Itinéraire) laisse du vide en bas plutôt que de remonter
-                   la ligne de séparation — c'est précisément ce qu'on cherche. Les modes de
-                   saisie (.search-focus, .profile-focus) relâchent les deux avec
-                   `!important` pour venir se coller au clavier ; ne pas leur retirer. */
-                const sheetH = syncSheetHeightVar();
-                // --panel-secondary-h reste alimentée : le CSS de tab-secondary et le repli
-                // en cascade de la feuille du scan ⛽ la lisent encore.
-                document.documentElement.style.setProperty('--panel-secondary-h', sheetH + 'px');
-                panel.style.maxHeight = sheetH + 'px';
-                panel.style.minHeight = sheetH + 'px';
+                   ⚠ CONTENU-FIT, PAS 50/50 (04/09/2026, demande utilisateur) : seul un
+                   max-height est posé — voir getItinFitHeightPx() — et PAS de min-height.
+                   Avant cette date, min ET max valaient `sheetH` (moitié d'écran fixe) : un
+                   contenu court laissait du vide en bas plutôt que de remonter la ligne de
+                   séparation, ce qui masquait la moitié du formulaire derrière une bande de
+                   carte inutile ici (contrairement à Objectifs/Profil, cette carte n'a jamais
+                   servi à rien pendant la saisie). Sans min-height, le panneau ne prend que la
+                   place que son contenu réclame, plafonnée par getItinFitHeightPx() — et donc
+                   s'adapte à la fois au contenu (adresses enregistrées, contacts…) et à la
+                   hauteur de l'écran. Les modes de saisie (.search-focus, .profile-focus)
+                   relâchent les deux avec `!important` pour venir se coller au clavier ; ne
+                   pas leur retirer.
+
+                   `--sheet-h` (getSheetHeightPx, 50/50) reste calculée et posée : le modal de
+                   trajet, les feuilles de scan ⛽/🅿️ et le panneau Profil s'y ancrent encore
+                   (voir leurs propres commentaires) et ne doivent pas suivre ce changement. */
+                syncSheetHeightVar();
+                const fitH = getItinFitHeightPx();
+                document.documentElement.style.setProperty('--panel-secondary-h', fitH + 'px');
+                panel.style.maxHeight = fitH + 'px';
+                panel.style.minHeight = '';
                 panel.style.overflow = '';
                 clearTrans(320);
             }
@@ -847,50 +864,17 @@
                 const inertiaDistance = velocity * 150;
                 let targetH = Math.max(minH(), Math.min(maxH(), currentH + inertiaDistance));
 
-                /* Objectifs / Profil : mêmes deux états qu'au chevron (togglePanel) et au
-                   double-appui sur l'onglet (switchMainTab). Sans cette sortie précoce, le
-                   geste retomberait dans la branche « position intermédiaire » ci-dessous et
-                   laisserait le panneau à mi-hauteur — exactement le demi-écran de carte
-                   inutile que ces deux états existent pour supprimer. */
+                /* Les trois onglets n'ont plus que DEUX états au doigt (04/09/2026) : ouvert
+                   ou fermé, jamais un entre-deux à mi-hauteur qui ne montrerait ni tout le
+                   contenu ni toute la carte. Objectifs/Profil rejoignent 'immersive' (plein
+                   écran, sans intérêt pour la carte derrière eux) ; Itinéraire rejoint 'full',
+                   qui depuis cette même date épouse la hauteur de son contenu plutôt que de
+                   figer 50 % de l'écran — voir le commentaire de la branche 'full' dans
+                   setPanelSnap(). setPanelSnap gère elle-même la transition et sa levée : on
+                   sort ici dans les deux cas. */
                 const _dragTab = document.querySelector('.panel-tab-content.active')?.id?.replace('panel-tab-', '');
-                if (_dragTab === 'objectifs' || _dragTab === 'profil') {
-                    setPanelSnap(targetH > (minH() + maxH()) / 2 ? 'immersive' : 'hidden');
-                    return;
-                }
-
-                if (targetH < minH() + 30) {
-                    // Glissement jusqu'en bas : le panneau s'efface COMPLÈTEMENT sous le
-                    // bandeau, exactement comme le double-appui sur l'onglet. Il s'arrêtait
-                    // auparavant sur 'min', laissant dépasser une poignée de 54 px — deux
-                    // états visuellement très proches pour un même geste. On délègue à
-                    // setPanelSnap pour que l'état escamoté soit strictement identique
-                    // quel que soit le déclencheur (geste, ping carte, double-appui).
-                    // setPanelSnap gère lui-même la transition et sa levée : on sort ici,
-                    // sinon le setTimeout de fin de fonction l'interromprait avant terme.
-                    setPanelSnap('hidden');
-                    return;
-                } else if (targetH > maxH() * 0.85) {
-                    // Ouvrir complètement. On délègue également ici : sur les onglets
-                    // Objectifs et Profil, la hauteur déployée est celle alignée sur
-                    // Itinéraire, que seul setPanelSnap sait calculer. Poser maxH() en dur
-                    // rouvrirait le panneau plus haut et casserait cet alignement.
-                    setPanelSnap('full');
-                    return;
-                } else {
-                    // Position intermédiaire
-                    panel.classList.remove('panel-min');
-                    panel.style.transition = 'max-height 0.25s ease-out';
-                    panel.style.maxHeight = Math.round(targetH) + 'px';
-                    panel.style.minHeight = '';
-                    panel.style.overflow = '';
-                    panelSnapState = 'half';
-                    // Cette branche pose l'état à la main sans passer par setPanelSnap :
-                    // le chevron doit quand même se retourner, sinon un panneau réduit au
-                    // doigt afficherait encore la flèche de réduction.
-                    panel.classList.add('panel-collapsed');
-                }
-
-                setTimeout(() => { panel.style.transition = ''; }, 280);
+                const _dragOpenState = (_dragTab === 'objectifs' || _dragTab === 'profil') ? 'immersive' : 'full';
+                setPanelSnap(targetH > (minH() + maxH()) / 2 ? _dragOpenState : 'hidden');
             }, { passive: true });
         })();
 

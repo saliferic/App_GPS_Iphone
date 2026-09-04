@@ -1788,7 +1788,11 @@
        qui reste de l'ancien code couleur.
        ====================================================================== */
 
-    /* infos : { couleur, physique } — `physique` omis, l'état réel de l'animal. */
+    /* infos : { couleur, physique } — `physique` omis, l'état réel de l'animal.
+       ⚠ IMAGE FIXE, PAS LE WEBP ANIMÉ (04/09/2026, demande utilisateur) : ce portrait
+       montre toujours `courant`, l'animal en cours de route — jamais un animal déjà
+       libéré (il faudrait en avoir choisi un autre pour continuer à jouer). L'animation
+       ne se déclenche qu'à la libération elle-même (parcLibre, plus bas). */
     function portrait(cible, infos) {
         const el = typeof cible === 'string' ? document.getElementById(cible) : cible;
         if (!el) return;
@@ -1805,7 +1809,7 @@
                     </radialGradient>
                 </defs>
                 <circle class="cp-halo" cx="160" cy="170" r="152" fill="url(#cp-halo-grad)"/>
-                ${COMPAGNONS[courant].interieur('ravi', infos.physique || physiqueCourant())}
+                ${COMPAGNONS[courant].interieur('ravi', infos.physique || physiqueCourant(), true)}
             </svg>`;
     }
 
@@ -2269,11 +2273,16 @@
 
     /* Le compagnon vit dans le repère 6..314 × 42..372, pieds vers 356 : on le
        pose donc par son CENTRE et sa LIGNE DE SOL, jamais par son coin. */
-    function parcAnimal(etat, s, cx, baseY, cle) {
+    function parcAnimal(etat, s, cx, baseY, cle, anime) {
         const c = COMPAGNONS[cle] || COMPAGNONS[courant];
-        /* Image FIXE (dossier Normal), pas le webp animé du hero/profil — demande
-           utilisateur (28/08/2026) : voir `statique` dans IMAGES (js/22). */
-        return `<g transform="translate(${(cx - 160 * s).toFixed(1)},${(baseY - 356 * s).toFixed(1)}) scale(${s})">${c.interieur(etat, undefined, true)}</g>`;
+        /* Image FIXE (dossier Normal) par défaut, pas le webp animé du hero/profil —
+           demande utilisateur (28/08/2026) : voir `statique` dans IMAGES (js/22).
+           ⚠ SAUF `anime` (04/09/2026, demande utilisateur) : l'animal ne danse que
+           lorsqu'il est réellement LIBÉRÉ, jamais avant. Seul parcLibre() passe
+           `anime`, avec son propre `libre` (étape 3 FRANCHIE, pas seulement en
+           cours — voir le commentaire de parcours() plus bas) ; parcCage() et
+           parcVehicule() n'ont pas ce paramètre et restent donc figés comme avant. */
+        return `<g transform="translate(${(cx - 160 * s).toFixed(1)},${(baseY - 356 * s).toFixed(1)}) scale(${s})">${c.interieur(etat, undefined, !anime)}</g>`;
     }
 
     function parcDefs(u) {
@@ -2434,7 +2443,7 @@
             <!--PA_FOND-->
             ${fondVisuel}
             ${cageVide}
-            ${parcAnimal('ravi', 0.30, 132, 166, cle)}
+            ${parcAnimal('ravi', 0.30, 132, 166, cle, libre)}
             ${envol}
             <g fill="#FFE9B8">
                 <circle class="cl-ff" cx="150" cy="120" r="2"/>
@@ -2647,6 +2656,11 @@
     /* La vignette du sélecteur de compagnon : le même dessin, derrière des
        barreaux. Tant qu'un animal n'est pas sauvé, il est en cage — c'est la
        seule chose que la fenêtre de choix a besoin de dire.
+       ⚠ IMAGE FIXE, PAS LE WEBP ANIMÉ (04/09/2026, demande utilisateur) : cette
+       vignette ne montre jamais un animal libéré (voir plus haut — un animal
+       sauvé quitte cette liste pour « Animaux sauvés », js/25), donc il ne
+       danse jamais ici. Seule la libération (parcLibre, plus bas) déclenche
+       l'animation.
        ⚠ Les barreaux sont dessinés APRÈS l'animal, sinon ils passent derrière. */
     function vignetteCage(cle) {
         const c = COMPAGNONS[cle];
@@ -2662,7 +2676,7 @@
                     <stop offset="1" stop-color="#596183"/>
                 </linearGradient>
             </defs>
-            ${c.interieur('repos')}
+            ${c.interieur('repos', undefined, true)}
             ${barreaux}
             <rect x="24" y="54" width="266" height="16" rx="8" fill="url(#vcMetal${u})"/>
             <rect x="24" y="342" width="266" height="14" rx="7" fill="url(#vcMetal${u})"/>
@@ -2755,9 +2769,9 @@
                             par la racine : l'appelant n'a pas à savoir d'où ce module a
                             été chargé. `null` pour un compagnon sans image, plutôt
                             qu'un objet à moitié rempli que l'appelant croirait valide. */
-                         image: function (cle, physique) {
+                         image: function (cle, physique, statique) {
                              if (!IMAGES[cle || courant]) return null;
-                             const v = variante(cle || courant, physique);
+                             const v = variante(cle || courant, physique, statique);
                              return { fichier: RACINE + v.fichier, boite: v.boite };
                          },
                          genre: function (cle) { return genreDe(cle || courant); },

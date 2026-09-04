@@ -427,14 +427,19 @@
            on garde l'animal sain, qui est faux sur l'état mais juste sur la position.
            Quand la variante finit par charger, `precharger()` rappelle le rafraîchis-
            sement et le fondu la met en place. */
+        /* `statique = true` sur les deux appels à Compagnon.image() (04/09/2026, demande
+           utilisateur) : le compagnon affiché ici est TOUJOURS `courant`, l'animal en
+           cours de route — jamais celui déjà libéré (il faudrait en choisir un autre
+           pour continuer à jouer). Il ne doit donc jamais afficher le webp animé, qui
+           n'a de sens qu'une fois relâché (voir parcLibre, js/22). */
         function imageMarqueur() {
             if (typeof window.Compagnon === 'undefined' || typeof Compagnon.image !== 'function') return null;
             const phys = physiqueCourant();
-            let im = tenterSansBruit(() => Compagnon.image(null, phys), 'marqueurGPS/image');
+            let im = tenterSansBruit(() => Compagnon.image(null, phys, true), 'marqueurGPS/image');
             if (!im || !im.boite || !im.boite.w || !im.boite.h) return null;
             precharger(im.fichier);
             if (_animalCharge[im.fichier] !== true && phys !== 'sain') {
-                const normal = tenterSansBruit(() => Compagnon.image(), 'marqueurGPS/image');
+                const normal = tenterSansBruit(() => Compagnon.image(null, undefined, true), 'marqueurGPS/image');
                 if (normal && normal.boite && normal.boite.w && normal.boite.h) {
                     precharger(normal.fichier);
                     if (_animalCharge[normal.fichier] === true) im = normal;

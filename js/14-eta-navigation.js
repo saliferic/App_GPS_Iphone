@@ -1547,9 +1547,11 @@
                 // 'min' laissait dépasser une poignée de 54 px : c'est l'état voulu pour un
                 // glissement au doigt, pas pour un appui sur l'onglet.
                 if (panelSnapState === 'hidden' || panelSnapState === 'min') {
-                    // Objectifs/Profil rouvrent en 'immersive' (quasi plein écran) : la
-                    // carte n'a rien à montrer derrière eux. Itinéraire reste sur 'full',
-                    // la règle 50/50, dont la moitié de carte visible a un sens réel.
+                    // Objectifs/Profil rouvrent en 'immersive' (quasi plein écran, jusqu'à la
+                    // zone sûre du haut) : la carte n'a rien à montrer derrière eux. Itinéraire
+                    // rouvre en 'full', qui depuis le 04/09/2026 épouse la hauteur de son
+                    // contenu plutôt qu'une règle 50/50 fixe (voir setPanelSnap, js/08) — une
+                    // bande de carte reste visible en haut, mais réduite au strict nécessaire.
                     setPanelSnap(tab === 'objectifs' || tab === 'profil' ? 'immersive' : 'full');
                 } else {
                     setPanelSnap('hidden');
@@ -1646,23 +1648,6 @@
             // la hauteur plein écran, ce qui masquait la carte sur ces deux onglets.
         }
 
-        // Mettre à jour le badge objectifs selon l'état has-reward
-        function updateGoalsBadge() {
-            const badge = document.getElementById('nav-badge-goals');
-            const oldBtn = document.getElementById('btn-weekly-goals');
-            if (!badge) return;
-            if (oldBtn && oldBtn.classList.contains('has-reward')) {
-                badge.classList.add('visible');
-            } else {
-                badge.classList.remove('visible');
-            }
-        }
-
-        // Hooker la mise à jour du badge lors du chargement des objectifs
-        const _origUpdateGoals = typeof updateWeeklyGoalsUI === 'function' ? updateWeeklyGoalsUI : null;
-        // On surcharge après la définition de la fonction originale via MutationObserver sur btn-weekly-goals
-        const _goalsBtnObserver = new MutationObserver(updateGoalsBadge);
-
         // Initialise les valeurs du véhicule depuis localStorage
         function initializeVehicleConfig() {
             const cfg = loadVehicleConfig();
@@ -1698,9 +1683,6 @@
             DOM.nextTurnSecondary    = document.getElementById('next-turn-secondary');
             DOM.nextTurnSecondaryIcon  = document.getElementById('next-turn-secondary-icon');
             DOM.nextTurnSecondaryStreet= document.getElementById('next-turn-secondary-street');
-
-            const goalsBtn = document.getElementById('btn-weekly-goals');
-            if (goalsBtn) _goalsBtnObserver.observe(goalsBtn, { attributes: true, attributeFilter: ['class'] });
 
             /* ⚠ CES DEUX APPELS SONT GARDÉS — L'ESCAMOTAGE DU PANNEAU EST LA DERNIÈRE
                INSTRUCTION DE CE HANDLER (18/08/2026). Une exception levée ici emportait tout

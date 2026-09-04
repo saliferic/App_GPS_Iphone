@@ -235,53 +235,12 @@ body.theme-crepuscule.pal-canopee {
     --cr-void-rgb:     6,18,12;
 }
 
-/* --- Abysse — bleu nuit profond ------------------------------------------ */
-body.theme-crepuscule.pal-abysse {
-    --cr-sky-0: #101C33;
-    --cr-sky-1: #172642;
-    --cr-sky-2: #1D2F52;
-
-    --cr-ink:   #EFF6FF;
-    --cr-ink-2: #A9C2E0;
-    --cr-ink-3: #7B93B5;
-    --cr-ink-4: #5F7594;
-
-    /* L'ambre d'origine, au pixel près : sur bleu nuit c'est le couple le plus
-       contrasté des trois, il n'y avait rien à corriger. */
-    --cr-amber:   #FFB35C;
-    --cr-amber-2: #FFD9A8;
-    --cr-violet:  #B08BFF;
-    /* ⚠ Le turquoise du temps se noyait dans le ciel bleu : il glisse vers le
-       teal pour rester distinct du fond. */
-    --cr-turq:    #7FE0DC;
-    --cr-mint:    #6FE3A0;
-    --cr-rose:    #FF8FA3;
-    --cr-danger:  #FF6B6B;
-
-    --cr-go-1:   #FF8A65;
-    --cr-go-2:   #FF5252;
-    --cr-go-rgb: 255,82,82;
-
-    --cr-amber-rgb:    255,179,92;
-    --cr-amber-d-rgb:  255,140,60;
-    --cr-violet-rgb:   176,139,255;
-    --cr-mint-rgb:     111,227,160;
-    --cr-turq-rgb:     127,224,220;
-    --cr-danger-rgb:   255,107,107;
-    --cr-sky-0-rgb:    16,28,51;
-    --cr-sky-1-rgb:    23,38,66;
-    --cr-sky-2-rgb:    29,47,82;
-    --cr-nav-rgb:      19,32,56;
-    --cr-shadow-rgb:   3,10,24;
-    --cr-void-rgb:     6,14,32;
-}
-
-/* --- Cyber Nuit — navy quasi noir, duo cyan / magenta (TEST 04/09/2026) ---
-   ⚠ PALETTE D'ESSAI, pas encore un choix arrêté : ajoutée avec son entrée dans
-   `js/28-theme.js` pour que l'utilisateur la feuillette sur l'app RÉELLE (pas
-   une reconstitution en artifact) avant de décider de la garder. Si elle n'est
-   pas retenue, retirer ce bloc ET son entrée dans THEMES — les deux ensemble,
-   sinon un `gps_theme` resté sur 'cyber' pointerait vers une classe fantôme. */
+/* --- Cyber Nuit — navy quasi noir, duo cyan / magenta ---
+   Thème par défaut du projet depuis le 04/09/2026 (remplace Abysse — ce
+   dernier a lui-même été retiré du sélecteur le 05/09/2026, demande
+   utilisateur). Voir THEME_DEFAUT dans js/28-theme.js et le script
+   d'amorçage en tête de <body> (index.html), qui doivent rester alignés
+   sur 'cyber'. */
 body.theme-crepuscule.pal-cyber {
     --cr-sky-0: #0A0E17;
     --cr-sky-1: #0F1526;
@@ -329,6 +288,342 @@ body.theme-crepuscule.pal-cyber {
     --cr-void-rgb:     7,10,20;
 }
 
+/* --- SAISONS, PAYSAGES ET TENDANCE (04/09/2026) ---
+   Douze palettes ajoutées d'un coup, même mécanique que Canopée/Abysse/Cyber
+   Nuit : un bloc `pal-` par thème, une entrée dans THEMES (js/28-theme.js).
+   ⚠ Comme pour Cyber Nuit, `--cr-go-rgb` reprend le rgb de `--cr-go-1` (pas
+   `--cr-go-2`) : c'est la teinte du bouton « Démarrer » qui sert de lueur, et
+   go-1 est systématiquement la plus vive des deux ici. `--cr-violet` (Babi)
+   reste proche d'un mauve constant à travers ces douze thèmes plutôt que
+   redérivé à chaque fois — c'est la couleur du compagnon, pas celle du décor,
+   au même titre que --cr-danger qui reste dans la famille du rouge partout. */
+
+/* --- Mousse Café — tendance, brun torréfié --- */
+body.theme-crepuscule.pal-mousse-cafe {
+    --cr-sky-0: #171210;
+    --cr-sky-1: #221A15;
+    --cr-sky-2: #2C2118;
+
+    --cr-ink:   #F5ECE2;
+    --cr-ink-2: #CBB9A8;
+    --cr-ink-3: #93806E;
+    --cr-ink-4: #766658;
+
+    --cr-amber:   #C08552;
+    --cr-amber-2: #D9B697;
+    --cr-violet:  #AD8DE0;
+    --cr-turq:    #8FBFC0;
+    --cr-mint:    #9CC98A;
+    --cr-rose:    #E0A3AE;
+    --cr-danger:  #E0645C;
+
+    /* Dégradé du bouton « C'est parti ! » revu le 05/09/2026 (demande utilisateur) :
+       de l'ambre du thème vers #E1CAB6, la couleur ajoutée ce jour-là à la palette
+       (elle sert aussi au bouton « + », voir plus bas). --cr-go-rgb (la lueur) suit
+       la plus claire des deux : #E1CAB6. */
+    --cr-go-1:   #C08552;
+    --cr-go-2:   #E1CAB6;
+    --cr-go-rgb: 225,202,182;
+
+    --cr-amber-rgb:    192,133,82;
+    --cr-amber-d-rgb:  192,106,56;
+    --cr-violet-rgb:   173,141,224;
+    --cr-mint-rgb:     156,201,138;
+    --cr-turq-rgb:     143,191,192;
+    --cr-danger-rgb:   224,100,92;
+    --cr-sky-0-rgb:    23,18,16;
+    --cr-sky-1-rgb:    34,26,21;
+    --cr-sky-2-rgb:    44,33,24;
+    --cr-nav-rgb:      29,22,19;
+    --cr-shadow-rgb:   9,7,7;
+    --cr-void-rgb:     14,11,10;
+}
+
+/* --- Dunes du Soir — désert, terracotta & turquoise --- */
+body.theme-crepuscule.pal-dunes-du-soir {
+    --cr-sky-0: #1A140F;
+    --cr-sky-1: #241B12;
+    --cr-sky-2: #2E2116;
+
+    --cr-ink:   #F7ECDD;
+    --cr-ink-2: #D2B692;
+    --cr-ink-3: #96795C;
+    --cr-ink-4: #78614A;
+
+    --cr-amber:   #E2703A;
+    --cr-amber-2: #EEA989;
+    --cr-violet:  #B79BD9;
+    --cr-turq:    #4FB8A8;
+    --cr-mint:    #8FBF7A;
+    --cr-rose:    #E8A0A0;
+    --cr-danger:  #E85C4A;
+
+    /* Dégradé revu le 05/09/2026 (demande utilisateur) : de l'orange de la palette
+       (--cr-amber) au jaune sable de la planche d'origine (#E8C87E, jamais posé en
+       jeton avant — repris tel quel du comparatif « Dunes du Soir »). --cr-go-rgb
+       suit la plus claire des deux : #E8C87E. */
+    --cr-go-1:   #E2703A;
+    --cr-go-2:   #E8C87E;
+    --cr-go-rgb: 232,200,126;
+
+    --cr-amber-rgb:    226,112,58;
+    --cr-amber-d-rgb:  226,90,39;
+    --cr-violet-rgb:   183,155,217;
+    --cr-mint-rgb:     143,191,122;
+    --cr-turq-rgb:     79,184,168;
+    --cr-danger-rgb:   232,92,74;
+    --cr-sky-0-rgb:    26,20,15;
+    --cr-sky-1-rgb:    36,27,18;
+    --cr-sky-2-rgb:    46,33,22;
+    --cr-nav-rgb:      31,23,16;
+    --cr-shadow-rgb:   10,8,7;
+    --cr-void-rgb:     16,12,10;
+}
+
+/* --- Sous-Bois — forêt, cuivre & fougère --- */
+body.theme-crepuscule.pal-sous-bois {
+    --cr-sky-0: #0D1912;
+    --cr-sky-1: #132419;
+    --cr-sky-2: #193020;
+
+    --cr-ink:   #EAF5EC;
+    --cr-ink-2: #A9C7AE;
+    --cr-ink-3: #6E8F76;
+    --cr-ink-4: #58725E;
+
+    --cr-amber:   #D98A4A;
+    --cr-amber-2: #E8B992;
+    --cr-violet:  #A98BE0;
+    --cr-turq:    #6FBFB0;
+    --cr-mint:    #8FBF6F;
+    --cr-rose:    #D98E9B;
+    --cr-danger:  #D9524A;
+
+    /* Dégradé revu le 05/09/2026 (demande utilisateur) : du vert de la palette
+       (--cr-mint) vers l'orangé (--cr-amber) — l'ancien go-2 (#C1495A, un rouge-baie)
+       part au bouton « + » à la place, voir plus bas. --cr-go-rgb suit la plus
+       claire des deux : --cr-mint. */
+    --cr-go-1:   #8FBF6F;
+    --cr-go-2:   #D98A4A;
+    --cr-go-rgb: 143,191,111;
+
+    --cr-amber-rgb:    217,138,74;
+    --cr-amber-d-rgb:  217,110,50;
+    --cr-violet-rgb:   169,139,224;
+    --cr-mint-rgb:     143,191,111;
+    --cr-turq-rgb:     111,191,176;
+    --cr-danger-rgb:   217,82,74;
+    --cr-sky-0-rgb:    13,25,18;
+    --cr-sky-1-rgb:    19,36,25;
+    --cr-sky-2-rgb:    25,48,32;
+    --cr-nav-rgb:      16,31,23;
+    --cr-shadow-rgb:   5,10,8;
+    --cr-void-rgb:     8,15,12;
+}
+
+/* --- Lagune Nocturne — plage, corail & écume --- */
+body.theme-crepuscule.pal-lagune-nocturne {
+    --cr-sky-0: #0A1C22;
+    --cr-sky-1: #0F2830;
+    --cr-sky-2: #15343D;
+
+    --cr-ink:   #E7F7F7;
+    --cr-ink-2: #A9D2D2;
+    --cr-ink-3: #5F8C8C;
+    --cr-ink-4: #4C7070;
+
+    --cr-amber:   #FF7F66;
+    --cr-amber-2: #FFB2A3;
+    --cr-violet:  #A98BE0;
+    --cr-turq:    #7FE0C9;
+    --cr-mint:    #7FD8A0;
+    --cr-rose:    #F2A0A8;
+    --cr-danger:  #E85C52;
+
+    --cr-go-1:   #FF9478;
+    --cr-go-2:   #F0C879;
+    /* --cr-go-rgb sur la plus claire des deux (05/09/2026) : #F0C879 plutôt que
+       --cr-go-1, seul changement demandé pour ce thème-ci ce jour-là. */
+    --cr-go-rgb: 240,200,121;
+
+    --cr-amber-rgb:    255,127,102;
+    --cr-amber-d-rgb:  255,102,69;
+    --cr-violet-rgb:   169,139,224;
+    --cr-mint-rgb:     127,216,160;
+    --cr-turq-rgb:     127,224,201;
+    --cr-danger-rgb:   232,92,82;
+    --cr-sky-0-rgb:    10,28,34;
+    --cr-sky-1-rgb:    15,40,48;
+    --cr-sky-2-rgb:    21,52,61;
+    --cr-nav-rgb:      13,34,43;
+    --cr-shadow-rgb:   4,11,15;
+    --cr-void-rgb:     6,17,22;
+}
+
+/* --- Aube Fleurie — printemps, fleur de cerisier --- */
+body.theme-crepuscule.pal-aube-fleurie {
+    --cr-sky-0: #191620;
+    --cr-sky-1: #221D2C;
+    --cr-sky-2: #2B2436;
+
+    --cr-ink:   #F6F0FA;
+    --cr-ink-2: #CBB9DB;
+    --cr-ink-3: #8F7DA3;
+    --cr-ink-4: #726482;
+
+    --cr-amber:   #F2879F;
+    --cr-amber-2: #F7B7C5;
+    --cr-violet:  #B79FE8;
+    --cr-turq:    #8FD0C8;
+    --cr-mint:    #A9D97A;
+    --cr-rose:    #F2879F;
+    --cr-danger:  #E85C6E;
+
+    --cr-go-1:   #F2879F;
+    --cr-go-2:   #B79FE8;
+    --cr-go-rgb: 242,135,159;
+
+    --cr-amber-rgb:    242,135,159;
+    --cr-amber-d-rgb:  242,108,108;
+    --cr-violet-rgb:   183,159,232;
+    --cr-mint-rgb:     169,217,122;
+    --cr-turq-rgb:     143,208,200;
+    --cr-danger-rgb:   232,92,110;
+    --cr-sky-0-rgb:    25,22,32;
+    --cr-sky-1-rgb:    34,29,44;
+    --cr-sky-2-rgb:    43,36,54;
+    --cr-nav-rgb:      29,25,40;
+    --cr-shadow-rgb:   10,9,14;
+    --cr-void-rgb:     15,13,21;
+}
+
+/* --- Sable Chaud — été, golden hour --- */
+body.theme-crepuscule.pal-sable-chaud {
+    --cr-sky-0: #0E1826;
+    --cr-sky-1: #132134;
+    --cr-sky-2: #182C42;
+
+    --cr-ink:   #F2F6FC;
+    --cr-ink-2: #A9BEDC;
+    --cr-ink-3: #6E82A3;
+    --cr-ink-4: #586882;
+
+    --cr-amber:   #FFC857;
+    --cr-amber-2: #FFDE9A;
+    --cr-violet:  #A98BE0;
+    --cr-turq:    #4FD8D0;
+    --cr-mint:    #8FD8A0;
+    --cr-rose:    #F2A0A8;
+    --cr-danger:  #E8564A;
+
+    /* Dégradé revu le 05/09/2026 (demande utilisateur) : du turquoise de la
+       palette (--cr-turq) vers le jaune soleil (--cr-amber) — l'ancien go-2
+       (#FF7A59, corail) part au bouton « + » à la place, voir plus bas.
+       --cr-go-rgb NE suit PLUS --cr-amber tel quel (glow jugé pas assez lumineux,
+       même demande utilisateur, seconde passe) : posé sur --cr-amber-2 (#FFDE9A),
+       la teinte la plus claire de la palette. */
+    --cr-go-1:   #4FD8D0;
+    --cr-go-2:   #FFC857;
+    --cr-go-rgb: 255,222,154;
+
+    --cr-amber-rgb:    255,200,87;
+    --cr-amber-d-rgb:  255,160,59;
+    --cr-violet-rgb:   169,139,224;
+    --cr-mint-rgb:     143,216,160;
+    --cr-turq-rgb:     79,216,208;
+    --cr-danger-rgb:   232,86,74;
+    --cr-sky-0-rgb:    14,24,38;
+    --cr-sky-1-rgb:    19,33,52;
+    --cr-sky-2-rgb:    24,44,66;
+    --cr-nav-rgb:      16,28,47;
+    --cr-shadow-rgb:   6,10,17;
+    --cr-void-rgb:     8,14,25;
+}
+
+/* --- Givre Polaire — hiver, cyan givre --- */
+body.theme-crepuscule.pal-givre-polaire {
+    --cr-sky-0: #10161D;
+    --cr-sky-1: #161F29;
+    --cr-sky-2: #1D2836;
+
+    --cr-ink:   #EAF2FA;
+    --cr-ink-2: #A9BACE;
+    --cr-ink-3: #647A94;
+    --cr-ink-4: #506276;
+
+    --cr-amber:   #6FD3E8;
+    --cr-amber-2: #A9E5F1;
+    --cr-violet:  #A9AFC7;
+    --cr-turq:    #8FE0F0;
+    --cr-mint:    #7FCFA0;
+    --cr-rose:    #E88A96;
+    --cr-danger:  #E14F5C;
+
+    /* Dégradé revu une seconde fois le 05/09/2026 (demande utilisateur) : finalement
+       du bleu de la palette (--cr-amber, #6FD3E8) vers le violet clair (--cr-violet),
+       pas du rose foncé comme le premier essai du jour. --cr-go-rgb ne suit PLUS
+       la plus claire des deux stops : demande explicite d'un glow CLAIR et glacé
+       pour appuyer le côté froid du thème, posé sur --cr-amber-2 (#A9E5F1), la
+       teinte la plus pâle de la palette plutôt que sur l'un des deux stops. */
+    --cr-go-1:   #6FD3E8;
+    --cr-go-2:   #A9AFC7;
+    --cr-go-rgb: 169,229,241;
+
+    --cr-amber-rgb:    111,211,232;
+    --cr-amber-d-rgb:  111,169,158;
+    --cr-violet-rgb:   169,175,199;
+    --cr-mint-rgb:     127,207,160;
+    --cr-turq-rgb:     143,224,240;
+    --cr-danger-rgb:   225,79,92;
+    --cr-sky-0-rgb:    16,22,29;
+    --cr-sky-1-rgb:    22,31,41;
+    --cr-sky-2-rgb:    29,40,54;
+    --cr-nav-rgb:      19,26,37;
+    --cr-shadow-rgb:   6,9,13;
+    --cr-void-rgb:     10,13,19;
+}
+
+/* --- Fosse Abyssale — océan, bioluminescence des grands fonds --- */
+body.theme-crepuscule.pal-fosse-abyssale {
+    --cr-sky-0: #050E14;
+    --cr-sky-1: #081620;
+    --cr-sky-2: #0C1F2C;
+
+    --cr-ink:   #E4F5F7;
+    --cr-ink-2: #A8CDD4;
+    --cr-ink-3: #5E8A93;
+    --cr-ink-4: #4B6E76;
+
+    --cr-amber:   #3DF2C4;
+    --cr-amber-2: #8BF7DC;
+    --cr-violet:  #9B8BE0;
+    --cr-turq:    #4FC9D9;
+    --cr-mint:    #5EE0A0;
+    --cr-rose:    #FF7FA8;
+    --cr-danger:  #E85C5C;
+
+    /* Dégradé revu le 05/09/2026 (demande utilisateur) : de #4FE0FF (go-1, inchangé)
+       vers #3DF2C4 (= --cr-amber, la teinte bioluminescente du thème) plutôt que
+       l'ancien bleu profond #2B5CE0 — les deux stops restent dans la même famille
+       cyan/turquoise. --cr-go-rgb reste sur #4FE0FF, déjà raccord avec les deux. */
+    --cr-go-1:   #4FE0FF;
+    --cr-go-2:   #3DF2C4;
+    --cr-go-rgb: 79,224,255;
+
+    --cr-amber-rgb:    61,242,196;
+    --cr-amber-d-rgb:  61,194,133;
+    --cr-violet-rgb:   155,139,224;
+    --cr-mint-rgb:     94,224,160;
+    --cr-turq-rgb:     79,201,217;
+    --cr-danger-rgb:   232,92,92;
+    --cr-sky-0-rgb:    5,14,20;
+    --cr-sky-1-rgb:    8,22,32;
+    --cr-sky-2-rgb:    12,31,44;
+    --cr-nav-rgb:      7,19,29;
+    --cr-shadow-rgb:   2,6,9;
+    --cr-void-rgb:     3,8,13;
+}
+
 
 /* === 2. BASE ET TYPOGRAPHIE ================================================ */
 
@@ -371,21 +666,26 @@ body.theme-crepuscule #main-bottom-nav * {
 
 /* === 3. LE PANNEAU (la feuille) ============================================ */
 
-/* Liseret lumineux bleu — à L'ESSAI (04/09/2026, demande utilisateur). Sur
-   `--cr-turq` plutôt que `--cr-amber` : c'est le seul jeton qui reste bleu
-   dans LES QUATRE palettes (bleu ciel en Crépuscule/Canopée, teal en Abysse,
-   cyan en Cyber Nuit) — `--cr-amber` aurait donné un liseret orange partout
-   sauf en Cyber Nuit. Si l'essai ne convient pas, revenir à `border: 1px solid
-   var(--cr-line);` et au seul box-shadow d'origine ci-dessous.
-   Épaisseur DOUBLÉE le même jour (bordure 1px→2px, lueur 26px→52px, liseret
+/* Liseret lumineux (04/09/2026, demande utilisateur — revu le même jour) : sur
+   `--cr-amber`, PAS `--cr-turq`. Premier essai posé sur `--cr-turq` parce que
+   c'était alors le seul jeton qui restait bleu dans les quatre palettes
+   d'origine — mais depuis l'ajout des douze thèmes saisons/paysages,
+   `--cr-turq` ne suit plus rien de reconnaissable (teal en Désert, cyan en
+   Cyber Nuit, bleu pâle ailleurs), alors que l'onglet actif de la barre du bas
+   (`.main-nav-tab.active`, § plus bas) est TOUJOURS en `--cr-amber` : le
+   contour du panneau doit reprendre CETTE couleur-là, à intensité réduite,
+   pour que la feuille se lise comme le prolongement du bouton actif — pas une
+   teinte bleue indépendante du thème. Si l'essai ne convient pas, revenir à
+   `border: 1px solid var(--cr-line);` et au seul box-shadow d'origine.
+   Épaisseur DOUBLÉE le 04/09/2026 (bordure 1px→2px, lueur 26px→52px, liseret
    interne 1px→2px) : le premier essai passait inaperçu. */
 body.theme-crepuscule #ui-panel {
     background: linear-gradient(180deg, rgba(var(--cr-sky-2-rgb),0.94), rgba(var(--cr-sky-0-rgb),0.98));
     -webkit-backdrop-filter: blur(var(--cr-blur));
     backdrop-filter: blur(var(--cr-blur));
-    border: 2px solid rgba(var(--cr-turq-rgb),0.55);
+    border: 2px solid rgba(var(--cr-amber-rgb),0.55);
     border-radius: var(--cr-r-sheet);
-    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6), 0 0 52px rgba(var(--cr-turq-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-turq-rgb),0.15);
+    box-shadow: 0 -24px 60px rgba(var(--cr-shadow-rgb),0.6), 0 0 52px rgba(var(--cr-amber-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-amber-rgb),0.15);
     color: var(--cr-ink-2);
 }
 
@@ -665,15 +965,66 @@ body.theme-crepuscule .profile-menu-delete:hover {
     color: var(--cr-go-1);
     filter: drop-shadow(0 0 8px rgba(var(--cr-go-rgb),0.9));
 }
-/* Boutons "+" de création (contact, profil) en vert — même demande. */
+/* Boutons "+" de création (contact, profil) — sur `--cr-violet`, pas `--cr-mint`
+   (04/09/2026, demande utilisateur). Posé en vert au départ, cette teinte-là
+   variait beaucoup d'un thème à l'autre (vert forêt en Sous-Bois, citron-vert
+   en Émeraude Profonde…) alors que `--cr-violet` reste sciemment un mauve
+   quasi constant d'un thème à l'autre — c'est la même logique que la couleur
+   du compagnon (Babi) : un repère qui ne se redessine pas à chaque thème. */
 body.theme-crepuscule #btn-add-fav,
 body.theme-crepuscule #btn-show-create-profile {
-    color: var(--cr-mint);
+    color: var(--cr-violet);
 }
 body.theme-crepuscule #btn-add-fav:hover,
 body.theme-crepuscule #btn-show-create-profile:hover {
-    color: var(--cr-mint);
-    filter: drop-shadow(0 0 6px rgba(var(--cr-mint-rgb),0.6));
+    color: var(--cr-violet);
+    filter: drop-shadow(0 0 6px rgba(var(--cr-violet-rgb),0.6));
+}
+/* Six thèmes REVUS le 05/09/2026 (demande utilisateur) : le "+" y quitte le mauve
+   partagé ci-dessus pour une couleur propre à chacun, choisie sur leur propre
+   nuancier plutôt que réutilisée sur un jeton existant — d'où des valeurs en
+   clair et non des `var(--cr-*)`. Règles postées APRÈS la règle partagée,
+   spécificité de classe en plus (`.pal-X`) pour la primer sans y toucher. */
+body.theme-crepuscule.pal-sable-chaud #btn-add-fav,
+body.theme-crepuscule.pal-sable-chaud #btn-show-create-profile { color: #FF7A59; }
+body.theme-crepuscule.pal-sable-chaud #btn-add-fav:hover,
+body.theme-crepuscule.pal-sable-chaud #btn-show-create-profile:hover {
+    color: #FF7A59; filter: drop-shadow(0 0 6px rgba(255,122,89,0.6));
+}
+
+body.theme-crepuscule.pal-sous-bois #btn-add-fav,
+body.theme-crepuscule.pal-sous-bois #btn-show-create-profile { color: #C1495A; }
+body.theme-crepuscule.pal-sous-bois #btn-add-fav:hover,
+body.theme-crepuscule.pal-sous-bois #btn-show-create-profile:hover {
+    color: #C1495A; filter: drop-shadow(0 0 6px rgba(193,73,90,0.6));
+}
+
+body.theme-crepuscule.pal-mousse-cafe #btn-add-fav,
+body.theme-crepuscule.pal-mousse-cafe #btn-show-create-profile { color: #E1CAB6; }
+body.theme-crepuscule.pal-mousse-cafe #btn-add-fav:hover,
+body.theme-crepuscule.pal-mousse-cafe #btn-show-create-profile:hover {
+    color: #E1CAB6; filter: drop-shadow(0 0 6px rgba(225,202,182,0.6));
+}
+
+body.theme-crepuscule.pal-givre-polaire #btn-add-fav,
+body.theme-crepuscule.pal-givre-polaire #btn-show-create-profile { color: #E14F5C; }
+body.theme-crepuscule.pal-givre-polaire #btn-add-fav:hover,
+body.theme-crepuscule.pal-givre-polaire #btn-show-create-profile:hover {
+    color: #E14F5C; filter: drop-shadow(0 0 6px rgba(225,79,92,0.6));
+}
+
+body.theme-crepuscule.pal-lagune-nocturne #btn-add-fav,
+body.theme-crepuscule.pal-lagune-nocturne #btn-show-create-profile { color: #7FE0C9; }
+body.theme-crepuscule.pal-lagune-nocturne #btn-add-fav:hover,
+body.theme-crepuscule.pal-lagune-nocturne #btn-show-create-profile:hover {
+    color: #7FE0C9; filter: drop-shadow(0 0 6px rgba(127,224,201,0.6));
+}
+
+body.theme-crepuscule.pal-dunes-du-soir #btn-add-fav,
+body.theme-crepuscule.pal-dunes-du-soir #btn-show-create-profile { color: #E8C87E; }
+body.theme-crepuscule.pal-dunes-du-soir #btn-add-fav:hover,
+body.theme-crepuscule.pal-dunes-du-soir #btn-show-create-profile:hover {
+    color: #E8C87E; filter: drop-shadow(0 0 6px rgba(232,200,126,0.6));
 }
 /* Croix de fermeture (`.cpx-fermer`, partagée par la plupart des modales, et
    la croix dédiée du modal de confirmation de trajet) en rose, même jeton que
@@ -1089,14 +1440,15 @@ body.theme-crepuscule #nav-panel-overlay-body {
     box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7);
     color: var(--cr-ink-2);
 }
-/* Même liseret que le panneau Itinéraire (`#ui-panel`, § 3 plus haut) — demande
-   utilisateur du 04/09/2026, « Confirmer le trajet » SEUL parmi les modales du
-   bloc du dessus (pas `#exit-confirm-box` ni les autres, qui gardent le simple
-   contour partagé). Règle DÉDIÉE postée après, pas de modification en place :
-   sinon toutes les modales listées ci-dessus hériteraient du liseret. */
+/* Même liseret que le panneau Itinéraire (`#ui-panel`, § 3 plus haut, sur
+   `--cr-amber` depuis le 04/09/2026) — demande utilisateur du 04/09/2026,
+   « Confirmer le trajet » SEUL parmi les modales du bloc du dessus (pas
+   `#exit-confirm-box` ni les autres, qui gardent le simple contour partagé).
+   Règle DÉDIÉE postée après, pas de modification en place : sinon toutes les
+   modales listées ci-dessus hériteraient du liseret. */
 body.theme-crepuscule #trip-modal {
-    border: 2px solid rgba(var(--cr-turq-rgb),0.55);
-    box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7), 0 0 52px rgba(var(--cr-turq-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-turq-rgb),0.15);
+    border: 2px solid rgba(var(--cr-amber-rgb),0.55);
+    box-shadow: 0 20px 60px rgba(var(--cr-shadow-rgb),0.7), 0 0 52px rgba(var(--cr-amber-rgb),0.4), inset 0 0 0 2px rgba(var(--cr-amber-rgb),0.15);
 }
 
 body.theme-crepuscule #exit-confirm-box h3,

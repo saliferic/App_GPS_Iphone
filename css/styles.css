@@ -2066,13 +2066,20 @@
         .itin-start-btn:disabled { background: rgba(15,20,30,0.8); color: #3a4250; border-color: rgba(255,255,255,0.04); box-shadow: none; cursor: not-allowed; transform: none; animation: none !important; }
         .itin-start-btn:disabled::before, .itin-start-btn:disabled::after { display: none; }
 
-        /* --- Animation permanente "au repos" : pulsation + reflet périodique, comme une invitation à appuyer --- */
+        /* --- Animation permanente "au repos" : pulsation + reflet périodique, comme une invitation à appuyer ---
+           ⚠ SUR `--cr-go-rgb`, PAS DU BLEU EN DUR (05/09/2026, demande utilisateur : « mousse
+           café a toujours un glow bleu autour du bouton démarré », et pareil sur plusieurs
+           autres thèmes). La cause : cette animation réécrit `box-shadow` en continu avec des
+           `rgba(13,71,161,…)` fixes, qui ÉCRASAIT la couleur posée par le thème — laquelle ne
+           s'appliquait donc jamais à l'écran, quel que soit ce que `body.theme-crepuscule
+           .itin-start-btn` déclarait par ailleurs. `var(--cr-go-rgb, 13,71,161)` reprend le
+           bleu d'origine comme repli si jamais la variable n'est pas posée (hors thème). */
         .itin-start-btn:not(:disabled):not(.is-loading) {
             animation: itin-start-pulse 2.5s ease-in-out infinite;
         }
         @keyframes itin-start-pulse {
-            0%, 100% { box-shadow: 0 4px 25px rgba(13,71,161,0.3), 0 0 8px rgba(0,100,255,0.08); border-color: rgba(0,150,255,0.25); }
-            50% { box-shadow: 0 4px 35px rgba(13,71,161,0.55), 0 0 25px rgba(0,120,255,0.2), 0 0 45px rgba(0,100,255,0.08); border-color: rgba(0,150,255,0.45); }
+            0%, 100% { box-shadow: 0 4px 25px rgba(var(--cr-go-rgb, 13,71,161),0.3), 0 0 8px rgba(var(--cr-go-rgb, 0,100,255),0.08); border-color: rgba(var(--cr-go-rgb, 0,150,255),0.25); }
+            50% { box-shadow: 0 4px 35px rgba(var(--cr-go-rgb, 13,71,161),0.55), 0 0 25px rgba(var(--cr-go-rgb, 0,120,255),0.2), 0 0 45px rgba(var(--cr-go-rgb, 0,100,255),0.08); border-color: rgba(var(--cr-go-rgb, 0,150,255),0.45); }
         }
         .itin-start-btn::before {
             content: ''; position: absolute; top: 0; left: -60%; width: 35%; height: 100%;
@@ -2951,10 +2958,6 @@
         /* === CONTOUR ECRAN (GLOW VITESSE) === */
         #screen-glow { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; transition: box-shadow 0.3s ease; box-sizing: border-box; }
 
-        /* === OBJECTIFS HEBDOMADAIRES === */
-        /* Le bouton flottant est remplacé par la barre de navigation permanente */
-        #btn-weekly-goals { display: none; } /* caché, on garde pour compatibilité JS */
-
         /* === BARRE DE NAVIGATION PERMANENTE (style Google Maps) === */
         #main-bottom-nav {
             position: fixed; bottom: 0; left: 0; width: 100%; z-index: 3500;
@@ -3002,16 +3005,6 @@
             height: 2px; border-radius: 0 0 2px 2px;
             background: #58a6ff; box-shadow: 0 0 8px rgba(88,166,255,0.6);
         }
-
-        /* Badge notification sur l'onglet objectifs */
-        .main-nav-tab .nav-badge {
-            position: absolute; top: 6px; right: calc(50% - 20px);
-            width: 8px; height: 8px; border-radius: 50%;
-            background: #f1c40f; box-shadow: 0 0 6px rgba(241,196,15,0.8);
-            display: none;
-        }
-        .main-nav-tab .nav-badge.visible { display: block; animation: badgePulse 1.5s ease-in-out infinite; }
-        @keyframes badgePulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
         /* Décaler les éléments du bas pour tenir compte de la barre */
         body { padding-bottom: 64px; }
@@ -3074,26 +3067,6 @@
         }
         #nav-panel-overlay-backdrop.open { display: block; }
 
-        #weekly-goals-overlay {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); z-index: 3000; align-items: center; justify-content: center;
-        }
-        #weekly-goals-overlay.open { display: flex; }
-        #weekly-goals-modal {
-            position: relative;
-            background: #1a1d23; border: 1px solid #333; border-radius: 20px;
-            padding: 22px 20px; width: 340px; max-width: calc(100vw - 30px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.8); color: #f1f1f1;
-        }
-        #weekly-goals-header {
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 14px; font-weight: 900; letter-spacing: 1.5px; color: #f1c40f; margin-bottom: 6px;
-            padding-right: 34px;
-        }
-        /* 14px du coin, même ratio que `.modal-close-x` — demande utilisateur du
-           04/09/2026. */
-        #weekly-goals-modal .cpx-fermer { position: absolute; top: 14px; right: 14px; }
-        #weekly-goals-timer { font-size: 11px; color: #8892b0; margin-bottom: 14px; }
         /* ═══ OBJECTIFS DE LA SEMAINE — CARTES A EMBLEME (21/08/2026) ═══
            Les cartes etaient des rectangles gris a filet vertical, l'etat porte par une
            case ⬜/✅ collee au titre. Chaque carte porte desormais un EMBLEME qui dit la
@@ -3231,13 +3204,9 @@
            montrée juste au-dessus dans le carnet. */
 
         /* .wg-claim-btn — le bouton « RÉCUPÉRER MON BADGE » du carnet — a été retiré
-           le 27/08/2026 avec le système de badges. Il ne reste que .wg-remaining, qui
-           annonce les missions restantes avant la prochaine étape du parcours. */
-        .wg-remaining { color: #4a5568; font-size: clamp(11px, 3vw, 12px); line-height: 1.5; }
-        #weekly-goals-bonus {
-            text-align: center; margin-top: 10px; padding: 10px;
-            border-radius: 12px; font-weight: 700; font-size: 13px;
-        }
+           le 27/08/2026 avec le système de badges, et .wg-remaining (qui annonçait les
+           missions restantes avant le bonus de fin de semaine) est parti avec lui le
+           04/09/2026 : ce modèle-ci n'a pas de bonus, contrairement à l'ancien. */
 
         /* === ANIMAUX SAUVES === */
         /* A remplace le bloc GALERIE DES TROPHEES le 26/08/2026, et ses regles avec :
@@ -5133,8 +5102,9 @@
         }
 
         /* ═══ CLASSEMENT EN LIGNE (23/08/2026) ═══
-           Calqué sur #weekly-goals-overlay : même z-index, même `.open`, même carte
-           sombre. Toutes les tailles en clamp() par la règle responsive du projet —
+           Même z-index, même `.open`, même carte sombre que les autres overlays plein
+           écran du projet (ex. #nav-panel-overlay). Toutes les tailles en clamp() par la
+           règle responsive du projet —
            ce panneau contient des champs de saisie, donc il doit rester utilisable
            du 320 px au clavier virtuel ouvert. */
         #classement-overlay {

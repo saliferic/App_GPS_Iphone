@@ -471,7 +471,7 @@
         function openClassementModal() {
             const ov = getEl('classement-overlay');
             if (!ov) return;
-            ov.classList.add('open');   // `.open`, comme #weekly-goals-overlay
+            ov.classList.add('open');   // `.open`, comme les autres overlays plein écran
             clRender();
             /* La session est relue à CHAQUE ouverture, pas une fois au chargement : le
                jeton peut avoir expiré, ou le compte avoir été supprimé entre-temps. */

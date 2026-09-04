@@ -105,13 +105,13 @@
      La CSP du projet ne déclare que `connect-src` : le script en clair passe.
      La table des thèmes reste dans js/28 — ici on ne fait que RELIRE le choix,
      sans le valider : une valeur inconnue pose une classe qui n'existe pas
-     dans le CSS, ce qui donne exactement Abysse (le défaut du projet depuis
-     le 04/09/2026). js/28 fera le ménage. -->
+     dans le CSS, ce qui donne exactement Cyber Nuit (le défaut du projet
+     depuis le 04/09/2026, après Abysse). js/28 fera le ménage. -->
 <script>
     try {
-        var _pal = localStorage.getItem('gps_theme') || 'abysse';
+        var _pal = localStorage.getItem('gps_theme') || 'cyber';
         if (_pal !== 'crepuscule') document.body.classList.add('pal-' + _pal);
-    } catch (e) { document.body.classList.add('pal-abysse'); /* stockage illisible : Abysse reste le défaut */ }
+    } catch (e) { document.body.classList.add('pal-cyber'); /* stockage illisible : Cyber Nuit reste le défaut */ }
 </script>
 
 
@@ -385,9 +385,6 @@
 
     <div id="screen-glow"></div>
 
-    <!-- Bouton objectifs hebdomadaires (conservé pour compatibilité JS mais masqué) -->
-    <button id="btn-weekly-goals" onclick="openWeeklyGoalsModal()" title="Objectifs de la semaine" style="display:none">🎯</button>
-
     <!-- Modal Vidéo Badge (plein écran, avant la modal badge) -->
     <!-- === MODAL STATISTIQUES DE CONDUITE === -->
     <div id="stats-modal-overlay" onclick="if(event.target===this)closeStatsModal()">
@@ -475,7 +472,6 @@
             <span>Itinéraire</span>
         </button>
         <button class="main-nav-tab" id="nav-tab-objectifs" onclick="switchMainTab('objectifs')">
-            <div class="nav-badge" id="nav-badge-goals"></div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <circle cx="12" cy="12" r="6"/>
@@ -502,19 +498,6 @@
         </div>
         <div id="nav-panel-overlay-body">
             <!-- contenu injecté dynamiquement selon l'onglet -->
-        </div>
-    </div>
-
-    <!-- Modale des objectifs hebdomadaires -->
-    <div id="weekly-goals-overlay" onclick="closeWeeklyGoalsModal()">
-        <div id="weekly-goals-modal" onclick="event.stopPropagation()">
-            <div id="weekly-goals-header">
-                <span>🎯 OBJECTIFS DE LA SEMAINE</span>
-                <button class="cpx-fermer" onclick="closeWeeklyGoalsModal()" aria-label="Fermer">✕</button>
-            </div>
-            <div id="weekly-goals-timer"></div>
-            <div id="weekly-goals-list"></div>
-            <div id="weekly-goals-bonus"></div>
         </div>
     </div>
 
@@ -1663,27 +1646,34 @@
                  s'affichait deux fois sur le même écran. Le décor est devenu la
                  fiche d'un animal sauvé, dans « Qui sauvons-nous ? ». -->
 
-            <div id="weekly-goals-bonus-panel" style="margin-top:16px;text-align:center;"></div>
-
-            <!-- ⚡ DEBUG — SUPPRIMER APRÈS TEST -->
-            <div style="margin-top:20px;text-align:center;border-top:1px dashed rgba(255,100,0,0.3);padding-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-                <button onclick="_debugFillGoals95()" style="background:rgba(255,100,0,0.15);border:1px dashed rgba(255,100,0,0.5);color:#ff9500;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    ⚡ DEBUG — Objectifs 95%
+            <!-- ⚡ DEBUG — SUPPRIMER APRÈS TEST
+                 Regroupés derrière un seul bouton bascule ("Debug Salif") pour ne plus
+                 encombrer l'écran Objectifs : masqués par défaut (`display:none` posé en
+                 style inline, pas en classe — cohérent avec le reste de ce bloc), révélés
+                 par _debugSalifToggle() (voir fin de fichier). */ -->
+            <div style="margin-top:20px;text-align:center;border-top:1px dashed rgba(255,100,0,0.3);padding-top:12px;">
+                <button onclick="_debugSalifToggle()" style="background:rgba(255,100,0,0.15);border:1px dashed rgba(255,100,0,0.5);color:#ff9500;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                    🐛 Debug Salif
                 </button>
-                <button onclick="_debugObjectifsLegers()" style="background:rgba(80,220,140,0.15);border:1px dashed rgba(80,220,140,0.5);color:#50dc8c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    🎯 DEBUG — Objectifs légers (20 km / 5 km / 30 pts)
-                </button>
-                <button onclick="_debugLoadTestContacts()" style="background:rgba(88,200,255,0.15);border:1px dashed rgba(88,200,255,0.5);color:#58c8ff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    🎤 DEBUG — Charger contacts vocal
-                </button>
-                <button onclick="_debugRemettreEnCage()" style="background:rgba(168,139,255,0.15);border:1px dashed rgba(168,139,255,0.5);color:#a88bff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    🔒 DEBUG — Remettre la troupe en cage (et ressusciter les morts)
-                </button>
-                <!-- Aperçu du seul moment où l'animal est visible en conduite : à l'arrêt,
-                     posé sur sa barre de vie. Bascule — rappuyer referme (voir js/12). -->
-                <button onclick="_debugModeArret_toggle()" style="background:rgba(255,180,60,0.15);border:1px dashed rgba(255,180,60,0.5);color:#ffb43c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
-                    🛑 DEBUG — Mode arrêt (compagnon sur la barre de vie)
-                </button>
+                <div id="debug-salif-panel" style="display:none;margin-top:12px;gap:8px;justify-content:center;flex-wrap:wrap;">
+                    <button onclick="_debugFillGoals95()" style="background:rgba(255,100,0,0.15);border:1px dashed rgba(255,100,0,0.5);color:#ff9500;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                        ⚡ DEBUG — Objectifs 95%
+                    </button>
+                    <button onclick="_debugObjectifsLegers()" style="background:rgba(80,220,140,0.15);border:1px dashed rgba(80,220,140,0.5);color:#50dc8c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                        🎯 DEBUG — Objectifs légers (20 km / 5 km / 30 pts)
+                    </button>
+                    <button onclick="_debugLoadTestContacts()" style="background:rgba(88,200,255,0.15);border:1px dashed rgba(88,200,255,0.5);color:#58c8ff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                        🎤 DEBUG — Charger contacts vocal
+                    </button>
+                    <button onclick="_debugRemettreEnCage()" style="background:rgba(168,139,255,0.15);border:1px dashed rgba(168,139,255,0.5);color:#a88bff;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                        🔒 DEBUG — Remettre la troupe en cage (et ressusciter les morts)
+                    </button>
+                    <!-- Aperçu du seul moment où l'animal est visible en conduite : à l'arrêt,
+                         posé sur sa barre de vie. Bascule — rappuyer referme (voir js/12). -->
+                    <button onclick="_debugModeArret_toggle()" style="background:rgba(255,180,60,0.15);border:1px dashed rgba(255,180,60,0.5);color:#ffb43c;font-size:11px;font-weight:700;padding:8px 16px;border-radius:10px;cursor:pointer;">
+                        🛑 DEBUG — Mode arrêt (compagnon sur la barre de vie)
+                    </button>
+                </div>
             </div>
 
     </div><!-- fin panel-tab-objectifs -->
