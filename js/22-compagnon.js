@@ -2711,7 +2711,13 @@
         /* Le hero suit lui aussi l'état physique : c'est le même animal que celui
            de la carte de rang, il ne peut pas être intact à un endroit et blessé à
            l'autre. Voir `physiqueCourant()`. */
-        cible.innerHTML = COMPAGNONS[courant].dessin(nouvel, physiqueCourant());
+        /* ⚠ LE WEBP ANIMÉ (danse) N'A DE SENS QU'UNE FOIS L'ANIMAL SAUVÉ (05/09/2026,
+           demande utilisateur) : sans ce garde-fou, le hero de l'onglet Itinéraire
+           dansait dès la sélection, avant même la première étape du parcours. Un
+           animal encore en cage ne danse nulle part — sauf sur la vignette de
+           l'étape 3 en cours, qui a son propre paramètre `libre` (voir parcLibre). */
+        const sauve = (typeof window.compagnonEstSauve === 'function') && window.compagnonEstSauve(courant);
+        cible.innerHTML = COMPAGNONS[courant].dessin(nouvel, physiqueCourant(), !sauve);
     }
 
     /* Redessine les portraits du compagnon actif après un changement d'état

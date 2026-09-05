@@ -427,19 +427,20 @@
            on garde l'animal sain, qui est faux sur l'état mais juste sur la position.
            Quand la variante finit par charger, `precharger()` rappelle le rafraîchis-
            sement et le fondu la met en place. */
-        /* `statique = true` sur les deux appels à Compagnon.image() (04/09/2026, demande
-           utilisateur) : le compagnon affiché ici est TOUJOURS `courant`, l'animal en
-           cours de route — jamais celui déjà libéré (il faudrait en choisir un autre
-           pour continuer à jouer). Il ne doit donc jamais afficher le webp animé, qui
-           n'a de sens qu'une fois relâché (voir parcLibre, js/22). */
+        /* `statique` sur les deux appels à Compagnon.image() (04/09/2026, demande
+           utilisateur, revu le 05/09/2026) : le webp animé n'a de sens qu'une fois
+           l'animal SAUVÉ (les 3 étapes du parcours franchies, voir `compagnonEstSauve`
+           dans js/12) — avant ça, il reste figé même à l'arrêt sur sa barre de vie.
+           Une fois sauvé, il danse ici comme partout ailleurs. */
         function imageMarqueur() {
             if (typeof window.Compagnon === 'undefined' || typeof Compagnon.image !== 'function') return null;
             const phys = physiqueCourant();
-            let im = tenterSansBruit(() => Compagnon.image(null, phys, true), 'marqueurGPS/image');
+            const sauve = (typeof window.compagnonEstSauve === 'function') && window.compagnonEstSauve(Compagnon.cle());
+            let im = tenterSansBruit(() => Compagnon.image(null, phys, !sauve), 'marqueurGPS/image');
             if (!im || !im.boite || !im.boite.w || !im.boite.h) return null;
             precharger(im.fichier);
             if (_animalCharge[im.fichier] !== true && phys !== 'sain') {
-                const normal = tenterSansBruit(() => Compagnon.image(null, undefined, true), 'marqueurGPS/image');
+                const normal = tenterSansBruit(() => Compagnon.image(null, undefined, !sauve), 'marqueurGPS/image');
                 if (normal && normal.boite && normal.boite.w && normal.boite.h) {
                     precharger(normal.fichier);
                     if (_animalCharge[normal.fichier] === true) im = normal;
