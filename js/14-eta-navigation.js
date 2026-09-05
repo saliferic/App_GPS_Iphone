@@ -1516,6 +1516,14 @@
 
             // === PENDANT UN TRAJET : Objectifs/Profil → overlay flottant ===
             if (document.body.classList.contains('nav-active') && tab !== 'trajet') {
+                /* ⚠ LE COMPAGNON N'A RIEN À FAIRE SUR CET OVERLAY (05/09/2026, relevé
+                   terrain) : posé sur #nav-bottom-bar avec un débordement vers le haut
+                   (voir sa règle CSS), il continuait de couvrir le bas de l'overlay
+                   Objectifs/Profil une fois affiché à l'arrêt. Masqué ici, il n'est pas
+                   rétabli tout seul : `majPortraitCompagnonArret()` le refait apparaître
+                   au retour sur « Trajet » si le véhicule est toujours arrêté (branche
+                   juste en dessous). */
+                tenterSansBruit(() => masquerPortraitCompagnon(), 'switchMainTab/compagnon');
                 const overlay = document.getElementById('nav-panel-overlay');
                 const isOpen = overlay && overlay.classList.contains('open');
                 // Toggle : si l'overlay est déjà ouvert sur ce même tab → fermer
@@ -1536,6 +1544,9 @@
                 document.querySelectorAll('.main-nav-tab').forEach(t => t.classList.remove('active'));
                 const trajetTab = document.getElementById('nav-tab-trajet');
                 if (trajetTab) trajetTab.classList.add('active');
+                // Le compagnon avait été masqué en quittant « Trajet » : on rejoue l'état
+                // réel (arrêté ou non) plutôt que de le rétablir à l'aveugle.
+                tenterSansBruit(() => majPortraitCompagnonArret(lastKnownSpeedKmh), 'switchMainTab/compagnon');
                 return;
             }
 

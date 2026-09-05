@@ -760,10 +760,13 @@
            posé sur la barre de vie, et s'efface dès que ça repart. On voit l'état de son
            animal quand on a le droit de le regarder, jamais quand on ne l'a pas.
 
-           ⚠ LE SEUIL EST DISSYMÉTRIQUE, ET C'EST LE CŒUR DE LA CHOSE : on se montre sous
-           2 km/h, on se cache au-dessus de 6. Un seuil unique ferait clignoter l'animal au
-           pas d'un bouchon, où la vitesse oscille sans arrêt autour de la valeur — ce
-           clignotement attirerait l'œil bien plus que sa présence permanente.
+           ⚠ LE SEUIL EST DISSYMÉTRIQUE : on se montre sous ARRET_SEUIL_APPARITION, on se
+           cache au-dessus d'ARRET_SEUIL_DISPARITION (plus bas). Un seuil unique ferait
+           clignoter l'animal au pas d'un bouchon, où la vitesse oscille sans arrêt autour
+           de la valeur — ce clignotement attirerait l'œil bien plus que sa présence
+           permanente. Resserré le 05/09/2026 sur demande utilisateur (apparition quasi
+           à l'arrêt strict, disparition dès 3 km/h) : voir le commentaire des constantes
+           pour le compromis que ça rouvre sur un bouchon.
            La disparition n'est PAS conditionnée à `isCourseStarted` : l'appelant l'est
            déjà, et la fin de trajet retire la barre entière. */
         /* Appelée à la fin du trajet (js/19) : plus aucun point GPS ne passera par
@@ -775,8 +778,15 @@
             document.getElementById('nav-compagnon-portrait')?.classList.remove('visible');
         }
 
-        const ARRET_SEUIL_APPARITION = 2;   // km/h — en dessous, le véhicule est à l'arrêt
-        const ARRET_SEUIL_DISPARITION = 6;  // km/h — au-dessus, il roule
+        /* Seuils resserrés le 05/09/2026 (relevé terrain, demande utilisateur) : le
+           compagnon ne doit apparaître qu'à l'arrêt réel, pas dès qu'on ralentit vers
+           un stop, et disparaître dès la reprise plutôt qu'attendre 6 km/h. `0.5` et
+           pas `0` pour l'apparition : le GPS ne rend jamais un 0 km/h exact à l'arrêt,
+           il oscille de quelques dixièmes autour de zéro. L'asymétrie (0,5 / 3) reste
+           volontairement plus resserrée que l'ancienne (2 / 6), au prix d'un risque de
+           clignotement au pas dans un bouchon — à surveiller au prochain trajet. */
+        const ARRET_SEUIL_APPARITION = 0.5; // km/h — en dessous, le véhicule est à l'arrêt
+        const ARRET_SEUIL_DISPARITION = 3;  // km/h — au-dessus, il roule
         let _portraitArretVisible = false;
         function majPortraitCompagnonArret(speedKmh) {
             const el = document.getElementById('nav-compagnon-portrait');

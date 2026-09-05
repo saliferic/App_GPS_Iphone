@@ -1281,7 +1281,16 @@
         const ECO_TAU_LINEAR  = 0.12;
 
         const ECO_THRESHOLD_BRAKE = 3.5 * ECO_SENSITIVITY;  // m/s² → freinage brusque
-        const ECO_THRESHOLD_ACCEL = 3.0 * ECO_SENSITIVITY;  // m/s² → accélération brutale
+        /* Abaissé de 3.0 à 2.2 le 05/09/2026 (relevé terrain : plusieurs accélérations
+           franches tentées, une seule détectée sur tout le trajet, alors que le freinage
+           se déclenchait bien). Le déséquilibre n'était pas un bug de seuil identique mal
+           réglé : un freinage d'urgence approche 1 g quand une accélération, même
+           volontairement appuyée, plafonne souvent à 0,2–0,3 g sur une voiture ordinaire
+           (les pneus avant patinent bien avant d'atteindre l'équivalent au freinage). Un
+           seuil quasi symétrique (3.5 / 3.0) rendait donc l'accélération proportionnellement
+           bien plus dure à déclencher que le freinage. 2.2 m/s² ≈ 0,22 g, cohérent avec une
+           accélération franche mais pas extrême — à revérifier au prochain trajet. */
+        const ECO_THRESHOLD_ACCEL = 2.2 * ECO_SENSITIVITY;  // m/s² → accélération brutale
         const ECO_MIN_DURATION_MS = 350;  // un événement doit DURER : un choc ponctuel est un nid-de-poule
         const ECO_MIN_SPEED_DELTA = 4;    // km/h de variation GPS exigée pour confirmer
         const ECO_COOLDOWN_MS     = 1200; // délai min entre deux événements (évite les doublons)
