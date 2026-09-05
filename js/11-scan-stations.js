@@ -1598,7 +1598,6 @@
             const line = ligne || fullRouteLine;
             restStopPlan = [];
             restStopPlanIndex = 0;
-            restStopBonusLost = false;
             if (!line || restAreas.length === 0) { refreshRestAreaMarkers(); return; }
 
             const candidats = [];
@@ -1680,7 +1679,6 @@
             restStopPlan = [];
             restStopPlanIndex = 0;
             restStopProposed = false;
-            restStopBonusLost = false;
             refreshRestAreaMarkers();
         }
 
@@ -1725,9 +1723,9 @@
            SUGGESTION DE PAUSE — deux régimes
            ═══════════════════════════════════════════════════════════════════
            • Plan actif (trajet > 2h et aires trouvées) : une proposition au seuil des
-             1h50, puis une nouvelle à CHAQUE zone dépassée sans s'arrêter. Après la
-             troisième, le bonus est perdu — mais la détection de pause continue de
-             tourner : s'arrêter reste possible, ça ne rapporte simplement plus rien.
+             1h50, puis une nouvelle à CHAQUE zone dépassée sans s'arrêter, y compris
+             après la troisième — le bonus reste acquis quelle que soit la zone où l'on
+             finit par s'arrêter.
            • Sinon : comportement d'origine, l'aire suivante annoncée toutes les 1h50. */
         function checkRestStopSuggestion(d, distAlongKm) {
             if (!d || !fullRouteLine) return;
@@ -1742,9 +1740,9 @@
                    point des 1h50 (js/09). Rouler plus vite que la moyenne annoncée met donc
                    une ou plusieurs zones DERRIÈRE nous au moment où le seuil tombe. Les
                    laisser dans le plan ferait cascader l'escalade sur la frame suivante —
-                   trois zones « ratées » d'un coup et bonus perdu sans avoir rien vu.
-                   Elles ne sont pas ratées, elles n'ont simplement jamais été proposées :
-                   on les écarte, et si le plan se vide on le reconstruit d'ici. */
+                   trois zones « ratées » d'un coup sans avoir rien vu. Elles ne sont pas
+                   ratées, elles n'ont simplement jamais été proposées : on les écarte, et
+                   si le plan se vide on le reconstruit d'ici. */
                 while (restStopPlanIndex < restStopPlan.length &&
                        distAlongKm > restStopPlan[restStopPlanIndex].distAlongKm) {
                     restStopPlanIndex++;
@@ -1757,21 +1755,15 @@
                 _proposeRestZone(d, distAlongKm);
                 return;
             }
-            if (restStopBonusLost || restStopPlanIndex >= restStopPlan.length) return;
+            if (restStopPlanIndex >= restStopPlan.length) return;
 
             const zone = restStopPlan[restStopPlanIndex];
             if (distAlongKm <= zone.distAlongKm + REST_STOP_PASSED_MARGIN_KM) return;
 
             // Zone franchie sans s'y arrêter.
             restStopPlanIndex++;
-            if (restStopPlanIndex >= restStopPlan.length) {
-                restStopBonusLost = true;
-                refreshRestAreaMarkers();
-                showRestStopLostBanner();
-            } else {
-                refreshRestAreaMarkers();
-                _proposeRestZone(d, distAlongKm);
-            }
+            refreshRestAreaMarkers();
+            if (restStopPlanIndex < restStopPlan.length) _proposeRestZone(d, distAlongKm);
         }
 
         function _proposeRestZone(d, distAlongKm) {
@@ -1821,7 +1813,7 @@
 
         function showRestStopBanner(name, distKm, avgSpeedKmh, plan) {
             const banner = document.getElementById('rest-stop-banner');
-            banner.classList.remove('validated', 'lost');
+            banner.classList.remove('validated');
             document.getElementById('rest-stop-icon').innerText = '☕';
             document.getElementById('rest-stop-title').innerText = plan
                 ? (plan.derniere ? `Pause conseillée · dernière zone (${plan.rang}/${plan.total})`
@@ -1840,20 +1832,6 @@
             document.getElementById('rest-stop-detail').innerText = `${name} · dans ${quand}`;
             _showRestStopBannerFor(REST_STOP_BANNER_MS);
             // 'bavard' : suggestion de confort/bonus, la bannière suffit à la porter.
-            playAudioSequence(['attention.ogg', 'time.ogg'], 0, 'bavard');
-        }
-
-        // Les 3 zones sont passées : on le dit une fois, franchement, plutôt que de laisser
-        // le conducteur croire que le bonus l'attend encore quelque part.
-        function showRestStopLostBanner() {
-            const banner = document.getElementById('rest-stop-banner');
-            banner.classList.remove('validated');
-            banner.classList.add('lost');
-            document.getElementById('rest-stop-icon').innerText = '⚠️';
-            document.getElementById('rest-stop-title').innerText = 'Bonus pause perdu';
-            document.getElementById('rest-stop-detail').innerText =
-                'Les 3 zones sont passées. Arrêtez-vous dès que vous le pouvez.';
-            _showRestStopBannerFor(REST_STOP_BANNER_MS);
             playAudioSequence(['attention.ogg', 'time.ogg'], 0, 'bavard');
         }
 
@@ -1904,22 +1882,14 @@
         }
 
         function validateRestStop(name, elapsedMin, isTest, d) {
-            /* ⚠ Le bonus est perdu, PAS la détection. S'arrêter après les 3 zones reste
-               reconnu et affiché — c'est le comportement qu'on veut encourager, même
-               tardif. Seuls les points ne suivent plus : sinon les 3 zones ne voudraient
-               rien dire et autant ne pas les proposer. */
-            const bonus = restStopBonusLost ? 0 : REST_STOP_BONUS_POINTS;
-            if (bonus > 0) addPointsToActiveProfile(bonus);
+            addPointsToActiveProfile(REST_STOP_BONUS_POINTS);
 
             const banner = document.getElementById('rest-stop-banner');
-            banner.classList.remove('lost');
             banner.classList.add('validated');
             document.getElementById('rest-stop-icon').innerText = '✅';
-            document.getElementById('rest-stop-title').innerText =
-                isTest ? 'Pause validée (test) !' : (bonus > 0 ? 'Pause validée !' : 'Pause prise');
+            document.getElementById('rest-stop-title').innerText = isTest ? 'Pause validée (test) !' : 'Pause validée !';
             const duree = isTest ? '' : `${Math.round(elapsedMin)} min · `;
-            const points = bonus > 0 ? `+${bonus} pts` : 'hors zones — pas de bonus';
-            document.getElementById('rest-stop-detail').innerText = `${name} · ${duree}${points}`;
+            document.getElementById('rest-stop-detail').innerText = `${name} · ${duree}+${REST_STOP_BONUS_POINTS} pts`;
             _showRestStopBannerFor(6000);
 
             /* Trajet très long : une fois la pause prise, on réarme un cycle complet pour

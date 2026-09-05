@@ -585,10 +585,9 @@
                         }
                     });
                     /* ⚠ Réarmement progressif UNIQUEMENT tant que rien n'a été proposé.
-                       `buildRestStopPlan()` remet à zéro `restStopPlanIndex` et
-                       `restStopBonusLost` : un tronçon arrivant en retard, alors que le
-                       conducteur a déjà dépassé la zone 1, lui rendrait ses occasions
-                       perdues et fausserait tout le compte. */
+                       `buildRestStopPlan()` remet à zéro `restStopPlanIndex` : un tronçon
+                       arrivant en retard, alors que le conducteur a déjà dépassé la zone 1,
+                       lui rendrait ses occasions perdues et fausserait tout le compte. */
                     if (index === iDecisif) decisifArrive = true;
                     arrives.add(index);
                     majCouverture();

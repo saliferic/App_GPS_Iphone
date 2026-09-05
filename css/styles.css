@@ -1183,9 +1183,6 @@
         #rest-stop-dismiss:hover { color: #fff; }
         #rest-stop-banner.validated { border-color: #28a745; }
         #rest-stop-banner.validated #rest-stop-title { color: #28a745; }
-        #rest-stop-banner.lost { border-color: rgba(231,76,60,0.5); }
-        #rest-stop-banner.lost #rest-stop-title { color: #e74c3c; }
-        #rest-stop-banner.lost #rest-stop-detail { white-space: normal; }
 
         /* === PICTOS « ZONE DE REPOS » SUR LA CARTE === */
         /* Les trois zones du plan sont posées dès le calcul du trajet : voir la carte avant

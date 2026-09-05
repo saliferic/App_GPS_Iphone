@@ -426,7 +426,6 @@
            de route, puis la suivante. */
         let restStopIntervalKm = null;
         let restStopProposed   = false;   // le seuil des 1h50 a-t-il déjà été franchi ?
-        let restStopBonusLost  = false;   // les 3 zones passées sans arrêt : bonus perdu
         let restStopMarkers    = [];      // marqueurs « repos » posés sur la carte
         let _restStopBannerTimer = null;
         /* Signature du tracé pour lequel `restAreas` a été rempli. Le plan est armé une
